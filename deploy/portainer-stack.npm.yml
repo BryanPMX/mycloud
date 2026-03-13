@@ -1,0 +1,162 @@
+version: "3.9"
+
+services:
+  api:
+    image: ghcr.io/${GHCR_OWNER}/mycloud-api:${IMAGE_TAG:-latest}
+    environment:
+      APP_NAME: ${APP_NAME}
+      APP_ENV: ${APP_ENV}
+      PORT: ${PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE}
+      MINIO_UPLOADS_BUCKET: ${MINIO_UPLOADS_BUCKET}
+      MINIO_ORIGINALS_BUCKET: ${MINIO_ORIGINALS_BUCKET}
+      MINIO_THUMBS_BUCKET: ${MINIO_THUMBS_BUCKET}
+      MINIO_AVATARS_BUCKET: ${MINIO_AVATARS_BUCKET}
+      CLAMAV_SOCKET: ${CLAMAV_SOCKET}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      mycloud_internal:
+      nginx-proxy-manager_default:
+        aliases:
+          - mycloud-api
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/${GHCR_OWNER}/mycloud-worker:${IMAGE_TAG:-latest}
+    environment:
+      APP_NAME: ${APP_NAME}
+      APP_ENV: ${APP_ENV}
+      PORT: ${PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE}
+      MINIO_UPLOADS_BUCKET: ${MINIO_UPLOADS_BUCKET}
+      MINIO_ORIGINALS_BUCKET: ${MINIO_ORIGINALS_BUCKET}
+      MINIO_THUMBS_BUCKET: ${MINIO_THUMBS_BUCKET}
+      MINIO_AVATARS_BUCKET: ${MINIO_AVATARS_BUCKET}
+      CLAMAV_SOCKET: ${CLAMAV_SOCKET}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_ACCESS_TTL_MINUTES: ${JWT_ACCESS_TTL_MINUTES}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      clamav:
+        condition: service_started
+    networks:
+      - mycloud_internal
+    restart: unless-stopped
+
+  migrate:
+    image: ghcr.io/${GHCR_OWNER}/mycloud-migrate:${IMAGE_TAG:-latest}
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mycloud_internal
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mycloud
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d mycloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mycloud_internal
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - mycloud_internal
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_CONSOLE_REDIRECT_URL}
+    volumes:
+      - minio_data:/data
+    networks:
+      mycloud_internal:
+      nginx-proxy-manager_default:
+        aliases:
+          - mycloud-minio
+          - mycloud-minio-console
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav:1.4_base
+    volumes:
+      - clamav_db:/var/lib/clamav
+    networks:
+      - mycloud_internal
+    restart: unless-stopped
+
+networks:
+  mycloud_internal:
+    driver: bridge
+  nginx-proxy-manager_default:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  clamav_db:
