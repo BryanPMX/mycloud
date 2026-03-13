@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
 Current implementation status on March 13, 2026:
-- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
+- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/albums`, `POST /api/v1/albums`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -488,12 +488,14 @@ List all albums owned by the user plus albums shared with them.
 {
   "owned": [
     {
-      "id":          "uuid",
-      "name":        "Summer 2024",
-      "description": "Family holiday in Sardinia",
-      "media_count": 84,
-      "cover_url":   "https://...",
-      "created_at":  "2024-06-01T00:00:00Z"
+      "id":            "uuid",
+      "owner_id":      "uuid",
+      "name":          "Summer 2024",
+      "description":   "Family holiday in Sardinia",
+      "cover_media_id": "uuid",
+      "media_count":   84,
+      "created_at":    "2024-06-01T00:00:00Z",
+      "updated_at":    "2024-06-01T00:00:00Z"
     }
   ],
   "shared_with_me": [...]
@@ -513,14 +515,26 @@ Create a new album.
 }
 ```
 
-**Response 201** — album object.
+**Response 201**
+```json
+{
+  "id":            "uuid",
+  "owner_id":      "uuid",
+  "name":          "Christmas 2024",
+  "description":   "Holiday gathering at Grandma's",
+  "cover_media_id": null,
+  "media_count":   0,
+  "created_at":    "2024-06-15T10:00:00Z",
+  "updated_at":    "2024-06-15T10:00:00Z"
+}
+```
 
 ---
 
 ### GET /albums/:id
 Get album details. User must own it or have an active share.
 
-**Response 200** — album object including share list.
+Planned later.
 
 ---
 
@@ -550,7 +564,7 @@ Delete an album. Does NOT delete the media within it (media has independent life
 ### GET /albums/:id/media
 List media within an album. Same query parameters as GET /media.
 
-**Response 200** — same shape as GET /media.
+Planned later.
 
 ---
 
@@ -593,15 +607,22 @@ Share an album with a family member or all family members.
 **Response 201**
 ```json
 {
-  "id":          "uuid",
-  "album_id":    "uuid",
-  "shared_by":   "uuid",
-  "shared_with": "uuid",
-  "permission":  "view",
-  "expires_at":  "2025-01-01T00:00:00Z",
-  "created_at":  "2024-06-15T10:00:00Z"
+  "id":           "uuid",
+  "album_id":     "uuid",
+  "shared_by":    "uuid",
+  "shared_with":  "uuid",
+  "recipient": {
+    "id":           "uuid",
+    "display_name": "Grandma Rose",
+    "avatar_url":   "avatars/grandma.webp"
+  },
+  "permission":   "view",
+  "expires_at":   "2025-01-01T00:00:00Z",
+  "created_at":   "2024-06-15T10:00:00Z"
 }
 ```
+
+If `shared_with` is omitted, the API creates a family-wide share using the all-zero UUID sentinel and returns a `recipient.display_name` of `Entire family`.
 
 ---
 
@@ -613,11 +634,18 @@ List all active shares for an album.
 {
   "shares": [
     {
-      "id":          "uuid",
-      "shared_with": { "id": "uuid", "display_name": "Grandma Rose", "avatar_url": "..." },
-      "permission":  "view",
-      "expires_at":  null,
-      "created_at":  "2024-06-01T00:00:00Z"
+      "id":           "uuid",
+      "album_id":     "uuid",
+      "shared_by":    "uuid",
+      "shared_with":  "uuid",
+      "recipient": {
+        "id":           "uuid",
+        "display_name": "Grandma Rose",
+        "avatar_url":   "avatars/grandma.webp"
+      },
+      "permission":   "view",
+      "expires_at":   null,
+      "created_at":   "2024-06-01T00:00:00Z"
     }
   ]
 }

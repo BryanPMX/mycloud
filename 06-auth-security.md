@@ -1,7 +1,7 @@
 # 06 — Authentication & Security
 
 Current implementation status on March 13, 2026:
-- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation, auth middleware, request IDs, structured request logging, and repository-enforced media visibility
+- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation, auth middleware, request IDs, structured request logging, repository-enforced media visibility, and application-layer album/share ownership checks
 - Still planned from this design doc: invite acceptance, rate limiting, security-header middleware, and the larger admin/invite flows described below
 
 ---

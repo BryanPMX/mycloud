@@ -20,17 +20,20 @@ As of March 13, 2026, the following starter work is now implemented for MyCloud:
 
 - backend core domain models and repository contracts
 - environment config, JWT/password helpers, and cursor pagination helpers
-- PostgreSQL pool + repositories for users and visible media
+- PostgreSQL pool + repositories for users, visible media, albums, shares, and comments
 - Redis client + refresh session store
+- Postgres comments repository plus media comment flows
 - HTTP router, auth middleware, request IDs, and structured request logging
-- auth endpoints plus `GET /users/me` and `GET /media`
-- initial migration and local API/Postgres/Redis compose setup
+- auth endpoints plus `GET /users/me`, `GET /media`, album/share routes, and media comment routes
+- album creation/listing, album-media membership changes, and share list/create/revoke flows
+- direct multipart upload init/complete flows with MinIO wiring
+- `process_media` queueing plus worker-side staging, scanning, and promotion
+- initial migrations and local API/Postgres/Redis/MinIO compose setup
 
 Still intentionally pending:
 
-- upload initialization and completion flows
-- MinIO integration and worker processing
-- album/share mutation endpoints
+- favorites and audit log persistence
+- album detail/update/delete and album-specific media listing
 - Flutter app runtime wiring
 
 ---

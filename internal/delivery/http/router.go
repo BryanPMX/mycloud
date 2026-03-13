@@ -11,12 +11,15 @@ import (
 )
 
 type Dependencies struct {
-	AppName      string
-	AppEnv       string
-	TokenService pkgauth.Service
-	AuthHandler  *handlers.AuthHandler
-	UserHandler  *handlers.UserHandler
-	MediaHandler *handlers.MediaHandler
+	AppName        string
+	AppEnv         string
+	TokenService   pkgauth.Service
+	AuthHandler    *handlers.AuthHandler
+	UserHandler    *handlers.UserHandler
+	MediaHandler   *handlers.MediaHandler
+	AlbumHandler   *handlers.AlbumHandler
+	ShareHandler   *handlers.ShareHandler
+	CommentHandler *handlers.CommentHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -49,6 +52,16 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	protected.POST("/media/upload/init", deps.MediaHandler.InitUpload)
 	protected.POST("/media/upload/:id/part-url", deps.MediaHandler.PresignPart)
 	protected.POST("/media/upload/:id/complete", deps.MediaHandler.CompleteUpload)
+	protected.GET("/albums", deps.AlbumHandler.List)
+	protected.POST("/albums", deps.AlbumHandler.Create)
+	protected.POST("/albums/:id/media", deps.AlbumHandler.AddMedia)
+	protected.DELETE("/albums/:id/media/:mediaId", deps.AlbumHandler.RemoveMedia)
+	protected.GET("/albums/:id/shares", deps.ShareHandler.List)
+	protected.POST("/albums/:id/shares", deps.ShareHandler.Create)
+	protected.DELETE("/albums/:id/shares/:shareId", deps.ShareHandler.Delete)
+	protected.GET("/media/:id/comments", deps.CommentHandler.List)
+	protected.POST("/media/:id/comments", deps.CommentHandler.Create)
+	protected.DELETE("/media/:id/comments/:commentId", deps.CommentHandler.Delete)
 
 	return router
 }

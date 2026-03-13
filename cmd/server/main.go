@@ -6,9 +6,15 @@ import (
 	"net/http"
 	"time"
 
+	albumcmd "github.com/yourorg/mycloud/internal/application/commands/albums"
 	authcmd "github.com/yourorg/mycloud/internal/application/commands/auth"
+	commentcmd "github.com/yourorg/mycloud/internal/application/commands/comments"
 	mediacmd "github.com/yourorg/mycloud/internal/application/commands/media"
+	sharecmd "github.com/yourorg/mycloud/internal/application/commands/shares"
+	albumquery "github.com/yourorg/mycloud/internal/application/queries/albums"
+	commentquery "github.com/yourorg/mycloud/internal/application/queries/comments"
 	mediaquery "github.com/yourorg/mycloud/internal/application/queries/media"
+	sharequery "github.com/yourorg/mycloud/internal/application/queries/shares"
 	userquery "github.com/yourorg/mycloud/internal/application/queries/users"
 	httpapi "github.com/yourorg/mycloud/internal/delivery/http"
 	"github.com/yourorg/mycloud/internal/delivery/http/handlers"
@@ -65,6 +71,9 @@ func main() {
 
 	userRepo := postgres.NewUserRepository(db)
 	mediaRepo := postgres.NewMediaRepository(db)
+	albumRepo := postgres.NewAlbumRepository(db)
+	shareRepo := postgres.NewShareRepository(db)
+	commentRepo := postgres.NewCommentRepository(db)
 	jobRepo := postgres.NewJobRepository(db)
 	sessionStore := redisinfra.NewSessionStore(redisClient)
 	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
@@ -77,6 +86,16 @@ func main() {
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
 	listMediaHandler := mediaquery.NewListMediaHandler(userRepo, mediaRepo)
+	listAlbumsHandler := albumquery.NewListAlbumsHandler(userRepo, albumRepo)
+	createAlbumHandler := albumcmd.NewCreateAlbumHandler(userRepo, albumRepo)
+	addAlbumMediaHandler := albumcmd.NewAddMediaHandler(userRepo, albumRepo, mediaRepo)
+	removeAlbumMediaHandler := albumcmd.NewRemoveMediaHandler(userRepo, albumRepo)
+	listSharesHandler := sharequery.NewListSharesHandler(userRepo, albumRepo, shareRepo)
+	createShareHandler := sharecmd.NewCreateShareHandler(userRepo, albumRepo, shareRepo)
+	revokeShareHandler := sharecmd.NewRevokeShareHandler(userRepo, albumRepo, shareRepo)
+	listCommentsHandler := commentquery.NewListCommentsHandler(userRepo, mediaRepo, commentRepo)
+	addCommentHandler := commentcmd.NewAddCommentHandler(userRepo, mediaRepo, commentRepo)
+	deleteCommentHandler := commentcmd.NewDeleteCommentHandler(userRepo, commentRepo)
 	initUploadHandler := mediacmd.NewInitUploadHandler(
 		userRepo,
 		storageService,
@@ -100,8 +119,20 @@ func main() {
 			cfg.AppEnv == "production",
 			int(cfg.JWTRefreshTTL.Seconds()),
 		),
-		UserHandler:  handlers.NewUserHandler(getMeHandler),
-		MediaHandler: handlers.NewMediaHandler(listMediaHandler, initUploadHandler, partURLHandler, completeUploadHandler),
+		AlbumHandler: handlers.NewAlbumHandler(
+			listAlbumsHandler,
+			createAlbumHandler,
+			addAlbumMediaHandler,
+			removeAlbumMediaHandler,
+		),
+		ShareHandler: handlers.NewShareHandler(
+			listSharesHandler,
+			createShareHandler,
+			revokeShareHandler,
+		),
+		UserHandler:    handlers.NewUserHandler(getMeHandler),
+		MediaHandler:   handlers.NewMediaHandler(listMediaHandler, initUploadHandler, partURLHandler, completeUploadHandler),
+		CommentHandler: handlers.NewCommentHandler(listCommentsHandler, addCommentHandler, deleteCommentHandler),
 	})
 
 	server := &http.Server{

@@ -7,11 +7,23 @@ Current backend slice:
 - JWT access/refresh auth with Redis-backed refresh session rotation
 - MinIO wiring for direct multipart uploads
 - Redis-backed `process_media` job enqueue plus worker promotion/scan flow
+- album list/create, album-media add/remove, and album share management
+- comment persistence plus media comment list/create/delete endpoints
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/users/me`
 - `GET /api/v1/media`
+- `GET /api/v1/albums`
+- `POST /api/v1/albums`
+- `POST /api/v1/albums/:id/media`
+- `DELETE /api/v1/albums/:id/media/:mediaId`
+- `GET /api/v1/albums/:id/shares`
+- `POST /api/v1/albums/:id/shares`
+- `DELETE /api/v1/albums/:id/shares/:shareId`
+- `GET /api/v1/media/:id/comments`
+- `POST /api/v1/media/:id/comments`
+- `DELETE /api/v1/media/:id/comments/:commentId`
 - `POST /api/v1/media/upload/init`
 - `POST /api/v1/media/upload/:id/part-url`
 - `POST /api/v1/media/upload/:id/complete`

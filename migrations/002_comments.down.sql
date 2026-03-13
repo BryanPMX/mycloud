@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_comments_media;
+DROP TABLE IF EXISTS comments CASCADE;

@@ -36,12 +36,14 @@ As of March 13, 2026, the repository includes the first working backend slice:
 - secure JWT login, refresh, and logout flows
 - authenticated `GET /users/me`
 - authorization-aware `GET /media` with cursor pagination
+- album creation/listing, album-media membership, and album share management
+- media comment read/write/delete flows backed by PostgreSQL soft deletes
 - direct multipart upload init, part-url presigning, and completion endpoints
 - `process_media` job creation at upload completion
 - worker-side staged upload scanning, promotion to originals, and media row finalization
-- focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, and media upload commands
+- focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, media upload commands, albums, and shares
 
-Actual thumbnail file generation, WebSocket progress events, sharing mutations, invite flow, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
+Actual thumbnail file generation, WebSocket progress events, album detail/update/delete flows, favorites, invite flow, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
 
 ### Design Goals
 

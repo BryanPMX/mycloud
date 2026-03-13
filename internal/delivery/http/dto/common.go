@@ -60,6 +60,47 @@ type UploadCompleteResponse struct {
 	SizeBytes int64  `json:"size_bytes"`
 }
 
+type AlbumResponse struct {
+	ID           string    `json:"id"`
+	OwnerID      string    `json:"owner_id"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	CoverMediaID *string   `json:"cover_media_id,omitempty"`
+	MediaCount   int       `json:"media_count"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type ShareRecipientResponse struct {
+	ID          string  `json:"id"`
+	DisplayName string  `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url"`
+}
+
+type ShareResponse struct {
+	ID         string                  `json:"id"`
+	AlbumID    string                  `json:"album_id"`
+	SharedBy   string                  `json:"shared_by"`
+	SharedWith string                  `json:"shared_with"`
+	Recipient  *ShareRecipientResponse `json:"recipient,omitempty"`
+	Permission string                  `json:"permission"`
+	ExpiresAt  *time.Time              `json:"expires_at,omitempty"`
+	CreatedAt  time.Time               `json:"created_at"`
+}
+
+type CommentAuthorResponse struct {
+	ID          string  `json:"id"`
+	DisplayName string  `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url"`
+}
+
+type CommentResponse struct {
+	ID        string                `json:"id"`
+	Author    CommentAuthorResponse `json:"author"`
+	Body      string                `json:"body"`
+	CreatedAt time.Time             `json:"created_at"`
+}
+
 func ToUserResponse(user *domain.User) UserResponse {
 	return UserResponse{
 		ID:          user.ID.String(),
@@ -102,6 +143,60 @@ func ToUploadCompleteResponse(media *domain.Media) UploadCompleteResponse {
 		Status:    string(media.Status),
 		Filename:  media.Filename,
 		SizeBytes: media.SizeBytes,
+	}
+}
+
+func ToAlbumResponse(album *domain.Album) AlbumResponse {
+	var coverMediaID *string
+	if album.CoverMediaID != nil {
+		value := album.CoverMediaID.String()
+		coverMediaID = &value
+	}
+
+	return AlbumResponse{
+		ID:           album.ID.String(),
+		OwnerID:      album.OwnerID.String(),
+		Name:         album.Name,
+		Description:  album.Description,
+		CoverMediaID: coverMediaID,
+		MediaCount:   album.MediaCount,
+		CreatedAt:    album.CreatedAt,
+		UpdatedAt:    album.UpdatedAt,
+	}
+}
+
+func ToShareResponse(share *domain.Share) ShareResponse {
+	var recipient *ShareRecipientResponse
+	if share.Recipient != nil {
+		recipient = &ShareRecipientResponse{
+			ID:          share.Recipient.ID.String(),
+			DisplayName: share.Recipient.DisplayName,
+			AvatarURL:   stringPtr(share.Recipient.AvatarKey),
+		}
+	}
+
+	return ShareResponse{
+		ID:         share.ID.String(),
+		AlbumID:    share.AlbumID.String(),
+		SharedBy:   share.SharedBy.String(),
+		SharedWith: share.SharedWith.String(),
+		Recipient:  recipient,
+		Permission: string(share.Permission),
+		ExpiresAt:  share.ExpiresAt,
+		CreatedAt:  share.CreatedAt,
+	}
+}
+
+func ToCommentResponse(comment *domain.Comment) CommentResponse {
+	return CommentResponse{
+		ID: comment.ID.String(),
+		Author: CommentAuthorResponse{
+			ID:          comment.Author.ID.String(),
+			DisplayName: comment.Author.DisplayName,
+			AvatarURL:   stringPtr(comment.Author.AvatarKey),
+		},
+		Body:      comment.Body,
+		CreatedAt: comment.CreatedAt,
 	}
 }
 
