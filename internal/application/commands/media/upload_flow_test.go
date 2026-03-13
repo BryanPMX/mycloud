@@ -134,6 +134,10 @@ func (r *fakeMediaRepo) ListVisibleToUser(context.Context, uuid.UUID, domain.Lis
 	return domain.MediaPage{}, nil
 }
 
+func (r *fakeMediaRepo) ListByAlbum(context.Context, uuid.UUID, domain.ListMediaOptions) (domain.MediaPage, error) {
+	return domain.MediaPage{}, nil
+}
+
 func (r *fakeMediaRepo) UpdateStatus(_ context.Context, id uuid.UUID, status domain.MediaStatus) error {
 	r.updatedID = id
 	r.updatedState = status

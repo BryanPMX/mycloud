@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
 Current implementation status on March 13, 2026:
-- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/albums`, `POST /api/v1/albums`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
+- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -50,7 +50,8 @@ Pass `?cursor=<next_cursor>` to get the next page. Empty `next_cursor` = last pa
 | 500 | Internal server error |
 
 ### Media DTO
-All media endpoints return this shape (abbreviated fields omitted where noted):
+All media endpoints return this shape (abbreviated fields omitted where noted).
+Current implementation note on March 13, 2026: `thumb_urls` still expose stored object keys today; presigned asset URLs are part of the next media read-management slice.
 ```json
 {
   "id":            "uuid",
@@ -534,7 +535,7 @@ Create a new album.
 ### GET /albums/:id
 Get album details. User must own it or have an active share.
 
-Planned later.
+**Response 200** — same album object shape returned by `POST /albums` and `GET /albums`.
 
 ---
 
@@ -564,7 +565,7 @@ Delete an album. Does NOT delete the media within it (media has independent life
 ### GET /albums/:id/media
 List media within an album. Same query parameters as GET /media.
 
-Planned later.
+**Response 200** — same paginated shape as `GET /media`.
 
 ---
 

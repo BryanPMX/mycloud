@@ -20,7 +20,7 @@ func requireActiveUser(ctx context.Context, userRepo domain.UserRepository, user
 	return user, nil
 }
 
-func requireManageableAlbum(
+func requireReadableAlbum(
 	ctx context.Context,
 	userRepo domain.UserRepository,
 	albumRepo domain.AlbumRepository,
@@ -31,12 +31,18 @@ func requireManageableAlbum(
 		return nil, nil, err
 	}
 
-	album, err := albumRepo.FindByID(ctx, albumID)
+	if user.IsAdmin() {
+		album, err := albumRepo.FindByID(ctx, albumID)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return user, album, nil
+	}
+
+	album, err := albumRepo.FindByIDVisibleToUser(ctx, albumID, userID)
 	if err != nil {
 		return nil, nil, err
-	}
-	if album.OwnerID != user.ID && !user.IsAdmin() {
-		return nil, nil, domain.ErrForbidden
 	}
 
 	return user, album, nil

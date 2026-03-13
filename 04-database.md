@@ -3,7 +3,7 @@
 Current implementation status on March 13, 2026:
 - Implemented in [001_initial_schema.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/001_initial_schema.up.sql): `users`, `media`, `albums`, `album_media`, `shares`, `jobs`, plus storage/accounting and album visibility triggers
 - Implemented in [002_comments.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/002_comments.up.sql): `comments` with soft-delete semantics and ordered media-thread lookup
-- Application layer now exercises `albums`, `album_media`, and `shares` for album creation/listing, album membership changes, and active share management
+- Application layer now exercises `albums`, `album_media`, and `shares` for album creation/listing/detail/update/delete, album membership changes, album media reads, and active share management
 - Still planned from this design doc: `favorites`, `audit_log`, and the broader search/metadata extensions described below
 
 ---

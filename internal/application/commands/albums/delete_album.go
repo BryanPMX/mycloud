@@ -8,26 +8,25 @@ import (
 	"github.com/yourorg/mycloud/internal/domain"
 )
 
-type RemoveMediaCommand struct {
+type DeleteAlbumCommand struct {
 	UserID  uuid.UUID
 	AlbumID uuid.UUID
-	MediaID uuid.UUID
 }
 
-type RemoveMediaHandler struct {
+type DeleteAlbumHandler struct {
 	userRepo  domain.UserRepository
 	albumRepo domain.AlbumRepository
 }
 
-func NewRemoveMediaHandler(userRepo domain.UserRepository, albumRepo domain.AlbumRepository) *RemoveMediaHandler {
-	return &RemoveMediaHandler{
+func NewDeleteAlbumHandler(userRepo domain.UserRepository, albumRepo domain.AlbumRepository) *DeleteAlbumHandler {
+	return &DeleteAlbumHandler{
 		userRepo:  userRepo,
 		albumRepo: albumRepo,
 	}
 }
 
-func (h *RemoveMediaHandler) Execute(ctx context.Context, command RemoveMediaCommand) error {
-	if command.AlbumID == uuid.Nil || command.MediaID == uuid.Nil {
+func (h *DeleteAlbumHandler) Execute(ctx context.Context, command DeleteAlbumCommand) error {
+	if command.AlbumID == uuid.Nil {
 		return domain.ErrInvalidInput
 	}
 
@@ -36,5 +35,5 @@ func (h *RemoveMediaHandler) Execute(ctx context.Context, command RemoveMediaCom
 		return err
 	}
 
-	return h.albumRepo.RemoveMedia(ctx, album.ID, command.MediaID)
+	return h.albumRepo.Delete(ctx, album.ID)
 }

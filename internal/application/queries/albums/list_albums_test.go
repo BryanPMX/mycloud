@@ -31,8 +31,10 @@ func (r *fakeUserRepo) UpdateLastLogin(context.Context, uuid.UUID, time.Time) er
 }
 
 type fakeAlbumRepo struct {
-	owned  []*domain.Album
-	shared []*domain.Album
+	album        *domain.Album
+	visibleAlbum *domain.Album
+	owned        []*domain.Album
+	shared       []*domain.Album
 }
 
 func (r *fakeAlbumRepo) Create(context.Context, *domain.Album) error {
@@ -40,7 +42,19 @@ func (r *fakeAlbumRepo) Create(context.Context, *domain.Album) error {
 }
 
 func (r *fakeAlbumRepo) FindByID(context.Context, uuid.UUID) (*domain.Album, error) {
-	return nil, domain.ErrNotFound
+	if r.album == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	return r.album, nil
+}
+
+func (r *fakeAlbumRepo) FindByIDVisibleToUser(context.Context, uuid.UUID, uuid.UUID) (*domain.Album, error) {
+	if r.visibleAlbum == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	return r.visibleAlbum, nil
 }
 
 func (r *fakeAlbumRepo) ListOwnedByUser(context.Context, uuid.UUID) ([]*domain.Album, error) {
@@ -49,6 +63,18 @@ func (r *fakeAlbumRepo) ListOwnedByUser(context.Context, uuid.UUID) ([]*domain.A
 
 func (r *fakeAlbumRepo) ListSharedWithUser(context.Context, uuid.UUID) ([]*domain.Album, error) {
 	return r.shared, nil
+}
+
+func (r *fakeAlbumRepo) Update(context.Context, *domain.Album) error {
+	return nil
+}
+
+func (r *fakeAlbumRepo) Delete(context.Context, uuid.UUID) error {
+	return nil
+}
+
+func (r *fakeAlbumRepo) HasMedia(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return false, nil
 }
 
 func (r *fakeAlbumRepo) AddMedia(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (bool, error) {

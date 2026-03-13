@@ -42,17 +42,9 @@ func (h *AddMediaHandler) Execute(ctx context.Context, command AddMediaCommand) 
 		return AddMediaResult{}, domain.ErrInvalidInput
 	}
 
-	user, err := requireActiveUser(ctx, h.userRepo, command.UserID)
+	user, album, err := requireManageableAlbum(ctx, h.userRepo, h.albumRepo, command.UserID, command.AlbumID)
 	if err != nil {
 		return AddMediaResult{}, err
-	}
-
-	album, err := h.albumRepo.FindByID(ctx, command.AlbumID)
-	if err != nil {
-		return AddMediaResult{}, err
-	}
-	if album.OwnerID != user.ID && !user.IsAdmin() {
-		return AddMediaResult{}, domain.ErrForbidden
 	}
 
 	seen := make(map[uuid.UUID]struct{}, len(command.MediaIDs))

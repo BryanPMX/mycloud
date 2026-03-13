@@ -317,6 +317,116 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 	}, nil
 }
 
+func (r *MediaRepository) ListByAlbum(ctx context.Context, albumID uuid.UUID, opts domain.ListMediaOptions) (domain.MediaPage, error) {
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	var (
+		cursorTime any
+		cursorID   any
+	)
+	if opts.Cursor != "" {
+		uploadedAt, id, err := pagination.DecodeTimeUUID(opts.Cursor)
+		if err != nil {
+			return domain.MediaPage{}, domain.ErrInvalidInput
+		}
+
+		cursorTime = uploadedAt
+		cursorID = id
+	}
+
+	const countQuery = `
+		SELECT count(*)
+		FROM media m
+		JOIN album_media am ON am.media_id = m.id
+		WHERE am.album_id = $1
+		  AND m.deleted_at IS NULL
+	`
+
+	var total int
+	if err := r.db.QueryRow(ctx, countQuery, albumID).Scan(&total); err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	const listQuery = `
+		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
+		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
+		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
+		       m.deleted_at, m.metadata
+		FROM media m
+		JOIN album_media am ON am.media_id = m.id
+		WHERE am.album_id = $1
+		  AND m.deleted_at IS NULL
+		  AND ($2::timestamptz IS NULL OR $3::uuid IS NULL OR (m.uploaded_at, m.id) < ($2, $3))
+		ORDER BY m.uploaded_at DESC, m.id DESC
+		LIMIT $4
+	`
+
+	rows, err := r.db.Query(ctx, listQuery, albumID, cursorTime, cursorID, limit+1)
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+	defer rows.Close()
+
+	items := make([]*domain.Media, 0, limit+1)
+	for rows.Next() {
+		row := mediaRow{}
+		if err := rows.Scan(
+			&row.ID,
+			&row.OwnerID,
+			&row.Filename,
+			&row.MimeType,
+			&row.SizeBytes,
+			&row.Width,
+			&row.Height,
+			&row.DurationSecs,
+			&row.OriginalKey,
+			&row.ThumbSmallKey,
+			&row.ThumbMediumKey,
+			&row.ThumbLargeKey,
+			&row.ThumbPosterKey,
+			&row.Status,
+			&row.TakenAt,
+			&row.UploadedAt,
+			&row.DeletedAt,
+			&row.Metadata,
+		); err != nil {
+			return domain.MediaPage{}, err
+		}
+
+		item, err := row.toDomain()
+		if err != nil {
+			return domain.MediaPage{}, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	nextCursor := ""
+	if len(items) > limit {
+		last := items[limit-1]
+		nextCursor, err = pagination.EncodeTimeUUID(last.UploadedAt, last.ID)
+		if err != nil {
+			return domain.MediaPage{}, err
+		}
+
+		items = items[:limit]
+	}
+
+	return domain.MediaPage{
+		Items:      items,
+		NextCursor: nextCursor,
+		Total:      total,
+	}, nil
+}
+
 func (r *MediaRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MediaStatus) error {
 	const query = `
 		UPDATE media

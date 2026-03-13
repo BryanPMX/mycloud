@@ -30,12 +30,9 @@ func NewListAlbumsHandler(userRepo domain.UserRepository, albumRepo domain.Album
 }
 
 func (h *ListAlbumsHandler) Execute(ctx context.Context, query ListAlbumsQuery) (ListAlbumsResult, error) {
-	user, err := h.userRepo.FindByID(ctx, query.UserID)
+	_, err := requireActiveUser(ctx, h.userRepo, query.UserID)
 	if err != nil {
 		return ListAlbumsResult{}, err
-	}
-	if !user.Active {
-		return ListAlbumsResult{}, domain.ErrUnauthorized
 	}
 
 	owned, err := h.albumRepo.ListOwnedByUser(ctx, query.UserID)

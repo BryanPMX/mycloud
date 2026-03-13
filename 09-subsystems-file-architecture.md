@@ -25,7 +25,7 @@ As of March 13, 2026, the following starter work is now implemented for MyCloud:
 - Postgres comments repository plus media comment flows
 - HTTP router, auth middleware, request IDs, and structured request logging
 - auth endpoints plus `GET /users/me`, `GET /media`, album/share routes, and media comment routes
-- album creation/listing, album-media membership changes, and share list/create/revoke flows
+- album creation/listing/detail/update/delete, album-specific media listing, album-media membership changes, and share list/create/revoke flows
 - direct multipart upload init/complete flows with MinIO wiring
 - `process_media` queueing plus worker-side staging, scanning, and promotion
 - initial migrations and local API/Postgres/Redis/MinIO compose setup
@@ -33,7 +33,6 @@ As of March 13, 2026, the following starter work is now implemented for MyCloud:
 Still intentionally pending:
 
 - favorites and audit log persistence
-- album detail/update/delete and album-specific media listing
 - Flutter app runtime wiring
 
 ---

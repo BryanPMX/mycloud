@@ -67,6 +67,44 @@ func (r *AlbumRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.A
 	return row.toDomain(), nil
 }
 
+func (r *AlbumRepository) FindByIDVisibleToUser(ctx context.Context, id, userID uuid.UUID) (*domain.Album, error) {
+	const query = `
+		SELECT a.id, a.owner_id, a.name, a.description, a.cover_media_id, a.media_count, a.created_at, a.updated_at
+		FROM albums a
+		WHERE a.id = $1
+		  AND (
+		    a.owner_id = $2
+		    OR EXISTS (
+		      SELECT 1
+		      FROM shares s
+		      WHERE s.album_id = a.id
+		        AND s.shared_with IN ($2, $3)
+		        AND (s.expires_at IS NULL OR s.expires_at > now())
+		    )
+		  )
+	`
+
+	row := albumRow{}
+	if err := r.db.QueryRow(ctx, query, id, userID, uuid.Nil).Scan(
+		&row.ID,
+		&row.OwnerID,
+		&row.Name,
+		&row.Description,
+		&row.CoverMediaID,
+		&row.MediaCount,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+
+		return nil, err
+	}
+
+	return row.toDomain(), nil
+}
+
 func (r *AlbumRepository) ListOwnedByUser(ctx context.Context, userID uuid.UUID) ([]*domain.Album, error) {
 	const query = `
 		SELECT id, owner_id, name, description, cover_media_id, media_count, created_at, updated_at
@@ -94,6 +132,69 @@ func (r *AlbumRepository) ListSharedWithUser(ctx context.Context, userID uuid.UU
 	`
 
 	return r.listAlbums(ctx, query, userID, uuid.Nil)
+}
+
+func (r *AlbumRepository) Update(ctx context.Context, album *domain.Album) error {
+	const query = `
+		UPDATE albums
+		SET name = $2,
+		    description = $3,
+		    cover_media_id = $4
+		WHERE id = $1
+		RETURNING updated_at
+	`
+
+	if err := r.db.QueryRow(ctx, query,
+		album.ID,
+		album.Name,
+		album.Description,
+		album.CoverMediaID,
+	).Scan(&album.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNotFound
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (r *AlbumRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	const query = `
+		DELETE FROM albums
+		WHERE id = $1
+	`
+
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *AlbumRepository) HasMedia(ctx context.Context, albumID, mediaID uuid.UUID) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM album_media am
+			JOIN media m ON m.id = am.media_id
+			WHERE am.album_id = $1
+			  AND am.media_id = $2
+			  AND m.deleted_at IS NULL
+		)
+	`
+
+	var exists bool
+	if err := r.db.QueryRow(ctx, query, albumID, mediaID).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (r *AlbumRepository) AddMedia(ctx context.Context, albumID, mediaID, addedBy uuid.UUID) (bool, error) {

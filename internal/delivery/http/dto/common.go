@@ -65,7 +65,7 @@ type AlbumResponse struct {
 	OwnerID      string    `json:"owner_id"`
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
-	CoverMediaID *string   `json:"cover_media_id,omitempty"`
+	CoverMediaID *string   `json:"cover_media_id"`
 	MediaCount   int       `json:"media_count"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`

@@ -18,6 +18,7 @@ type MediaRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Media, error)
 	FindByIDForUser(ctx context.Context, id, userID uuid.UUID) (*Media, error)
 	ListVisibleToUser(ctx context.Context, userID uuid.UUID, opts ListMediaOptions) (MediaPage, error)
+	ListByAlbum(ctx context.Context, albumID uuid.UUID, opts ListMediaOptions) (MediaPage, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status MediaStatus) error
 	ApplyProcessingResult(ctx context.Context, id uuid.UUID, result MediaProcessingResult) error
 }
@@ -25,8 +26,12 @@ type MediaRepository interface {
 type AlbumRepository interface {
 	Create(ctx context.Context, album *Album) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Album, error)
+	FindByIDVisibleToUser(ctx context.Context, id, userID uuid.UUID) (*Album, error)
 	ListOwnedByUser(ctx context.Context, userID uuid.UUID) ([]*Album, error)
 	ListSharedWithUser(ctx context.Context, userID uuid.UUID) ([]*Album, error)
+	Update(ctx context.Context, album *Album) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	HasMedia(ctx context.Context, albumID, mediaID uuid.UUID) (bool, error)
 	AddMedia(ctx context.Context, albumID, mediaID, addedBy uuid.UUID) (bool, error)
 	RemoveMedia(ctx context.Context, albumID, mediaID uuid.UUID) error
 }

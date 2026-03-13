@@ -47,12 +47,32 @@ func (r *fakeAlbumRepo) FindByID(context.Context, uuid.UUID) (*domain.Album, err
 	return r.album, nil
 }
 
+func (r *fakeAlbumRepo) FindByIDVisibleToUser(context.Context, uuid.UUID, uuid.UUID) (*domain.Album, error) {
+	if r.album == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	return r.album, nil
+}
+
 func (r *fakeAlbumRepo) ListOwnedByUser(context.Context, uuid.UUID) ([]*domain.Album, error) {
 	return nil, nil
 }
 
 func (r *fakeAlbumRepo) ListSharedWithUser(context.Context, uuid.UUID) ([]*domain.Album, error) {
 	return nil, nil
+}
+
+func (r *fakeAlbumRepo) Update(context.Context, *domain.Album) error {
+	return nil
+}
+
+func (r *fakeAlbumRepo) Delete(context.Context, uuid.UUID) error {
+	return nil
+}
+
+func (r *fakeAlbumRepo) HasMedia(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return false, nil
 }
 
 func (r *fakeAlbumRepo) AddMedia(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (bool, error) {

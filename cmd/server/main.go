@@ -86,8 +86,12 @@ func main() {
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
 	listMediaHandler := mediaquery.NewListMediaHandler(userRepo, mediaRepo)
+	getAlbumHandler := albumquery.NewGetAlbumHandler(userRepo, albumRepo)
 	listAlbumsHandler := albumquery.NewListAlbumsHandler(userRepo, albumRepo)
+	listAlbumMediaHandler := albumquery.NewListAlbumMediaHandler(userRepo, albumRepo, mediaRepo)
 	createAlbumHandler := albumcmd.NewCreateAlbumHandler(userRepo, albumRepo)
+	updateAlbumHandler := albumcmd.NewUpdateAlbumHandler(userRepo, albumRepo)
+	deleteAlbumHandler := albumcmd.NewDeleteAlbumHandler(userRepo, albumRepo)
 	addAlbumMediaHandler := albumcmd.NewAddMediaHandler(userRepo, albumRepo, mediaRepo)
 	removeAlbumMediaHandler := albumcmd.NewRemoveMediaHandler(userRepo, albumRepo)
 	listSharesHandler := sharequery.NewListSharesHandler(userRepo, albumRepo, shareRepo)
@@ -120,8 +124,12 @@ func main() {
 			int(cfg.JWTRefreshTTL.Seconds()),
 		),
 		AlbumHandler: handlers.NewAlbumHandler(
+			getAlbumHandler,
 			listAlbumsHandler,
+			listAlbumMediaHandler,
 			createAlbumHandler,
+			updateAlbumHandler,
+			deleteAlbumHandler,
 			addAlbumMediaHandler,
 			removeAlbumMediaHandler,
 		),
