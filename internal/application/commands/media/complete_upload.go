@@ -24,6 +24,8 @@ type CompleteUploadResult struct {
 type CompleteUploadHandler struct {
 	userRepo    domain.UserRepository
 	mediaRepo   domain.MediaRepository
+	jobRepo     domain.JobRepository
+	jobQueue    domain.JobQueue
 	storage     domain.StorageService
 	uploadStore domain.UploadSessionStore
 }
@@ -31,12 +33,16 @@ type CompleteUploadHandler struct {
 func NewCompleteUploadHandler(
 	userRepo domain.UserRepository,
 	mediaRepo domain.MediaRepository,
+	jobRepo domain.JobRepository,
+	jobQueue domain.JobQueue,
 	storage domain.StorageService,
 	uploadStore domain.UploadSessionStore,
 ) *CompleteUploadHandler {
 	return &CompleteUploadHandler{
 		userRepo:    userRepo,
 		mediaRepo:   mediaRepo,
+		jobRepo:     jobRepo,
+		jobQueue:    jobQueue,
 		storage:     storage,
 		uploadStore: uploadStore,
 	}
@@ -65,6 +71,10 @@ func (h *CompleteUploadHandler) Execute(ctx context.Context, command CompleteUpl
 		media, findErr := h.mediaRepo.FindByIDForUser(ctx, command.MediaID, command.UserID)
 		if findErr != nil {
 			return nil, findErr
+		}
+
+		if err := h.ensureProcessMediaJob(ctx, media); err != nil {
+			return nil, err
 		}
 
 		return &CompleteUploadResult{Media: media}, nil
@@ -110,7 +120,51 @@ func (h *CompleteUploadHandler) Execute(ctx context.Context, command CompleteUpl
 		media = existing
 	}
 
+	if err := h.ensureProcessMediaJob(ctx, media); err != nil {
+		return nil, err
+	}
+
 	_ = h.uploadStore.DeleteUploadSession(ctx, session.MediaID)
 
 	return &CompleteUploadResult{Media: media}, nil
+}
+
+func (h *CompleteUploadHandler) ensureProcessMediaJob(ctx context.Context, media *domain.Media) error {
+	if media.Status != domain.MediaStatusPending {
+		return nil
+	}
+
+	existing, err := h.jobRepo.FindLatestByMediaAndType(ctx, media.ID, domain.JobTypeProcessMedia)
+	switch {
+	case err == nil:
+		if existing.Status == domain.JobStatusQueued {
+			return h.jobQueue.Enqueue(ctx, existing)
+		}
+		return nil
+	case !errors.Is(err, domain.ErrNotFound):
+		return err
+	}
+
+	mediaID := media.ID
+	job := &domain.Job{
+		ID:        uuid.New(),
+		MediaID:   &mediaID,
+		Type:      domain.JobTypeProcessMedia,
+		Status:    domain.JobStatusQueued,
+		Payload:   processMediaPayload(media),
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := h.jobRepo.Create(ctx, job); err != nil {
+		return err
+	}
+
+	return h.jobQueue.Enqueue(ctx, job)
+}
+
+func processMediaPayload(media *domain.Media) map[string]any {
+	return map[string]any{
+		"filename":   media.Filename,
+		"mime_type":  media.MimeType,
+		"object_key": media.OriginalKey,
+	}
 }

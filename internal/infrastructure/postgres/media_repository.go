@@ -73,6 +73,48 @@ func (r *MediaRepository) Create(ctx context.Context, media *domain.Media) error
 	return err
 }
 
+func (r *MediaRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Media, error) {
+	const query = `
+		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
+		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
+		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
+		       m.deleted_at, m.metadata
+		FROM media m
+		WHERE m.id = $1
+		  AND m.deleted_at IS NULL
+	`
+
+	row := mediaRow{}
+	if err := r.db.QueryRow(ctx, query, id).Scan(
+		&row.ID,
+		&row.OwnerID,
+		&row.Filename,
+		&row.MimeType,
+		&row.SizeBytes,
+		&row.Width,
+		&row.Height,
+		&row.DurationSecs,
+		&row.OriginalKey,
+		&row.ThumbSmallKey,
+		&row.ThumbMediumKey,
+		&row.ThumbLargeKey,
+		&row.ThumbPosterKey,
+		&row.Status,
+		&row.TakenAt,
+		&row.UploadedAt,
+		&row.DeletedAt,
+		&row.Metadata,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+
+		return nil, err
+	}
+
+	return row.toDomain()
+}
+
 type mediaRow struct {
 	ID             uuid.UUID
 	OwnerID        uuid.UUID
@@ -273,6 +315,68 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 		NextCursor: nextCursor,
 		Total:      total,
 	}, nil
+}
+
+func (r *MediaRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MediaStatus) error {
+	const query = `
+		UPDATE media
+		SET status = $2
+		WHERE id = $1
+		  AND deleted_at IS NULL
+	`
+
+	tag, err := r.db.Exec(ctx, query, id, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *MediaRepository) ApplyProcessingResult(ctx context.Context, id uuid.UUID, result domain.MediaProcessingResult) error {
+	metadata, err := json.Marshal(result.Metadata)
+	if err != nil {
+		return err
+	}
+
+	const query = `
+		UPDATE media
+		SET status = $2,
+		    width = CASE WHEN $3 > 0 THEN $3 ELSE width END,
+		    height = CASE WHEN $4 > 0 THEN $4 ELSE height END,
+		    duration_secs = CASE WHEN $5 > 0 THEN $5 ELSE duration_secs END,
+		    thumb_small_key = NULLIF($6, ''),
+		    thumb_medium_key = NULLIF($7, ''),
+		    thumb_large_key = NULLIF($8, ''),
+		    thumb_poster_key = NULLIF($9, ''),
+		    metadata = $10
+		WHERE id = $1
+		  AND deleted_at IS NULL
+	`
+
+	tag, err := r.db.Exec(ctx, query,
+		id,
+		domain.MediaStatusReady,
+		result.Width,
+		result.Height,
+		result.DurationSecs,
+		result.ThumbKeys.Small,
+		result.ThumbKeys.Medium,
+		result.ThumbKeys.Large,
+		result.ThumbKeys.Poster,
+		metadata,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
 }
 
 func (r mediaRow) toDomain() (*domain.Media, error) {

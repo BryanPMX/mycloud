@@ -6,6 +6,7 @@ Current backend slice:
 - PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, and `jobs`
 - JWT access/refresh auth with Redis-backed refresh session rotation
 - MinIO wiring for direct multipart uploads
+- Redis-backed `process_media` job enqueue plus worker promotion/scan flow
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`

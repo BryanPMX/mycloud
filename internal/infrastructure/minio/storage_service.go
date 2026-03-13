@@ -3,6 +3,7 @@ package minio
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,12 +18,14 @@ import (
 type StorageService struct {
 	core          *miniosdk.Core
 	uploadsBucket string
+	originalsBuck string
 }
 
-func NewStorageService(core *miniosdk.Core, uploadsBucket string) *StorageService {
+func NewStorageService(core *miniosdk.Core, uploadsBucket, originalsBucket string) *StorageService {
 	return &StorageService{
 		core:          core,
 		uploadsBucket: uploadsBucket,
+		originalsBuck: originalsBucket,
 	}
 }
 
@@ -92,6 +95,32 @@ func (s *StorageService) UploadExists(ctx context.Context, key string) (bool, er
 func (s *StorageService) DeleteUpload(ctx context.Context, key string) error {
 	if err := s.core.RemoveObject(ctx, s.uploadsBucket, key, miniosdk.RemoveObjectOptions{}); err != nil {
 		return fmt.Errorf("delete upload object: %w", err)
+	}
+
+	return nil
+}
+
+func (s *StorageService) OpenUpload(ctx context.Context, key string) (io.ReadCloser, error) {
+	obj, err := s.core.Client.GetObject(ctx, s.uploadsBucket, key, miniosdk.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get upload object: %w", err)
+	}
+
+	return obj, nil
+}
+
+func (s *StorageService) PromoteUpload(ctx context.Context, key string) error {
+	if _, err := s.core.CopyObject(
+		ctx,
+		s.uploadsBucket,
+		key,
+		s.originalsBuck,
+		key,
+		nil,
+		miniosdk.CopySrcOptions{},
+		miniosdk.PutObjectOptions{},
+	); err != nil {
+		return fmt.Errorf("promote upload object: %w", err)
 	}
 
 	return nil

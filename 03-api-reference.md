@@ -328,7 +328,7 @@ MinIO responds with `200 OK` or `204 No Content` and an `ETag` header. The clien
 ---
 
 ### POST /media/upload/:id/complete
-Finalize a staged multipart upload. In the current slice this persists the `media` row as `pending`; worker enqueue, virus scanning, promotion, and thumbnail generation are still planned in the next media-processing slice.
+Finalize a staged multipart upload. The API persists the `media` row as `pending`, creates a `process_media` job, and enqueues background processing.
 
 **Request**
 ```json
@@ -351,7 +351,7 @@ Finalize a staged multipart upload. In the current slice this persists the `medi
 }
 ```
 
-The current implementation stops at the `pending` media row. The worker job enqueue and WebSocket progress updates are not wired yet.
+The current worker slice scans the staged object, promotes it into the originals bucket, and fills metadata plus thumbnail keys. Actual thumbnail file generation and WebSocket progress updates are still planned.
 
 ---
 

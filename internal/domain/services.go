@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,6 +21,8 @@ type StorageService interface {
 	AbortUpload(ctx context.Context, key, uploadID string) error
 	UploadExists(ctx context.Context, key string) (bool, error)
 	DeleteUpload(ctx context.Context, key string) error
+	OpenUpload(ctx context.Context, key string) (io.ReadCloser, error)
+	PromoteUpload(ctx context.Context, key string) error
 }
 
 type UploadSessionStore interface {
@@ -30,4 +33,14 @@ type UploadSessionStore interface {
 
 type MediaKeyBuilder interface {
 	BuildMediaObjectKey(ownerID, mediaID uuid.UUID, filename, mimeType string, now time.Time) string
+	BuildThumbKeys(mediaID uuid.UUID, mimeType string) ThumbKeys
+}
+
+type JobQueue interface {
+	Enqueue(ctx context.Context, job *Job) error
+	Dequeue(ctx context.Context, timeout time.Duration) (*Job, error)
+}
+
+type VirusScanner interface {
+	ScanReader(ctx context.Context, r io.Reader) (clean bool, threat string, err error)
 }

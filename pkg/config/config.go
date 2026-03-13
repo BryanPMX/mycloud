@@ -23,6 +23,7 @@ type Config struct {
 	MinIOOrigBuck    string
 	MinIOThumbsBuck  string
 	MinIOAvatarsBuck string
+	ClamAVSocket     string
 	JWTSecret        string
 	JWTIssuer        string
 	JWTAccessTTL     time.Duration
@@ -46,6 +47,7 @@ func Load() (Config, error) {
 		MinIOOrigBuck:    getEnv("MINIO_ORIGINALS_BUCKET", "fc-originals"),
 		MinIOThumbsBuck:  getEnv("MINIO_THUMBS_BUCKET", "fc-thumbs"),
 		MinIOAvatarsBuck: getEnv("MINIO_AVATARS_BUCKET", "fc-avatars"),
+		ClamAVSocket:     strings.TrimSpace(os.Getenv("CLAMAV_SOCKET")),
 		JWTSecret:        os.Getenv("JWT_SECRET"),
 		JWTIssuer:        getEnv("JWT_ISSUER", "mycloud"),
 		ReadTimeout:      10 * time.Second,

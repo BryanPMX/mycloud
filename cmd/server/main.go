@@ -65,9 +65,11 @@ func main() {
 
 	userRepo := postgres.NewUserRepository(db)
 	mediaRepo := postgres.NewMediaRepository(db)
+	jobRepo := postgres.NewJobRepository(db)
 	sessionStore := redisinfra.NewSessionStore(redisClient)
 	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
-	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck)
+	jobQueue := redisinfra.NewJobQueue(redisClient)
+	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck)
 	keyBuilder := minioinfra.NewKeyBuilder()
 
 	loginHandler := authcmd.NewLoginHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
@@ -85,7 +87,7 @@ func main() {
 		48*time.Hour,
 	)
 	partURLHandler := mediacmd.NewPresignUploadPartHandler(userRepo, storageService, uploadStore, 15*time.Minute)
-	completeUploadHandler := mediacmd.NewCompleteUploadHandler(userRepo, mediaRepo, storageService, uploadStore)
+	completeUploadHandler := mediacmd.NewCompleteUploadHandler(userRepo, mediaRepo, jobRepo, jobQueue, storageService, uploadStore)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		AppName:      cfg.AppName,

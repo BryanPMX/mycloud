@@ -2,6 +2,8 @@ package media
 
 import (
 	"context"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,6 +45,8 @@ type fakeStorageService struct {
 	completed     []domain.CompletedPart
 	abortCalled   bool
 	uploadExists  bool
+	promotedKey   string
+	openedKey     string
 
 	initErr         error
 	presignErr      error
@@ -92,9 +96,12 @@ func (s *fakeUploadStore) DeleteUploadSession(_ context.Context, mediaID uuid.UU
 }
 
 type fakeMediaRepo struct {
-	existing  *domain.Media
-	created   *domain.Media
-	createErr error
+	existing     *domain.Media
+	created      *domain.Media
+	createErr    error
+	updatedID    uuid.UUID
+	updatedState domain.MediaStatus
+	applied      *domain.MediaProcessingResult
 }
 
 func (r *fakeMediaRepo) Create(_ context.Context, media *domain.Media) error {
@@ -115,8 +122,97 @@ func (r *fakeMediaRepo) FindByIDForUser(context.Context, uuid.UUID, uuid.UUID) (
 	return r.existing, nil
 }
 
+func (r *fakeMediaRepo) FindByID(context.Context, uuid.UUID) (*domain.Media, error) {
+	if r.existing == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	return r.existing, nil
+}
+
 func (r *fakeMediaRepo) ListVisibleToUser(context.Context, uuid.UUID, domain.ListMediaOptions) (domain.MediaPage, error) {
 	return domain.MediaPage{}, nil
+}
+
+func (r *fakeMediaRepo) UpdateStatus(_ context.Context, id uuid.UUID, status domain.MediaStatus) error {
+	r.updatedID = id
+	r.updatedState = status
+	return nil
+}
+
+func (r *fakeMediaRepo) ApplyProcessingResult(_ context.Context, id uuid.UUID, result domain.MediaProcessingResult) error {
+	r.updatedID = id
+	copied := result
+	r.applied = &copied
+	return nil
+}
+
+type fakeJobRepo struct {
+	existing  *domain.Job
+	created   *domain.Job
+	createErr error
+	findErr   error
+}
+
+func (r *fakeJobRepo) Create(_ context.Context, job *domain.Job) error {
+	if r.createErr != nil {
+		return r.createErr
+	}
+
+	copied := *job
+	r.created = &copied
+	r.existing = &copied
+	return nil
+}
+
+func (r *fakeJobRepo) FindByID(context.Context, uuid.UUID) (*domain.Job, error) {
+	if r.existing == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	return r.existing, r.findErr
+}
+
+func (r *fakeJobRepo) FindLatestByMediaAndType(context.Context, uuid.UUID, domain.JobType) (*domain.Job, error) {
+	if r.findErr != nil {
+		return nil, r.findErr
+	}
+	if r.existing == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	return r.existing, nil
+}
+
+func (r *fakeJobRepo) MarkRunning(context.Context, uuid.UUID, time.Time) error {
+	return nil
+}
+
+func (r *fakeJobRepo) MarkDone(context.Context, uuid.UUID, time.Time) error {
+	return nil
+}
+
+func (r *fakeJobRepo) MarkFailed(context.Context, uuid.UUID, string, time.Time) error {
+	return nil
+}
+
+type fakeJobQueue struct {
+	enqueued []*domain.Job
+	err      error
+}
+
+func (q *fakeJobQueue) Enqueue(_ context.Context, job *domain.Job) error {
+	if q.err != nil {
+		return q.err
+	}
+
+	copied := *job
+	q.enqueued = append(q.enqueued, &copied)
+	return nil
+}
+
+func (q *fakeJobQueue) Dequeue(context.Context, time.Duration) (*domain.Job, error) {
+	return nil, nil
 }
 
 type fakeKeyBuilder struct {
@@ -125,6 +221,15 @@ type fakeKeyBuilder struct {
 
 func (b fakeKeyBuilder) BuildMediaObjectKey(uuid.UUID, uuid.UUID, string, string, time.Time) string {
 	return b.key
+}
+
+func (b fakeKeyBuilder) BuildThumbKeys(uuid.UUID, string) domain.ThumbKeys {
+	return domain.ThumbKeys{
+		Small:  "small.webp",
+		Medium: "medium.webp",
+		Large:  "large.webp",
+		Poster: "poster.webp",
+	}
 }
 
 func (s *fakeStorageService) InitiateUpload(_ context.Context, key, mimeType string) (string, error) {
@@ -162,6 +267,16 @@ func (s *fakeStorageService) AbortUpload(_ context.Context, _, _ string) error {
 
 func (s *fakeStorageService) UploadExists(context.Context, string) (bool, error) {
 	return s.uploadExists, s.uploadExistsErr
+}
+
+func (s *fakeStorageService) OpenUpload(_ context.Context, key string) (io.ReadCloser, error) {
+	s.openedKey = key
+	return io.NopCloser(strings.NewReader("clean-media")), nil
+}
+
+func (s *fakeStorageService) PromoteUpload(_ context.Context, key string) error {
+	s.promotedKey = key
+	return nil
 }
 
 func TestInitUploadHandlerExecute(t *testing.T) {
@@ -259,8 +374,10 @@ func TestCompleteUploadHandlerExecuteCreatesPendingMedia(t *testing.T) {
 	storage := &fakeStorageService{}
 	uploadStore := &fakeUploadStore{session: session}
 	mediaRepo := &fakeMediaRepo{}
+	jobRepo := &fakeJobRepo{}
+	jobQueue := &fakeJobQueue{}
 
-	handler := NewCompleteUploadHandler(userRepo, mediaRepo, storage, uploadStore)
+	handler := NewCompleteUploadHandler(userRepo, mediaRepo, jobRepo, jobQueue, storage, uploadStore)
 	result, err := handler.Execute(context.Background(), CompleteUploadCommand{
 		UserID:   user.ID,
 		MediaID:  session.MediaID,
@@ -285,6 +402,12 @@ func TestCompleteUploadHandlerExecuteCreatesPendingMedia(t *testing.T) {
 	if uploadStore.deletedID != session.MediaID {
 		t.Fatal("Execute() did not delete the upload session after completion")
 	}
+	if jobRepo.created == nil || jobRepo.created.Type != domain.JobTypeProcessMedia {
+		t.Fatal("Execute() did not create a process_media job")
+	}
+	if len(jobQueue.enqueued) != 1 || jobQueue.enqueued[0].ID != jobRepo.created.ID {
+		t.Fatal("Execute() did not enqueue the created process_media job")
+	}
 }
 
 func TestCompleteUploadHandlerExecuteReturnsExistingMediaWhenSessionIsGone(t *testing.T) {
@@ -301,8 +424,10 @@ func TestCompleteUploadHandlerExecuteReturnsExistingMediaWhenSessionIsGone(t *te
 	userRepo := &fakeMediaUserRepo{user: user}
 	uploadStore := &fakeUploadStore{getErr: domain.ErrNotFound}
 	mediaRepo := &fakeMediaRepo{existing: existing}
+	jobRepo := &fakeJobRepo{}
+	jobQueue := &fakeJobQueue{}
 
-	handler := NewCompleteUploadHandler(userRepo, mediaRepo, &fakeStorageService{}, uploadStore)
+	handler := NewCompleteUploadHandler(userRepo, mediaRepo, jobRepo, jobQueue, &fakeStorageService{}, uploadStore)
 	result, err := handler.Execute(context.Background(), CompleteUploadCommand{
 		UserID:   user.ID,
 		MediaID:  existing.ID,
@@ -316,5 +441,8 @@ func TestCompleteUploadHandlerExecuteReturnsExistingMediaWhenSessionIsGone(t *te
 	}
 	if result.Media != existing {
 		t.Fatal("Execute() did not return the existing media row")
+	}
+	if len(jobQueue.enqueued) != 1 {
+		t.Fatal("Execute() did not enqueue processing for the existing pending media")
 	}
 }

@@ -67,3 +67,11 @@ type UploadSession struct {
 	UploadID  string
 	CreatedAt time.Time
 }
+
+type MediaProcessingResult struct {
+	Width        int
+	Height       int
+	DurationSecs float64
+	ThumbKeys    ThumbKeys
+	Metadata     map[string]any
+}

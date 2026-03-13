@@ -30,3 +30,18 @@ func TestKeyBuilderBuildMediaObjectKeyFallsBackToMIMEExtension(t *testing.T) {
 		t.Fatalf("BuildMediaObjectKey() = %q, want .heic suffix", key)
 	}
 }
+
+func TestKeyBuilderBuildThumbKeysIncludesPosterForVideo(t *testing.T) {
+	t.Parallel()
+
+	builder := NewKeyBuilder()
+	mediaID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+
+	keys := builder.BuildThumbKeys(mediaID, "video/mp4")
+	if keys.Small != "22222222-2222-2222-2222-222222222222/small.webp" {
+		t.Fatalf("BuildThumbKeys() small = %q", keys.Small)
+	}
+	if keys.Poster != "22222222-2222-2222-2222-222222222222/poster.webp" {
+		t.Fatalf("BuildThumbKeys() poster = %q", keys.Poster)
+	}
+}

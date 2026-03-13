@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/yourorg/mycloud/internal/domain"
 )
 
 type KeyBuilder struct{}
@@ -24,6 +26,19 @@ func (b *KeyBuilder) BuildMediaObjectKey(ownerID, mediaID uuid.UUID, filename, m
 		mediaID.String(),
 		normalizedExtension(filename, mimeType),
 	)
+}
+
+func (b *KeyBuilder) BuildThumbKeys(mediaID uuid.UUID, mimeType string) domain.ThumbKeys {
+	keys := domain.ThumbKeys{
+		Small:  fmt.Sprintf("%s/small.webp", mediaID.String()),
+		Medium: fmt.Sprintf("%s/medium.webp", mediaID.String()),
+		Large:  fmt.Sprintf("%s/large.webp", mediaID.String()),
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(mimeType)), "video/") {
+		keys.Poster = fmt.Sprintf("%s/poster.webp", mediaID.String())
+	}
+
+	return keys
 }
 
 func normalizedExtension(filename, mimeType string) string {
