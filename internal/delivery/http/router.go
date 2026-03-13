@@ -46,6 +46,9 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	protected.Use(middleware.RequireAuth(deps.TokenService))
 	protected.GET("/users/me", deps.UserHandler.GetMe)
 	protected.GET("/media", deps.MediaHandler.List)
+	protected.POST("/media/upload/init", deps.MediaHandler.InitUpload)
+	protected.POST("/media/upload/:id/part-url", deps.MediaHandler.PresignPart)
+	protected.POST("/media/upload/:id/complete", deps.MediaHandler.CompleteUpload)
 
 	return router
 }

@@ -5,11 +5,15 @@ This repository now contains both the design set and the first implemented backe
 Current backend slice:
 - PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, and `jobs`
 - JWT access/refresh auth with Redis-backed refresh session rotation
+- MinIO wiring for direct multipart uploads
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/users/me`
 - `GET /api/v1/media`
+- `POST /api/v1/media/upload/init`
+- `POST /api/v1/media/upload/:id/part-url`
+- `POST /api/v1/media/upload/:id/complete`
 - `GET /health`
 
 Use the numbered design docs for architecture and implementation status:

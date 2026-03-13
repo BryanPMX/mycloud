@@ -10,33 +10,53 @@ import (
 )
 
 type Config struct {
-	AppName       string
-	AppEnv        string
-	Port          string
-	DatabaseURL   string
-	RedisURL      string
-	JWTSecret     string
-	JWTIssuer     string
-	JWTAccessTTL  time.Duration
-	JWTRefreshTTL time.Duration
-	ReadTimeout   time.Duration
-	WriteTimeout  time.Duration
-	IdleTimeout   time.Duration
+	AppName          string
+	AppEnv           string
+	Port             string
+	DatabaseURL      string
+	RedisURL         string
+	MinIOEndpoint    string
+	MinIOAccessKey   string
+	MinIOSecretKey   string
+	MinIOSecure      bool
+	MinIOUploadsBuck string
+	MinIOOrigBuck    string
+	MinIOThumbsBuck  string
+	MinIOAvatarsBuck string
+	JWTSecret        string
+	JWTIssuer        string
+	JWTAccessTTL     time.Duration
+	JWTRefreshTTL    time.Duration
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
+	IdleTimeout      time.Duration
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppName:      getEnv("APP_NAME", "MyCloud"),
-		AppEnv:       getEnv("APP_ENV", "development"),
-		Port:         getEnv("PORT", "8080"),
-		DatabaseURL:  strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		RedisURL:     strings.TrimSpace(os.Getenv("REDIS_URL")),
-		JWTSecret:    os.Getenv("JWT_SECRET"),
-		JWTIssuer:    getEnv("JWT_ISSUER", "mycloud"),
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		AppName:          getEnv("APP_NAME", "MyCloud"),
+		AppEnv:           getEnv("APP_ENV", "development"),
+		Port:             getEnv("PORT", "8080"),
+		DatabaseURL:      strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		RedisURL:         strings.TrimSpace(os.Getenv("REDIS_URL")),
+		MinIOEndpoint:    strings.TrimSpace(os.Getenv("MINIO_ENDPOINT")),
+		MinIOAccessKey:   strings.TrimSpace(os.Getenv("MINIO_ACCESS_KEY")),
+		MinIOSecretKey:   strings.TrimSpace(os.Getenv("MINIO_SECRET_KEY")),
+		MinIOUploadsBuck: getEnv("MINIO_UPLOADS_BUCKET", "fc-uploads"),
+		MinIOOrigBuck:    getEnv("MINIO_ORIGINALS_BUCKET", "fc-originals"),
+		MinIOThumbsBuck:  getEnv("MINIO_THUMBS_BUCKET", "fc-thumbs"),
+		MinIOAvatarsBuck: getEnv("MINIO_AVATARS_BUCKET", "fc-avatars"),
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		JWTIssuer:        getEnv("JWT_ISSUER", "mycloud"),
+		ReadTimeout:      10 * time.Second,
+		WriteTimeout:     15 * time.Second,
+		IdleTimeout:      60 * time.Second,
 	}
+	minioSecure, err := parseBool("MINIO_SECURE", false)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.MinIOSecure = minioSecure
 
 	accessMinutes, err := parsePositiveInt("JWT_ACCESS_TTL_MINUTES", 15)
 	if err != nil {
@@ -55,6 +75,15 @@ func Load() (Config, error) {
 	}
 	if cfg.RedisURL == "" {
 		missing = append(missing, "REDIS_URL")
+	}
+	if cfg.MinIOEndpoint == "" {
+		missing = append(missing, "MINIO_ENDPOINT")
+	}
+	if cfg.MinIOAccessKey == "" {
+		missing = append(missing, "MINIO_ACCESS_KEY")
+	}
+	if cfg.MinIOSecretKey == "" {
+		missing = append(missing, "MINIO_SECRET_KEY")
 	}
 	if strings.TrimSpace(cfg.JWTSecret) == "" {
 		missing = append(missing, "JWT_SECRET")
@@ -79,6 +108,16 @@ func parsePositiveInt(key string, fallback int) (int, error) {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value <= 0 {
 		return 0, errors.New(key + " must be a positive integer")
+	}
+
+	return value, nil
+}
+
+func parseBool(key string, fallback bool) (bool, error) {
+	raw := getEnv(key, strconv.FormatBool(fallback))
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, errors.New(key + " must be a boolean")
 	}
 
 	return value, nil

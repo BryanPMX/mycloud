@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
 Current implementation status on March 13, 2026:
-- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`
+- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -291,7 +291,7 @@ Initiate a direct-to-MinIO multipart upload session.
 ```
 
 **Errors**
-- `402 Payment Required` — storage quota exceeded.
+- `409 Conflict` — storage quota exceeded.
 - `415 Unsupported Media Type` — MIME type not in allow-list.
 
 ---
@@ -328,7 +328,7 @@ MinIO responds with `200 OK` or `204 No Content` and an `ETag` header. The clien
 ---
 
 ### POST /media/upload/:id/complete
-Finalize a staged multipart upload. Triggers async processing (virus scan + promotion to originals + thumbnail generation).
+Finalize a staged multipart upload. In the current slice this persists the `media` row as `pending`; worker enqueue, virus scanning, promotion, and thumbnail generation are still planned in the next media-processing slice.
 
 **Request**
 ```json
@@ -351,7 +351,7 @@ Finalize a staged multipart upload. Triggers async processing (virus scan + prom
 }
 ```
 
-The client should then open a WebSocket (`GET /ws/progress`) to receive status updates as the media is processed.
+The current implementation stops at the `pending` media row. The worker job enqueue and WebSocket progress updates are not wired yet.
 
 ---
 

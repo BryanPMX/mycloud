@@ -40,6 +40,26 @@ type MediaResponse struct {
 	ThumbURLs    ThumbURLs  `json:"thumb_urls"`
 }
 
+type UploadInitResponse struct {
+	MediaID       string `json:"media_id"`
+	UploadID      string `json:"upload_id"`
+	Key           string `json:"key"`
+	PartSizeBytes int64  `json:"part_size_bytes"`
+	PartURLTTL    int    `json:"part_url_ttl"`
+}
+
+type UploadPartURLResponse struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type UploadCompleteResponse struct {
+	ID        string `json:"id"`
+	Status    string `json:"status"`
+	Filename  string `json:"filename"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
 func ToUserResponse(user *domain.User) UserResponse {
 	return UserResponse{
 		ID:          user.ID.String(),
@@ -73,6 +93,15 @@ func ToMediaResponse(media *domain.Media) MediaResponse {
 			Large:  stringPtr(media.ThumbKeys.Large),
 			Poster: stringPtr(media.ThumbKeys.Poster),
 		},
+	}
+}
+
+func ToUploadCompleteResponse(media *domain.Media) UploadCompleteResponse {
+	return UploadCompleteResponse{
+		ID:        media.ID.String(),
+		Status:    string(media.Status),
+		Filename:  media.Filename,
+		SizeBytes: media.SizeBytes,
 	}
 }
 

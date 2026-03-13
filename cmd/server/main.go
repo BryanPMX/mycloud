@@ -7,10 +7,12 @@ import (
 	"time"
 
 	authcmd "github.com/yourorg/mycloud/internal/application/commands/auth"
+	mediacmd "github.com/yourorg/mycloud/internal/application/commands/media"
 	mediaquery "github.com/yourorg/mycloud/internal/application/queries/media"
 	userquery "github.com/yourorg/mycloud/internal/application/queries/users"
 	httpapi "github.com/yourorg/mycloud/internal/delivery/http"
 	"github.com/yourorg/mycloud/internal/delivery/http/handlers"
+	minioinfra "github.com/yourorg/mycloud/internal/infrastructure/minio"
 	"github.com/yourorg/mycloud/internal/infrastructure/postgres"
 	redisinfra "github.com/yourorg/mycloud/internal/infrastructure/redis"
 	pkgauth "github.com/yourorg/mycloud/pkg/auth"
@@ -38,6 +40,24 @@ func main() {
 	}
 	defer redisClient.Close()
 
+	minioCtx, minioCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer minioCancel()
+
+	minioCore, err := minioinfra.NewCore(
+		minioCtx,
+		cfg.MinIOEndpoint,
+		cfg.MinIOAccessKey,
+		cfg.MinIOSecretKey,
+		cfg.MinIOSecure,
+		cfg.MinIOUploadsBuck,
+		cfg.MinIOOrigBuck,
+		cfg.MinIOThumbsBuck,
+		cfg.MinIOAvatarsBuck,
+	)
+	if err != nil {
+		log.Fatalf("connect minio: %v", err)
+	}
+
 	tokenService, err := pkgauth.NewJWTService(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	if err != nil {
 		log.Fatalf("create token service: %v", err)
@@ -46,12 +66,26 @@ func main() {
 	userRepo := postgres.NewUserRepository(db)
 	mediaRepo := postgres.NewMediaRepository(db)
 	sessionStore := redisinfra.NewSessionStore(redisClient)
+	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
+	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck)
+	keyBuilder := minioinfra.NewKeyBuilder()
 
 	loginHandler := authcmd.NewLoginHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	refreshHandler := authcmd.NewRefreshHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
 	listMediaHandler := mediaquery.NewListMediaHandler(userRepo, mediaRepo)
+	initUploadHandler := mediacmd.NewInitUploadHandler(
+		userRepo,
+		storageService,
+		uploadStore,
+		keyBuilder,
+		mediacmd.DefaultPartSizeBytes,
+		15*time.Minute,
+		48*time.Hour,
+	)
+	partURLHandler := mediacmd.NewPresignUploadPartHandler(userRepo, storageService, uploadStore, 15*time.Minute)
+	completeUploadHandler := mediacmd.NewCompleteUploadHandler(userRepo, mediaRepo, storageService, uploadStore)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		AppName:      cfg.AppName,
@@ -65,7 +99,7 @@ func main() {
 			int(cfg.JWTRefreshTTL.Seconds()),
 		),
 		UserHandler:  handlers.NewUserHandler(getMeHandler),
-		MediaHandler: handlers.NewMediaHandler(listMediaHandler),
+		MediaHandler: handlers.NewMediaHandler(listMediaHandler, initUploadHandler, partURLHandler, completeUploadHandler),
 	})
 
 	server := &http.Server{

@@ -31,12 +31,13 @@ MyCloud is a **private, high-quality media cloud** for up to 50+ family members,
 As of March 13, 2026, the repository includes the first working backend slice:
 
 - runtime config loading from environment variables
-- PostgreSQL and Redis wiring in the API composition root
+- PostgreSQL, Redis, and MinIO wiring in the API composition root
 - initial SQL migration with quota and album-count triggers
 - secure JWT login, refresh, and logout flows
 - authenticated `GET /users/me`
 - authorization-aware `GET /media` with cursor pagination
-- focused unit coverage for JWT, password hashing, cursor encoding, and login orchestration
+- direct multipart upload init, part-url presigning, and completion endpoints
+- focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, and media upload commands
 
 The upload pipeline, worker processing, sharing mutations, invite flow, Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
 

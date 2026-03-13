@@ -12,3 +12,22 @@ type SessionStore interface {
 	ValidateRefreshToken(ctx context.Context, userID uuid.UUID, jti string) (bool, error)
 	RevokeRefreshToken(ctx context.Context, userID uuid.UUID, jti string) error
 }
+
+type StorageService interface {
+	InitiateUpload(ctx context.Context, key, mimeType string) (string, error)
+	PresignUploadPart(ctx context.Context, key, uploadID string, partNum int, ttl time.Duration) (string, error)
+	CompleteUpload(ctx context.Context, key, uploadID string, parts []CompletedPart) error
+	AbortUpload(ctx context.Context, key, uploadID string) error
+	UploadExists(ctx context.Context, key string) (bool, error)
+	DeleteUpload(ctx context.Context, key string) error
+}
+
+type UploadSessionStore interface {
+	SaveUploadSession(ctx context.Context, session UploadSession, ttl time.Duration) error
+	GetUploadSession(ctx context.Context, mediaID uuid.UUID) (*UploadSession, error)
+	DeleteUploadSession(ctx context.Context, mediaID uuid.UUID) error
+}
+
+type MediaKeyBuilder interface {
+	BuildMediaObjectKey(ownerID, mediaID uuid.UUID, filename, mimeType string, now time.Time) string
+}

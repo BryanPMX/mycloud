@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -20,6 +21,56 @@ type MediaRepository struct {
 
 func NewMediaRepository(db *pgxpool.Pool) *MediaRepository {
 	return &MediaRepository{db: db}
+}
+
+func (r *MediaRepository) Create(ctx context.Context, media *domain.Media) error {
+	metadata, err := json.Marshal(media.Metadata)
+	if err != nil {
+		return err
+	}
+
+	const query = `
+		INSERT INTO media (
+			id, owner_id, filename, mime_type, size_bytes, width, height, duration_secs,
+			original_key, thumb_small_key, thumb_medium_key, thumb_large_key, thumb_poster_key,
+			status, taken_at, uploaded_at, deleted_at, metadata
+		) VALUES (
+			$1, $2, $3, $4, $5, NULLIF($6, 0), NULLIF($7, 0), NULLIF($8, 0),
+			$9, NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, ''),
+			$14, $15, $16, $17, $18
+		)
+	`
+
+	_, err = r.db.Exec(ctx, query,
+		media.ID,
+		media.OwnerID,
+		media.Filename,
+		media.MimeType,
+		media.SizeBytes,
+		media.Width,
+		media.Height,
+		media.DurationSecs,
+		media.OriginalKey,
+		media.ThumbKeys.Small,
+		media.ThumbKeys.Medium,
+		media.ThumbKeys.Large,
+		media.ThumbKeys.Poster,
+		media.Status,
+		media.TakenAt,
+		media.UploadedAt,
+		media.DeletedAt,
+		metadata,
+	)
+	if err == nil {
+		return nil
+	}
+
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return domain.ErrConflict
+	}
+
+	return err
 }
 
 type mediaRow struct {

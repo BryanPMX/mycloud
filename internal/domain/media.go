@@ -51,3 +51,19 @@ type MediaPage struct {
 	NextCursor string
 	Total      int
 }
+
+type CompletedPart struct {
+	PartNumber int
+	ETag       string
+}
+
+type UploadSession struct {
+	MediaID   uuid.UUID
+	OwnerID   uuid.UUID
+	Filename  string
+	MimeType  string
+	SizeBytes int64
+	ObjectKey string
+	UploadID  string
+	CreatedAt time.Time
+}
