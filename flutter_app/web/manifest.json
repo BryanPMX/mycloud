@@ -1,0 +1,6 @@
+{
+  "name": "FamilyCloud",
+  "short_name": "FamilyCloud",
+  "start_url": "/",
+  "display": "standalone"
+}

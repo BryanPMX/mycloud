@@ -1,0 +1,3 @@
+class AlbumListScreen {
+  const AlbumListScreen();
+}

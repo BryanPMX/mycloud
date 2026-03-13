@@ -1,0 +1,3 @@
+class AutoBackupService {
+  const AutoBackupService();
+}

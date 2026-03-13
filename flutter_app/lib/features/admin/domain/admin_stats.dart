@@ -1,0 +1,3 @@
+class AdminStats {
+  const AdminStats();
+}

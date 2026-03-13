@@ -1,0 +1,79 @@
+# OS and editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+secrets/
+certs/
+
+# Runtime data and local state
+tmp/
+.tmp/
+data/
+storage/
+uploads/
+originals/
+thumbs/
+avatars/
+backups/
+postgres_data/
+redis_data/
+minio_data/
+prometheus_data/
+grafana_data/
+clamav_data/
+
+# Database, cache, and backup artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.rdb
+*.dump
+*.bak
+*.sql.gz
+*.tar.gz
+
+# Logs
+*.log
+nginx/logs/*
+!nginx/logs/.gitkeep
+
+# Build outputs and binaries
+bin/
+dist/
+build/
+coverage/
+*.coverprofile
+
+# Dependency directories
+node_modules/
+
+# Go cache and local tooling
+.gocache/
+go.work.sum
+
+# Flutter and Dart generated files
+flutter_app/.dart_tool/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+flutter_app/.packages
+flutter_app/build/
+flutter_app/.metadata
+flutter_app/android/.gradle/
+flutter_app/android/app/debug/
+flutter_app/android/app/profile/
+flutter_app/android/app/release/
+
+# Optional local deploy output
+public/
+var/

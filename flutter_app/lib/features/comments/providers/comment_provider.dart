@@ -1,0 +1,3 @@
+class CommentProvider {
+  const CommentProvider();
+}

@@ -1,0 +1,2 @@
+-- Placeholder migration.
+-- Add the initial schema here when database implementation starts.

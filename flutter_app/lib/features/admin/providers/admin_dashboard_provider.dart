@@ -1,0 +1,3 @@
+class AdminDashboardProvider {
+  const AdminDashboardProvider();
+}

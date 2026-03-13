@@ -1,0 +1,3 @@
+class Album {
+  const Album();
+}

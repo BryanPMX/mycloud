@@ -1,0 +1,11 @@
+name: Docker Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Add Docker build steps when container images are ready."

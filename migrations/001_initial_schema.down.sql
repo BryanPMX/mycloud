@@ -1,0 +1,1 @@
+-- Placeholder rollback migration for the initial schema.

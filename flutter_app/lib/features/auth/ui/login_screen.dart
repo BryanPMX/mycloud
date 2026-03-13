@@ -1,0 +1,3 @@
+class LoginScreen {
+  const LoginScreen();
+}

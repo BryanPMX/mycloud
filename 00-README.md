@@ -18,6 +18,7 @@
 | 06 | `06-auth-security.md` | JWT strategy, refresh tokens, authorization, security hardening |
 | 07 | `07-flutter-client.md` | Flutter app structure, Riverpod, routing, upload, offline |
 | 08 | `08-infrastructure.md` | Docker Compose, Nginx, monitoring, backup, scaling |
+| 09 | `09-subsystems-file-architecture.md` | Starter subsystem decomposition and essential implementation file architecture |
 
 ---
 

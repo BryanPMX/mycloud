@@ -1,0 +1,6 @@
+FROM alpine:3.20
+
+WORKDIR /app
+
+# Placeholder worker image. Replace with the real multi-stage Go build later.
+CMD ["sh"]

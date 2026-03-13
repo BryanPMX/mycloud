@@ -1,0 +1,3 @@
+class AlbumProvider {
+  const AlbumProvider();
+}

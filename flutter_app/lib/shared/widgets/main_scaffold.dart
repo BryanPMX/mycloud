@@ -1,0 +1,3 @@
+class MainScaffold {
+  const MainScaffold();
+}

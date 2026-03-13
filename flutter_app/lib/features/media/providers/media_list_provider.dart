@@ -1,0 +1,3 @@
+class MediaListProvider {
+  const MediaListProvider();
+}

@@ -1,0 +1,3 @@
+class PhotoGridScreen {
+  const PhotoGridScreen();
+}

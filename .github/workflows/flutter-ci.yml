@@ -1,0 +1,11 @@
+name: Flutter CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Add Flutter CI steps when client implementation begins."
