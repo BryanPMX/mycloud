@@ -76,7 +76,12 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Portainer redeploy
-        if: ${{ secrets.PORTAINER_STACK_WEBHOOK_URL != '' }}
         env:
           PORTAINER_STACK_WEBHOOK_URL: ${{ secrets.PORTAINER_STACK_WEBHOOK_URL }}
-        run: curl --fail --show-error --silent -X POST "$PORTAINER_STACK_WEBHOOK_URL"
+        run: |
+          if [ -z "$PORTAINER_STACK_WEBHOOK_URL" ]; then
+            echo "PORTAINER_STACK_WEBHOOK_URL is not set; skipping redeploy trigger."
+            exit 0
+          fi
+
+          curl --fail --show-error --silent -X POST "$PORTAINER_STACK_WEBHOOK_URL"
