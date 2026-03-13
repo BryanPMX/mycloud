@@ -1,4 +1,281 @@
 package postgres
 
-// MediaRepository will implement media persistence against PostgreSQL.
-type MediaRepository struct{}
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/yourorg/mycloud/internal/domain"
+	"github.com/yourorg/mycloud/pkg/pagination"
+)
+
+type MediaRepository struct {
+	db *pgxpool.Pool
+}
+
+func NewMediaRepository(db *pgxpool.Pool) *MediaRepository {
+	return &MediaRepository{db: db}
+}
+
+type mediaRow struct {
+	ID             uuid.UUID
+	OwnerID        uuid.UUID
+	Filename       string
+	MimeType       string
+	SizeBytes      int64
+	Width          *int
+	Height         *int
+	DurationSecs   *float64
+	OriginalKey    string
+	ThumbSmallKey  *string
+	ThumbMediumKey *string
+	ThumbLargeKey  *string
+	ThumbPosterKey *string
+	Status         string
+	TakenAt        *time.Time
+	UploadedAt     time.Time
+	DeletedAt      *time.Time
+	Metadata       []byte
+}
+
+func (r *MediaRepository) FindByIDForUser(ctx context.Context, id, userID uuid.UUID) (*domain.Media, error) {
+	const query = `
+		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
+		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
+		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
+		       m.deleted_at, m.metadata
+		FROM media m
+		WHERE m.id = $1
+		  AND m.deleted_at IS NULL
+		  AND (
+		    m.owner_id = $2
+		    OR EXISTS (
+		      SELECT 1
+		      FROM album_media am
+		      JOIN shares s ON s.album_id = am.album_id
+		      WHERE am.media_id = m.id
+		        AND s.shared_with IN ($2, $3)
+		        AND (s.expires_at IS NULL OR s.expires_at > now())
+		    )
+		  )
+	`
+
+	row := mediaRow{}
+	if err := r.db.QueryRow(ctx, query, id, userID, uuid.Nil).Scan(
+		&row.ID,
+		&row.OwnerID,
+		&row.Filename,
+		&row.MimeType,
+		&row.SizeBytes,
+		&row.Width,
+		&row.Height,
+		&row.DurationSecs,
+		&row.OriginalKey,
+		&row.ThumbSmallKey,
+		&row.ThumbMediumKey,
+		&row.ThumbLargeKey,
+		&row.ThumbPosterKey,
+		&row.Status,
+		&row.TakenAt,
+		&row.UploadedAt,
+		&row.DeletedAt,
+		&row.Metadata,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+
+		return nil, err
+	}
+
+	return row.toDomain()
+}
+
+func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUID, opts domain.ListMediaOptions) (domain.MediaPage, error) {
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	var (
+		cursorTime any
+		cursorID   any
+	)
+	if opts.Cursor != "" {
+		uploadedAt, id, err := pagination.DecodeTimeUUID(opts.Cursor)
+		if err != nil {
+			return domain.MediaPage{}, domain.ErrInvalidInput
+		}
+
+		cursorTime = uploadedAt
+		cursorID = id
+	}
+
+	const countQuery = `
+		SELECT count(*)
+		FROM media m
+		WHERE m.deleted_at IS NULL
+		  AND (
+		    m.owner_id = $1
+		    OR EXISTS (
+		      SELECT 1
+		      FROM album_media am
+		      JOIN shares s ON s.album_id = am.album_id
+		      WHERE am.media_id = m.id
+		        AND s.shared_with IN ($1, $2)
+		        AND (s.expires_at IS NULL OR s.expires_at > now())
+		    )
+		  )
+	`
+
+	var total int
+	if err := r.db.QueryRow(ctx, countQuery, userID, uuid.Nil).Scan(&total); err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	const listQuery = `
+		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
+		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
+		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
+		       m.deleted_at, m.metadata
+		FROM media m
+		WHERE m.deleted_at IS NULL
+		  AND (
+		    m.owner_id = $1
+		    OR EXISTS (
+		      SELECT 1
+		      FROM album_media am
+		      JOIN shares s ON s.album_id = am.album_id
+		      WHERE am.media_id = m.id
+		        AND s.shared_with IN ($1, $2)
+		        AND (s.expires_at IS NULL OR s.expires_at > now())
+		    )
+		  )
+		  AND ($3::timestamptz IS NULL OR $4::uuid IS NULL OR (m.uploaded_at, m.id) < ($3, $4))
+		ORDER BY m.uploaded_at DESC, m.id DESC
+		LIMIT $5
+	`
+
+	rows, err := r.db.Query(ctx, listQuery, userID, uuid.Nil, cursorTime, cursorID, limit+1)
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+	defer rows.Close()
+
+	items := make([]*domain.Media, 0, limit+1)
+	for rows.Next() {
+		row := mediaRow{}
+		if err := rows.Scan(
+			&row.ID,
+			&row.OwnerID,
+			&row.Filename,
+			&row.MimeType,
+			&row.SizeBytes,
+			&row.Width,
+			&row.Height,
+			&row.DurationSecs,
+			&row.OriginalKey,
+			&row.ThumbSmallKey,
+			&row.ThumbMediumKey,
+			&row.ThumbLargeKey,
+			&row.ThumbPosterKey,
+			&row.Status,
+			&row.TakenAt,
+			&row.UploadedAt,
+			&row.DeletedAt,
+			&row.Metadata,
+		); err != nil {
+			return domain.MediaPage{}, err
+		}
+
+		item, err := row.toDomain()
+		if err != nil {
+			return domain.MediaPage{}, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	nextCursor := ""
+	if len(items) > limit {
+		last := items[limit-1]
+		nextCursor, err = pagination.EncodeTimeUUID(last.UploadedAt, last.ID)
+		if err != nil {
+			return domain.MediaPage{}, err
+		}
+
+		items = items[:limit]
+	}
+
+	return domain.MediaPage{
+		Items:      items,
+		NextCursor: nextCursor,
+		Total:      total,
+	}, nil
+}
+
+func (r mediaRow) toDomain() (*domain.Media, error) {
+	var metadata map[string]any
+	if len(r.Metadata) > 0 {
+		if err := json.Unmarshal(r.Metadata, &metadata); err != nil {
+			return nil, err
+		}
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+
+	return &domain.Media{
+		ID:           r.ID,
+		OwnerID:      r.OwnerID,
+		Filename:     r.Filename,
+		MimeType:     r.MimeType,
+		SizeBytes:    r.SizeBytes,
+		Width:        derefInt(r.Width),
+		Height:       derefInt(r.Height),
+		DurationSecs: derefFloat64(r.DurationSecs),
+		OriginalKey:  r.OriginalKey,
+		ThumbKeys: domain.ThumbKeys{
+			Small:  derefString(r.ThumbSmallKey),
+			Medium: derefString(r.ThumbMediumKey),
+			Large:  derefString(r.ThumbLargeKey),
+			Poster: derefString(r.ThumbPosterKey),
+		},
+		Status:     domain.MediaStatus(r.Status),
+		TakenAt:    r.TakenAt,
+		UploadedAt: r.UploadedAt,
+		DeletedAt:  r.DeletedAt,
+		Metadata:   metadata,
+	}, nil
+}
+
+func derefInt(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func derefFloat64(value *float64) float64 {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}

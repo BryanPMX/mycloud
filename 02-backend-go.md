@@ -5,7 +5,7 @@
 ## 1. Project Layout
 
 ```
-familycloud/
+mycloud/
 ├── cmd/
 │   ├── server/
 │   │   └── main.go               # HTTP server entry point — composition root
@@ -111,7 +111,7 @@ familycloud/
 
 ```go
 // go.mod
-module github.com/yourorg/familycloud
+module github.com/yourorg/mycloud
 
 go 1.22
 
@@ -412,8 +412,8 @@ package http
 
 import (
     "github.com/gin-gonic/gin"
-    "github.com/yourorg/familycloud/internal/delivery/http/handlers"
-    "github.com/yourorg/familycloud/internal/delivery/http/middleware"
+    "github.com/yourorg/mycloud/internal/delivery/http/handlers"
+    "github.com/yourorg/mycloud/internal/delivery/http/middleware"
 )
 
 func NewRouter(deps Dependencies, cfg Config) *gin.Engine {
@@ -530,7 +530,7 @@ import (
     "strings"
 
     "github.com/gin-gonic/gin"
-    "github.com/yourorg/familycloud/pkg/auth"
+    "github.com/yourorg/mycloud/pkg/auth"
 )
 
 const UserIDKey = "user_id"

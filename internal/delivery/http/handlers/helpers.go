@@ -1,4 +1,4 @@
-package httpapi
+package handlers
 
 import (
 	"errors"
@@ -9,7 +9,15 @@ import (
 	"github.com/yourorg/mycloud/internal/domain"
 )
 
-func WriteError(c *gin.Context, err error) {
+func errInvalidInput() error {
+	return domain.ErrInvalidInput
+}
+
+func errUnauthorized() error {
+	return domain.ErrUnauthorized
+}
+
+func writeError(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
 	code := "INTERNAL_ERROR"
 	message := "internal server error"

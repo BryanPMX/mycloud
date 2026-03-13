@@ -1,6 +1,10 @@
 # 03 — REST API Reference
 
-All endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
+Current implementation status on March 13, 2026:
+- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`
+- Planned later: the remaining endpoints below unless otherwise noted
+
+All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
 Authenticated endpoints accept either `Authorization: Bearer <access_token>` (mobile/native) or the `access_token` httpOnly cookie (web).
 
 ---
@@ -12,7 +16,7 @@ Authenticated endpoints accept either `Authorization: Bearer <access_token>` (mo
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-For Flutter web, the browser sends `access_token` / `refresh_token` cookies automatically. Those cookies are `HttpOnly`, `Secure`, and `SameSite=Strict`; JavaScript never reads them directly.
+For browser clients, the server can send `access_token` / `refresh_token` cookies automatically. Those cookies are `HttpOnly` and `SameSite=Strict`; in production they should also be `Secure`.
 
 ### Pagination
 List endpoints use **keyset (cursor) pagination** — stable under concurrent inserts.

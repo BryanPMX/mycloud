@@ -4,7 +4,7 @@
 
 ## 1. Purpose
 
-This file defines the **starter repository structure** for FamilyCloud.
+This file defines the **starter repository structure** for MyCloud.
 
 It is intentionally minimal:
 
@@ -14,12 +14,31 @@ It is intentionally minimal:
 
 The goal is to keep the first implementation pass clear and lightweight without losing the overall architecture.
 
+## Current Status
+
+As of March 13, 2026, the following starter work is now implemented for MyCloud:
+
+- backend core domain models and repository contracts
+- environment config, JWT/password helpers, and cursor pagination helpers
+- PostgreSQL pool + repositories for users and visible media
+- Redis client + refresh session store
+- HTTP router, auth middleware, request IDs, and structured request logging
+- auth endpoints plus `GET /users/me` and `GET /media`
+- initial migration and local API/Postgres/Redis compose setup
+
+Still intentionally pending:
+
+- upload initialization and completion flows
+- MinIO integration and worker processing
+- album/share mutation endpoints
+- Flutter app runtime wiring
+
 ---
 
 ## 2. Starter Top-Level Structure
 
 ```text
-familycloud/
+mycloud/
 ├── 00-README.md
 ├── 01-architecture.md
 ├── 02-backend-go.md
@@ -273,7 +292,7 @@ Dockerfile.worker
 nginx/
 ├── nginx.conf
 └── conf.d/
-    └── familycloud.conf
+    └── mycloud.conf
 
 monitoring/
 └── prometheus.yml

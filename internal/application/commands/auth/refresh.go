@@ -2,26 +2,24 @@ package auth
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/yourorg/mycloud/internal/domain"
 	pkgauth "github.com/yourorg/mycloud/pkg/auth"
 )
 
-type LoginCommand struct {
-	Email    string
-	Password string
+type RefreshCommand struct {
+	RefreshToken string
 }
 
-type LoginResult struct {
+type RefreshResult struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int
 	User         *domain.User
 }
 
-type LoginHandler struct {
+type RefreshHandler struct {
 	userRepo     domain.UserRepository
 	sessionStore domain.SessionStore
 	tokenService pkgauth.Service
@@ -29,14 +27,14 @@ type LoginHandler struct {
 	refreshTTL   time.Duration
 }
 
-func NewLoginHandler(
+func NewRefreshHandler(
 	userRepo domain.UserRepository,
 	sessionStore domain.SessionStore,
 	tokenService pkgauth.Service,
 	accessTTL time.Duration,
 	refreshTTL time.Duration,
-) *LoginHandler {
-	return &LoginHandler{
+) *RefreshHandler {
+	return &RefreshHandler{
 		userRepo:     userRepo,
 		sessionStore: sessionStore,
 		tokenService: tokenService,
@@ -45,19 +43,34 @@ func NewLoginHandler(
 	}
 }
 
-func (h *LoginHandler) Execute(ctx context.Context, command LoginCommand) (*LoginResult, error) {
-	user, err := h.userRepo.FindByEmail(ctx, strings.TrimSpace(command.Email))
+func (h *RefreshHandler) Execute(ctx context.Context, command RefreshCommand) (*RefreshResult, error) {
+	if command.RefreshToken == "" {
+		return nil, domain.ErrMissingToken
+	}
+
+	claims, err := h.tokenService.ValidateRefreshToken(command.RefreshToken)
 	if err != nil {
-		if err == domain.ErrNotFound {
-			return nil, domain.ErrInvalidCredentials
-		}
+		return nil, domain.ErrInvalidToken
+	}
+
+	valid, err := h.sessionStore.ValidateRefreshToken(ctx, claims.UserID, claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, domain.ErrInactiveSession
+	}
+
+	user, err := h.userRepo.FindByID(ctx, claims.UserID)
+	if err != nil {
 		return nil, err
 	}
 	if !user.Active {
-		return nil, domain.ErrInvalidCredentials
+		return nil, domain.ErrUnauthorized
 	}
-	if !pkgauth.CheckPassword(user.PasswordHash, command.Password) {
-		return nil, domain.ErrInvalidCredentials
+
+	if err := h.sessionStore.RevokeRefreshToken(ctx, claims.UserID, claims.ID); err != nil {
+		return nil, err
 	}
 
 	accessToken, err := h.tokenService.GenerateAccessToken(user.ID, string(user.Role))
@@ -77,11 +90,7 @@ func (h *LoginHandler) Execute(ctx context.Context, command LoginCommand) (*Logi
 		return nil, err
 	}
 
-	now := time.Now().UTC()
-	user.LastLoginAt = &now
-	_ = h.userRepo.UpdateLastLogin(ctx, user.ID, now)
-
-	return &LoginResult{
+	return &RefreshResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    int(h.accessTTL.Seconds()),

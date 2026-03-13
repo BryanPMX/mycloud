@@ -177,7 +177,7 @@ import (
     "time"
 
     "github.com/minio/minio-go/v7"
-    "github.com/yourorg/familycloud/internal/domain"
+    "github.com/yourorg/mycloud/internal/domain"
 )
 
 type StorageService struct {
@@ -323,7 +323,7 @@ import (
     "strings"
 
     "github.com/davidbyttow/govips/v2/vips"
-    "github.com/yourorg/familycloud/internal/domain"
+    "github.com/yourorg/mycloud/internal/domain"
 )
 
 func init() {
@@ -459,7 +459,7 @@ import (
     "path/filepath"
     "strings"
 
-    "github.com/yourorg/familycloud/internal/domain"
+    "github.com/yourorg/mycloud/internal/domain"
 )
 
 type VideoProcessor struct {

@@ -96,7 +96,7 @@ services:
     restart: always
     env_file: .env
     environment:
-      POSTGRES_DB:       familycloud
+      POSTGRES_DB:       mycloud
       POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -105,7 +105,7 @@ services:
     networks:
       - fc-internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d familycloud"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d mycloud"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -273,9 +273,9 @@ ENTRYPOINT ["/bin/worker"]
 # .env — NEVER commit to git. Copy .env.example and fill in.
 
 # PostgreSQL
-POSTGRES_USER=familycloud
+POSTGRES_USER=mycloud
 POSTGRES_PASSWORD=change-me-strong-password-here
-DATABASE_URL=postgres://familycloud:change-me-strong-password-here@postgres:5432/familycloud?sslmode=disable
+DATABASE_URL=postgres://mycloud:change-me-strong-password-here@postgres:5432/mycloud?sslmode=disable
 
 # Redis
 REDIS_PASSWORD=change-me-redis-password
@@ -311,7 +311,7 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-app@gmail.com
 SMTP_PASS=your-app-password
-SMTP_FROM=FamilyCloud <your-app@gmail.com>
+SMTP_FROM=MyCloud <your-app@gmail.com>
 
 # Allowed CORS origins
 ALLOWED_ORIGINS=https://your-domain.com,https://app.your-domain.com
@@ -361,7 +361,7 @@ http {
 ```
 
 ```nginx
-# nginx/conf.d/familycloud.conf
+# nginx/conf.d/mycloud.conf
 
 # Redirect HTTP → HTTPS
 server {
@@ -432,7 +432,7 @@ server {
 
     # Flutter web app (static files)
     location / {
-        root /var/www/familycloud;
+        root /var/www/mycloud;
         try_files $uri $uri/ /index.html;  # SPA fallback
         expires 1h;
 
@@ -517,7 +517,7 @@ rule_files:
 ```yaml
 # monitoring/alerts.yml
 groups:
-  - name: familycloud
+  - name: mycloud
     rules:
       - alert: DiskSpaceWarning
         expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.20
@@ -535,7 +535,7 @@ groups:
         expr: up{job="api"} == 0
         for: 1m
         annotations:
-          summary: "FamilyCloud API is down"
+          summary: "MyCloud API is down"
 
       - alert: HighErrorRate
         expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
@@ -544,13 +544,13 @@ groups:
           summary: "High 5xx error rate on API"
 
       - alert: JobQueueBacklog
-        expr: familycloud_pending_jobs > 50
+        expr: mycloud_pending_jobs > 50
         for: 10m
         annotations:
           summary: "Media processing job queue is backed up"
 
       - alert: VirusDetected
-        expr: increase(familycloud_virus_detected_total[1h]) > 0
+        expr: increase(mycloud_virus_detected_total[1h]) > 0
         annotations:
           summary: "Virus detected in a file upload"
 ```
@@ -583,17 +583,17 @@ var (
     }, []string{"method", "route", "status"})
 
     UploadBytesTotal = promauto.NewCounter(prometheus.CounterOpts{
-        Name: "familycloud_upload_bytes_total",
+        Name: "mycloud_upload_bytes_total",
         Help: "Total bytes uploaded",
     })
 
     VirusDetectedTotal = promauto.NewCounter(prometheus.CounterOpts{
-        Name: "familycloud_virus_detected_total",
+        Name: "mycloud_virus_detected_total",
         Help: "Number of virus-detected uploads",
     })
 
     PendingJobs = promauto.NewGauge(prometheus.GaugeOpts{
-        Name: "familycloud_pending_jobs",
+        Name: "mycloud_pending_jobs",
         Help: "Number of pending media processing jobs",
     })
 )
@@ -622,8 +622,8 @@ Three-tier backup: Postgres WAL archiving, MinIO bucket versioning, and nightly 
 
 ```bash
 #!/bin/bash
-# /opt/familycloud/scripts/backup-postgres.sh
-# Run via cron: 0 2 * * * /opt/familycloud/scripts/backup-postgres.sh
+# /opt/mycloud/scripts/backup-postgres.sh
+# Run via cron: 0 2 * * * /opt/mycloud/scripts/backup-postgres.sh
 
 set -euo pipefail
 
@@ -633,17 +633,17 @@ KEEP_DAYS=30
 
 mkdir -p "$BACKUP_DIR"
 
-docker exec familycloud-postgres-1 pg_dump \
+docker exec mycloud-postgres-1 pg_dump \
   -U "$POSTGRES_USER" \
-  -d familycloud \
+  -d mycloud \
   --format=custom \
   --compress=9 \
-  > "$BACKUP_DIR/familycloud-$DATE.dump"
+  > "$BACKUP_DIR/mycloud-$DATE.dump"
 
 # Remove backups older than KEEP_DAYS
 find "$BACKUP_DIR" -name "*.dump" -mtime "+$KEEP_DAYS" -delete
 
-echo "Backup complete: $BACKUP_DIR/familycloud-$DATE.dump"
+echo "Backup complete: $BACKUP_DIR/mycloud-$DATE.dump"
 ```
 
 ### MinIO Versioning
@@ -659,25 +659,25 @@ mc ilm add myminio/fc-originals \
 
 ```bash
 #!/bin/bash
-# /opt/familycloud/scripts/backup-minio.sh
+# /opt/mycloud/scripts/backup-minio.sh
 # Assumes a second disk is mounted at /mnt/backup-disk
 
 rsync -av --delete \
-  /var/lib/docker/volumes/familycloud_minio_data/_data/ \
+  /var/lib/docker/volumes/mycloud_minio_data/_data/ \
   /mnt/backup-disk/minio-backup/
 
 rsync -av --delete \
-  /var/lib/docker/volumes/familycloud_postgres_data/_data/ \
+  /var/lib/docker/volumes/mycloud_postgres_data/_data/ \
   /mnt/backup-disk/postgres-backup/
 ```
 
 ### Crontab
 
 ```cron
-# /etc/cron.d/familycloud
-0 2 * * * root /opt/familycloud/scripts/backup-postgres.sh >> /var/log/familycloud-backup.log 2>&1
-30 2 * * * root /opt/familycloud/scripts/backup-minio.sh >> /var/log/familycloud-backup.log 2>&1
-0 3 * * 0 root docker exec familycloud-clamav-1 freshclam  # weekly virus def update
+# /etc/cron.d/mycloud
+0 2 * * * root /opt/mycloud/scripts/backup-postgres.sh >> /var/log/mycloud-backup.log 2>&1
+30 2 * * * root /opt/mycloud/scripts/backup-minio.sh >> /var/log/mycloud-backup.log 2>&1
+0 3 * * 0 root docker exec mycloud-clamav-1 freshclam  # weekly virus def update
 ```
 
 ---
@@ -709,8 +709,8 @@ sudo certbot renew --dry-run
 
 ```bash
 # Initial deployment
-git clone https://github.com/yourorg/familycloud.git /opt/familycloud
-cd /opt/familycloud
+git clone https://github.com/yourorg/mycloud.git /opt/mycloud
+cd /opt/mycloud
 cp .env.example .env
 # Fill in all values in .env
 
@@ -723,7 +723,7 @@ docker compose exec api migrate -path ./migrations -database "$DATABASE_URL" up
 # Deploy Flutter web app
 cd flutter_app
 flutter build web --release
-rsync -av --delete build/web/ /var/www/familycloud/
+rsync -av --delete build/web/ /var/www/mycloud/
 
 # Update (rolling)
 git pull

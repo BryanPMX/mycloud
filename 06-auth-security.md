@@ -1,10 +1,14 @@
 # 06 — Authentication & Security
 
+Current implementation status on March 13, 2026:
+- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation, auth middleware, request IDs, structured request logging, and repository-enforced media visibility
+- Still planned from this design doc: invite acceptance, rate limiting, security-header middleware, and the larger admin/invite flows described below
+
 ---
 
 ## 1. Authentication Strategy
 
-The app uses a standard **dual-token JWT scheme**:
+MyCloud currently uses a standard **dual-token JWT scheme**:
 
 - **Access token** — short-lived (15 min), stateless JWT with token type `access`. Mobile/native clients send it as `Authorization: Bearer ...`; web clients receive it as an `httpOnly` cookie.
 - **Refresh token** — long-lived (30 days), JWT with token type `refresh` and a unique `jti`. Its `jti` is stored in Redis for rotation/revocation. Mobile stores the token in `flutter_secure_storage`; web keeps it in an `httpOnly` cookie.
@@ -76,7 +80,7 @@ func (s *jwtService) GenerateAccessToken(userID uuid.UUID, role string) (string,
         RegisteredClaims: jwt.RegisteredClaims{
             IssuedAt:  jwt.NewNumericDate(now),
             ExpiresAt: jwt.NewNumericDate(now.Add(s.accessTokenTTL)),
-            Issuer:    "familycloud",
+            Issuer:    "mycloud",
             Subject:   userID.String(),
         },
     }
@@ -95,7 +99,7 @@ func (s *jwtService) GenerateRefreshToken(userID uuid.UUID) (string, error) {
             ID:        uuid.NewString(), // jti — unique per refresh token
             IssuedAt:  jwt.NewNumericDate(now),
             ExpiresAt: jwt.NewNumericDate(now.Add(s.refreshTokenTTL)),
-            Issuer:    "familycloud",
+            Issuer:    "mycloud",
             Subject:   userID.String(),
         },
     }
@@ -493,7 +497,7 @@ Users are added by admin invitation only — there is no public registration.
 Admin calls POST /admin/users/invite { email, role, quota_gb }
     → Generate a cryptographically random 32-byte token
     → Hash it (sha256) and store the hash in users.invite_token with a 72h expiry
-    → Send the plaintext token in an email as a link: https://app.familycloud.com/accept?token=xxx
+    → Send the plaintext token in an email as a link: https://app.mycloud.example/accept?token=xxx
     → Recipient clicks link → Flutter web app calls POST /auth/invite/accept
     → Server fetches user by email, compares sha256(token) == stored hash (constant-time)
     → If match: set password, clear invite_token, activate account

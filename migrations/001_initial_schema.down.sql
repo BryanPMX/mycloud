@@ -1,1 +1,23 @@
--- Placeholder rollback migration for the initial schema.
+DROP TRIGGER IF EXISTS trg_media_album_visibility ON media;
+DROP TRIGGER IF EXISTS trg_album_media_count ON album_media;
+DROP TRIGGER IF EXISTS trg_media_storage ON media;
+DROP TRIGGER IF EXISTS trg_albums_updated_at ON albums;
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
+
+DROP TABLE IF EXISTS jobs CASCADE;
+DROP TABLE IF EXISTS shares CASCADE;
+DROP TABLE IF EXISTS album_media CASCADE;
+DROP TABLE IF EXISTS albums CASCADE;
+DROP TABLE IF EXISTS media CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+DROP FUNCTION IF EXISTS update_album_count_on_media_visibility CASCADE;
+DROP FUNCTION IF EXISTS update_album_count CASCADE;
+DROP FUNCTION IF EXISTS update_user_storage CASCADE;
+DROP FUNCTION IF EXISTS set_updated_at CASCADE;
+
+DROP TYPE IF EXISTS job_status CASCADE;
+DROP TYPE IF EXISTS job_type CASCADE;
+DROP TYPE IF EXISTS permission CASCADE;
+DROP TYPE IF EXISTS media_status CASCADE;
+DROP TYPE IF EXISTS user_role CASCADE;

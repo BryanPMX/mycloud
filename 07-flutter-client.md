@@ -658,7 +658,7 @@ Auto-backup uploads new camera roll photos/videos when the app is in the backgro
 ```dart
 // Configured on app startup
 class AutoBackupService {
-  static const String taskName = 'familycloud_auto_backup';
+  static const String taskName = 'mycloud_auto_backup';
 
   static Future<void> register() async {
     await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);

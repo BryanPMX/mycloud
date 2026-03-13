@@ -1,5 +1,9 @@
 # 04 — Database Design (PostgreSQL)
 
+Current implementation status on March 13, 2026:
+- Implemented in [001_initial_schema.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/001_initial_schema.up.sql): `users`, `media`, `albums`, `album_media`, `shares`, `jobs`, plus storage/accounting and album visibility triggers
+- Still planned from this design doc: `favorites`, `comments`, `audit_log`, and the broader search/metadata extensions described below
+
 ---
 
 ## 1. Design Principles
@@ -440,7 +444,7 @@ import (
 
     "github.com/google/uuid"
     "github.com/jmoiron/sqlx"
-    "github.com/yourorg/familycloud/internal/domain"
+    "github.com/yourorg/mycloud/internal/domain"
 )
 
 type mediaRow struct {

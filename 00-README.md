@@ -1,4 +1,4 @@
-# FamilyCloud — Full System Design
+# MyCloud — Full System Design
 
 > A private, self-hosted photo and video platform for families.
 > Built with Flutter · Go · PostgreSQL · MinIO · Redis · Docker.
@@ -24,7 +24,21 @@
 
 ## Project Summary
 
-FamilyCloud is a **private, high-quality media cloud** for up to 50+ family members, self-hosted on an Ubuntu server. Users can upload, browse, download, and share photos and videos at original quality, from any device.
+MyCloud is a **private, high-quality media cloud** for up to 50+ family members, self-hosted on an Ubuntu server. Users can upload, browse, download, and share photos and videos at original quality, from any device.
+
+## Current Implementation Status
+
+As of March 13, 2026, the repository includes the first working backend slice:
+
+- runtime config loading from environment variables
+- PostgreSQL and Redis wiring in the API composition root
+- initial SQL migration with quota and album-count triggers
+- secure JWT login, refresh, and logout flows
+- authenticated `GET /users/me`
+- authorization-aware `GET /media` with cursor pagination
+- focused unit coverage for JWT, password hashing, cursor encoding, and login orchestration
+
+The upload pipeline, worker processing, sharing mutations, invite flow, Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
 
 ### Design Goals
 
@@ -115,7 +129,7 @@ With 16 GB RAM and 1 TB storage, you have significant headroom for your existing
 
 ## Conventions Used in This Document Set
 
-- All Go package paths use the module prefix `github.com/yourorg/familycloud`.
+- All Go package paths use the module prefix `github.com/yourorg/mycloud`.
 - All SQL uses PostgreSQL 15+ syntax.
 - All environment variable names use `SCREAMING_SNAKE_CASE`.
 - API paths are versioned under `/api/v1/`.

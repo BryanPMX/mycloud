@@ -4,7 +4,11 @@
 
 ## 1. Architectural Style: Clean Architecture
 
-FamilyCloud's backend follows **Clean Architecture** (Robert C. Martin). The fundamental rule is the **Dependency Rule**: source code dependencies must point only inward. Inner layers define interfaces; outer layers implement them.
+MyCloud's backend follows **Clean Architecture** (Robert C. Martin). The fundamental rule is the **Dependency Rule**: source code dependencies must point only inward. Inner layers define interfaces; outer layers implement them.
+
+Current implementation note:
+- The live code currently covers the backend correctness kernel only: domain contracts, schema, auth/session flows, authenticated current-user lookup, and authorization-aware media listing.
+- Direct uploads, worker processing, WebSocket progress, and email/event side effects in the rest of this document are still planned.
 
 ```
 ┌──────────────────────────────────────────────┐
