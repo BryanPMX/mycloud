@@ -11,26 +11,29 @@ import (
 )
 
 type AuthHandler struct {
-	loginHandler   *authcmd.LoginHandler
-	refreshHandler *authcmd.RefreshHandler
-	logoutHandler  *authcmd.LogoutHandler
-	secureCookies  bool
-	refreshTTL     int
+	loginHandler        *authcmd.LoginHandler
+	refreshHandler      *authcmd.RefreshHandler
+	logoutHandler       *authcmd.LogoutHandler
+	acceptInviteHandler *authcmd.AcceptInviteHandler
+	secureCookies       bool
+	refreshTTL          int
 }
 
 func NewAuthHandler(
 	loginHandler *authcmd.LoginHandler,
 	refreshHandler *authcmd.RefreshHandler,
 	logoutHandler *authcmd.LogoutHandler,
+	acceptInviteHandler *authcmd.AcceptInviteHandler,
 	secureCookies bool,
 	refreshTTLSeconds int,
 ) *AuthHandler {
 	return &AuthHandler{
-		loginHandler:   loginHandler,
-		refreshHandler: refreshHandler,
-		logoutHandler:  logoutHandler,
-		secureCookies:  secureCookies,
-		refreshTTL:     refreshTTLSeconds,
+		loginHandler:        loginHandler,
+		refreshHandler:      refreshHandler,
+		logoutHandler:       logoutHandler,
+		acceptInviteHandler: acceptInviteHandler,
+		secureCookies:       secureCookies,
+		refreshTTL:          refreshTTLSeconds,
 	}
 }
 
@@ -93,6 +96,37 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	h.clearAuthCookies(c)
 	c.Status(http.StatusNoContent)
+}
+
+func (h *AuthHandler) AcceptInvite(c *gin.Context) {
+	var request struct {
+		Token       string `json:"token"`
+		DisplayName string `json:"display_name"`
+		Password    string `json:"password"`
+	}
+	if err := httpx.BindJSON(c, &request); err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	result, err := h.acceptInviteHandler.Execute(c.Request.Context(), authcmd.AcceptInviteCommand{
+		Token:       request.Token,
+		DisplayName: request.DisplayName,
+		Password:    request.Password,
+		IPAddress:   clientIPAddr(c),
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	h.setAuthCookies(c, result.AccessToken, result.RefreshToken, result.ExpiresIn)
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  result.AccessToken,
+		"refresh_token": result.RefreshToken,
+		"expires_in":    result.ExpiresIn,
+		"user":          dto.ToUserResponse(result.User),
+	})
 }
 
 func (h *AuthHandler) setAuthCookies(c *gin.Context, accessToken, refreshToken string, accessTTLSeconds int) {

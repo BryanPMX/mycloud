@@ -51,6 +51,31 @@ func UserIDFromContext(c *gin.Context) (uuid.UUID, bool) {
 	return userID, ok
 }
 
+func RoleFromContext(c *gin.Context) (string, bool) {
+	value, ok := c.Get(contextRoleKey)
+	if !ok {
+		return "", false
+	}
+
+	role, ok := value.(string)
+	return role, ok
+}
+
+func RequireRole(role string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		currentRole, ok := RoleFromContext(c)
+		if !ok || currentRole != role {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "forbidden",
+				"code":  "FORBIDDEN",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func extractAccessToken(c *gin.Context) string {
 	header := strings.TrimSpace(c.GetHeader("Authorization"))
 	if strings.HasPrefix(strings.ToLower(header), "bearer ") {

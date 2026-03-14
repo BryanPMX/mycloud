@@ -54,6 +54,10 @@ func (s *fakeSessionStore) RevokeRefreshToken(context.Context, uuid.UUID, string
 	return nil
 }
 
+func (s *fakeSessionStore) RevokeAllForUser(context.Context, uuid.UUID) error {
+	return nil
+}
+
 func TestLoginHandlerExecute(t *testing.T) {
 	t.Parallel()
 

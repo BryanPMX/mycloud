@@ -24,6 +24,8 @@ type User struct {
 	StorageUsed  int64
 	QuotaBytes   int64
 	Active       bool
+	InviteToken  string
+	InviteExpiry *time.Time
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	LastLoginAt  *time.Time

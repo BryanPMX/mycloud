@@ -18,6 +18,49 @@ type UserResponse struct {
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
 }
 
+type AdminUserResponse struct {
+	ID          string     `json:"id"`
+	Email       string     `json:"email"`
+	DisplayName string     `json:"display_name"`
+	Role        string     `json:"role"`
+	StorageUsed int64      `json:"storage_used"`
+	QuotaBytes  int64      `json:"quota_bytes"`
+	Active      bool       `json:"active"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+}
+
+type InviteUserResponse struct {
+	UserID    string    `json:"user_id"`
+	InviteURL string    `json:"invite_url"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type SystemStatsResponse struct {
+	Users   SystemUserStatsResponse    `json:"users"`
+	Storage SystemStorageStatsResponse `json:"storage"`
+	Media   SystemMediaStatsResponse   `json:"media"`
+}
+
+type SystemUserStatsResponse struct {
+	Total  int64 `json:"total"`
+	Active int64 `json:"active"`
+}
+
+type SystemStorageStatsResponse struct {
+	TotalBytes int64   `json:"total_bytes"`
+	UsedBytes  int64   `json:"used_bytes"`
+	FreeBytes  int64   `json:"free_bytes"`
+	PctUsed    float64 `json:"pct_used"`
+}
+
+type SystemMediaStatsResponse struct {
+	TotalItems  int64 `json:"total_items"`
+	TotalImages int64 `json:"total_images"`
+	TotalVideos int64 `json:"total_videos"`
+	PendingJobs int64 `json:"pending_jobs"`
+}
+
 type ThumbURLs struct {
 	Small  *string `json:"small"`
 	Medium *string `json:"medium"`
@@ -120,6 +163,49 @@ func ToUserResponse(user *domain.User) UserResponse {
 		StoragePct:  user.StoragePercent(),
 		CreatedAt:   user.CreatedAt,
 		LastLoginAt: user.LastLoginAt,
+	}
+}
+
+func ToAdminUserResponse(user *domain.User) AdminUserResponse {
+	return AdminUserResponse{
+		ID:          user.ID.String(),
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		Role:        string(user.Role),
+		StorageUsed: user.StorageUsed,
+		QuotaBytes:  user.QuotaBytes,
+		Active:      user.Active,
+		CreatedAt:   user.CreatedAt,
+		LastLoginAt: user.LastLoginAt,
+	}
+}
+
+func ToInviteUserResponse(user *domain.User, inviteURL string, expiresAt time.Time) InviteUserResponse {
+	return InviteUserResponse{
+		UserID:    user.ID.String(),
+		InviteURL: inviteURL,
+		ExpiresAt: expiresAt,
+	}
+}
+
+func ToSystemStatsResponse(stats *domain.SystemStats) SystemStatsResponse {
+	return SystemStatsResponse{
+		Users: SystemUserStatsResponse{
+			Total:  stats.Users.Total,
+			Active: stats.Users.Active,
+		},
+		Storage: SystemStorageStatsResponse{
+			TotalBytes: stats.Storage.TotalBytes,
+			UsedBytes:  stats.Storage.UsedBytes,
+			FreeBytes:  stats.Storage.FreeBytes,
+			PctUsed:    stats.Storage.PctUsed,
+		},
+		Media: SystemMediaStatsResponse{
+			TotalItems:  stats.Media.TotalItems,
+			TotalImages: stats.Media.TotalImages,
+			TotalVideos: stats.Media.TotalVideos,
+			PendingJobs: stats.Media.PendingJobs,
+		},
 	}
 }
 

@@ -12,6 +12,7 @@ type SessionStore interface {
 	StoreRefreshToken(ctx context.Context, userID uuid.UUID, jti string, ttl time.Duration) error
 	ValidateRefreshToken(ctx context.Context, userID uuid.UUID, jti string) (bool, error)
 	RevokeRefreshToken(ctx context.Context, userID uuid.UUID, jti string) error
+	RevokeAllForUser(ctx context.Context, userID uuid.UUID) error
 }
 
 type StorageService interface {

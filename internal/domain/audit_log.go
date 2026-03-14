@@ -17,3 +17,10 @@ type AuditLog struct {
 	IPAddress *netip.Addr
 	CreatedAt time.Time
 }
+
+const (
+	AuditActionAdminInviteUser    = "admin.user.invite"
+	AuditActionAdminUpdateUser    = "admin.user.update"
+	AuditActionAdminDeactivate    = "admin.user.deactivate"
+	AuditActionAuthInviteAccepted = "auth.invite.accept"
+)

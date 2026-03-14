@@ -3,6 +3,8 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"net/netip"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -73,4 +75,18 @@ func writeError(c *gin.Context, err error) {
 		"error": message,
 		"code":  code,
 	})
+}
+
+func clientIPAddr(c *gin.Context) *netip.Addr {
+	raw := strings.TrimSpace(c.ClientIP())
+	if raw == "" {
+		return nil
+	}
+
+	addr, err := netip.ParseAddr(raw)
+	if err != nil {
+		return nil
+	}
+
+	return &addr
 }

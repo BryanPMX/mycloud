@@ -23,10 +23,11 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 - PostgreSQL pool + repositories for users, visible media, albums, shares, and comments
 - PostgreSQL favorites persistence plus favorite-aware media list reads
 - PostgreSQL search-vector, metadata, invite-token, and timeline index migration
+- PostgreSQL audit-log migration plus invite/admin audit persistence
 - Redis client + refresh session store
 - Postgres comments repository plus media comment flows
-- HTTP router, auth middleware, request IDs, and structured request logging
-- auth endpoints plus `GET /users/me`, media list/detail/search/trash routes, presigned original reads, media favorite routes, album/share routes, and media comment routes
+- HTTP router, auth middleware, admin role middleware, request IDs, and structured request logging
+- auth endpoints plus `POST /auth/invite/accept`, `GET /users/me`, media list/detail/search/trash routes, presigned original reads, media favorite routes, album/share routes, media comment routes, and admin user-management/stat routes
 - album creation/listing/detail/update/delete, album-specific media listing, album-media membership changes, and share list/create/revoke flows
 - direct multipart upload init/part-url/complete/abort flows with MinIO wiring
 - trash restore/permanent-delete/empty-trash flows with best-effort MinIO asset cleanup
@@ -35,7 +36,6 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 
 Still intentionally pending:
 
-- audit log persistence
 - Flutter app runtime wiring
 
 ---

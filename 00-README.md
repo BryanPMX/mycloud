@@ -33,7 +33,7 @@ As of March 14, 2026, the repository includes the current working backend slices
 - runtime config loading from environment variables
 - PostgreSQL, Redis, and MinIO wiring in the API composition root
 - initial SQL migration with quota and album-count triggers
-- secure JWT login, refresh, and logout flows
+- secure JWT login, refresh, logout, and invite-accept flows
 - authenticated `GET /users/me`
 - authorization-aware `GET /media`, `GET /media/:id`, `GET /media/search`, and trash listing with cursor pagination
 - presigned original download URLs via `GET /media/:id/url`
@@ -41,13 +41,15 @@ As of March 14, 2026, the repository includes the current working backend slices
 - album creation/listing/detail/update/delete, album-media membership, and album share management
 - media comment read/write/delete flows backed by PostgreSQL soft deletes
 - media favorite/unfavorite flows backed by PostgreSQL favorites
+- admin user list/invite/update/deactivate routes plus admin system stats
+- append-only `audit_log` persistence for invite/admin actions via `005_audit_log`
 - direct multipart upload init, part-url presigning, and completion endpoints
 - `process_media` job creation at upload completion
 - search-vector and metadata index migration for media search/timeline reads
 - worker-side staged upload scanning, promotion to originals, and media row finalization
-- focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, media upload commands, favorites, albums, and shares
+- focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, invite acceptance, admin mutations, media upload commands, favorites, albums, and shares
 
-Actual thumbnail file generation, WebSocket progress events, invite flow, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise. The thumbnail read endpoint is wired, but it returns `404` until real thumbnail objects exist in `fc-thumbs`.
+Actual thumbnail file generation, WebSocket progress events, SMTP invite delivery, user profile writes, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise. The thumbnail read endpoint is wired, but it returns `404` until real thumbnail objects exist in `fc-thumbs`.
 
 ### Design Goals
 

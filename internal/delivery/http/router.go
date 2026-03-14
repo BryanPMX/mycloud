@@ -20,6 +20,7 @@ type Dependencies struct {
 	AlbumHandler   *handlers.AlbumHandler
 	ShareHandler   *handlers.ShareHandler
 	CommentHandler *handlers.CommentHandler
+	AdminHandler   *handlers.AdminHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -44,6 +45,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	authGroup.POST("/login", deps.AuthHandler.Login)
 	authGroup.POST("/refresh", deps.AuthHandler.Refresh)
 	authGroup.POST("/logout", deps.AuthHandler.Logout)
+	authGroup.POST("/invite/accept", deps.AuthHandler.AcceptInvite)
 
 	protected := v1.Group("/")
 	protected.Use(middleware.RequireAuth(deps.TokenService))
@@ -78,6 +80,14 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	protected.GET("/media/:id/comments", deps.CommentHandler.List)
 	protected.POST("/media/:id/comments", deps.CommentHandler.Create)
 	protected.DELETE("/media/:id/comments/:commentId", deps.CommentHandler.Delete)
+
+	admin := protected.Group("/admin")
+	admin.Use(middleware.RequireRole("admin"))
+	admin.GET("/users", deps.AdminHandler.ListUsers)
+	admin.POST("/users/invite", deps.AdminHandler.InviteUser)
+	admin.PATCH("/users/:id", deps.AdminHandler.UpdateUser)
+	admin.DELETE("/users/:id", deps.AdminHandler.DeactivateUser)
+	admin.GET("/stats", deps.AdminHandler.SystemStats)
 
 	return router
 }

@@ -1,8 +1,8 @@
 # 06 — Authentication & Security
 
-Current implementation status on March 13, 2026:
-- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation, auth middleware, request IDs, structured request logging, repository-enforced media visibility, and application-layer album/share ownership checks
-- Still planned from this design doc: invite acceptance, rate limiting, security-header middleware, and the larger admin/invite flows described below
+Current implementation status on March 14, 2026:
+- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation plus admin-triggered session revocation, auth middleware, admin role middleware, request IDs, structured request logging, repository-enforced media visibility, application-layer album/share ownership checks, hashed invite acceptance, admin user-management routes, and `audit_log` writes for invite/admin actions
+- Still planned from this design doc: rate limiting, security-header middleware, cleanup orchestration, and SMTP invite delivery
 
 ---
 
@@ -493,6 +493,8 @@ func (m *LoginRateLimiter) CheckAndIncrement(ctx context.Context, ip string) err
 
 Users are added by admin invitation only — there is no public registration.
 
+Current implementation note on March 14, 2026: the backend now issues hashed 72-hour invite tokens, exposes `POST /api/v1/admin/users/invite` and `POST /api/v1/auth/invite/accept`, and records invite/admin actions in `audit_log`. The current API returns `invite_url` directly; SMTP delivery remains planned.
+
 ```
 Admin calls POST /admin/users/invite { email, role, quota_gb }
     → Generate a cryptographically random 32-byte token
@@ -593,12 +595,12 @@ func (s *Scanner) ScanReader(ctx context.Context, r io.Reader) (bool, string, er
 | 9 | TLS 1.2+ enforced at Nginx | `nginx.conf` |
 | 10 | HSTS header with 1-year max-age | `nginx.conf` |
 | 11 | CSP header restricting script sources | `nginx.conf` |
-| 12 | Rate limiting on login (5 attempts / 15 min) | `middleware/rate_limit.go` |
-| 13 | Login response is constant-time (prevents email enumeration) | `handlers/auth_handler.go` |
+| 12 | Rate limiting on login (5 attempts / 15 min) | Planned |
+| 13 | Login response burns bcrypt work on missing accounts (reduces email enumeration) | `commands/auth/login.go` |
 | 14 | Invite token stored as sha256 hash | `commands/invite_user.go` |
-| 15 | Token comparison is constant-time | `crypto/subtle.ConstantTimeCompare` |
+| 15 | Token comparison is constant-time | `pkg/auth/invite.go` |
 | 16 | All secrets in `.env` file, excluded from git | `.gitignore` |
 | 17 | No secrets in logs or error messages | `slog` structured logging rules |
-| 18 | Audit log of all sensitive actions | `audit_log` table |
+| 18 | Audit log of invite/admin-sensitive actions | `audit_log` table |
 | 19 | Soft delete with 30-day recovery window | `media.deleted_at` |
 | 20 | Admin-only user management routes | `middleware.RequireRole("admin")` |

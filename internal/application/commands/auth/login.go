@@ -9,6 +9,8 @@ import (
 	pkgauth "github.com/yourorg/mycloud/pkg/auth"
 )
 
+const dummyPasswordHash = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+
 type LoginCommand struct {
 	Email    string
 	Password string
@@ -49,14 +51,13 @@ func (h *LoginHandler) Execute(ctx context.Context, command LoginCommand) (*Logi
 	user, err := h.userRepo.FindByEmail(ctx, strings.TrimSpace(command.Email))
 	if err != nil {
 		if err == domain.ErrNotFound {
+			burnPasswordCheck(command.Password)
 			return nil, domain.ErrInvalidCredentials
 		}
 		return nil, err
 	}
-	if !user.Active {
-		return nil, domain.ErrInvalidCredentials
-	}
-	if !pkgauth.CheckPassword(user.PasswordHash, command.Password) {
+
+	if !pkgauth.CheckPassword(user.PasswordHash, command.Password) || !user.Active {
 		return nil, domain.ErrInvalidCredentials
 	}
 
@@ -87,4 +88,8 @@ func (h *LoginHandler) Execute(ctx context.Context, command LoginCommand) (*Logi
 		ExpiresIn:    int(h.accessTTL.Seconds()),
 		User:         user,
 	}, nil
+}
+
+func burnPasswordCheck(password string) {
+	_ = pkgauth.CheckPassword(dummyPasswordHash, password)
 }

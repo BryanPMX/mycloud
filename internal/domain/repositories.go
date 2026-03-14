@@ -13,6 +13,15 @@ type UserRepository interface {
 	UpdateLastLogin(ctx context.Context, id uuid.UUID, lastLoginAt time.Time) error
 }
 
+type AdminRepository interface {
+	ListUsers(ctx context.Context) ([]*User, error)
+	CreateOrRefreshInvite(ctx context.Context, params InviteUserParams, audit *AuditLog) (*User, error)
+	FindInviteByTokenHash(ctx context.Context, tokenHash string) (*User, error)
+	AcceptInvite(ctx context.Context, params AcceptInviteParams, audit *AuditLog) (*User, error)
+	UpdateUser(ctx context.Context, params AdminUpdateUserParams, audit *AuditLog) (*User, error)
+	GetSystemStats(ctx context.Context) (*SystemStats, error)
+}
+
 type MediaRepository interface {
 	Create(ctx context.Context, media *Media) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Media, error)

@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
 Current implementation status on March 14, 2026:
-- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/media/search`, `GET /api/v1/media/trash`, `DELETE /api/v1/media/trash`, `GET /api/v1/media/:id`, `GET /api/v1/media/:id/url`, `GET /api/v1/media/:id/thumb`, `DELETE /api/v1/media/:id`, `POST /api/v1/media/:id/restore`, `DELETE /api/v1/media/:id/permanent`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`, `DELETE /api/v1/media/upload/:id`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`
+- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invite/accept`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/media/search`, `GET /api/v1/media/trash`, `DELETE /api/v1/media/trash`, `GET /api/v1/media/:id`, `GET /api/v1/media/:id/url`, `GET /api/v1/media/:id/thumb`, `DELETE /api/v1/media/:id`, `POST /api/v1/media/:id/restore`, `DELETE /api/v1/media/:id/permanent`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`, `DELETE /api/v1/media/upload/:id`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `GET /api/v1/admin/users`, `POST /api/v1/admin/users/invite`, `PATCH /api/v1/admin/users/:id`, `DELETE /api/v1/admin/users/:id`, `GET /api/v1/admin/stats`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -161,6 +161,8 @@ Web clients may call the endpoint with an empty body; the server revokes the `re
 
 ### POST /auth/invite/accept
 Accept an admin-generated invite link. Sets password and activates the account.
+
+Current implementation note on March 14, 2026: this endpoint is live now. It validates the stored sha256 invite hash, activates the account, clears invite fields, creates a fresh auth session, and records an `audit_log` entry.
 
 **Request**
 ```json
@@ -739,6 +741,8 @@ List all registered users.
 ### POST /admin/users/invite
 Send an invite link to a new family member.
 
+Current implementation note on March 14, 2026: this endpoint is live now. The backend generates a 72-hour invite token, stores only the sha256 hash, returns the `invite_url`, and writes an `audit_log` entry. SMTP delivery is still planned, so the current response also includes `expires_at`.
+
 **Request**
 ```json
 {
@@ -752,16 +756,19 @@ Send an invite link to a new family member.
 ```json
 {
   "user_id":    "uuid",
-  "invite_url": "https://your-app.com/accept?token=xxx"
+  "invite_url": "https://your-app.com/accept?token=xxx",
+  "expires_at": "2026-03-17T18:00:00Z"
 }
 ```
 
-The invite URL is also emailed to the recipient.
+The current backend returns the invite URL directly. Email transport is still planned.
 
 ---
 
 ### PATCH /admin/users/:id
 Update user role, quota, or active status.
+
+Current implementation note on March 14, 2026: this endpoint is live now. Role, `quota_bytes`, and `active` are supported today; self-demotion and self-deactivation are rejected. Successful writes record an `audit_log` row.
 
 **Request**
 ```json
@@ -779,12 +786,16 @@ All fields optional. **Response 200** — updated user object.
 ### DELETE /admin/users/:id
 Deactivate a user account. Their media is retained but they can no longer log in.
 
+Current implementation note on March 14, 2026: this endpoint is live now. It reuses the admin update flow, revokes refresh sessions, clears any outstanding invite token, and records an `audit_log` row.
+
 **Response 204**
 
 ---
 
 ### GET /admin/stats
 System-wide statistics.
+
+Current implementation note on March 14, 2026: this endpoint is live now. It returns total/active users, aggregate quota usage, visible media counts, and pending job count from PostgreSQL.
 
 **Response 200**
 ```json
@@ -812,6 +823,8 @@ System-wide statistics.
 
 ### POST /admin/maintenance/cleanup
 Trigger a cleanup job: remove orphaned MinIO objects, clean expired shares, and purge trashed media older than 30 days.
+
+Current implementation note on March 14, 2026: this endpoint is still planned.
 
 **Response 202**
 ```json

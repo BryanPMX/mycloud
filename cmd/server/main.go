@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"time"
 
+	admincmd "github.com/yourorg/mycloud/internal/application/commands/admin"
 	albumcmd "github.com/yourorg/mycloud/internal/application/commands/albums"
 	authcmd "github.com/yourorg/mycloud/internal/application/commands/auth"
 	commentcmd "github.com/yourorg/mycloud/internal/application/commands/comments"
 	mediacmd "github.com/yourorg/mycloud/internal/application/commands/media"
 	sharecmd "github.com/yourorg/mycloud/internal/application/commands/shares"
+	adminquery "github.com/yourorg/mycloud/internal/application/queries/admin"
 	albumquery "github.com/yourorg/mycloud/internal/application/queries/albums"
 	commentquery "github.com/yourorg/mycloud/internal/application/queries/comments"
 	mediaquery "github.com/yourorg/mycloud/internal/application/queries/media"
@@ -70,6 +72,7 @@ func main() {
 	}
 
 	userRepo := postgres.NewUserRepository(db)
+	adminRepo := postgres.NewAdminRepository(db)
 	mediaRepo := postgres.NewMediaRepository(db)
 	albumRepo := postgres.NewAlbumRepository(db)
 	shareRepo := postgres.NewShareRepository(db)
@@ -85,7 +88,10 @@ func main() {
 	loginHandler := authcmd.NewLoginHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	refreshHandler := authcmd.NewRefreshHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
+	acceptInviteHandler := authcmd.NewAcceptInviteHandler(adminRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
+	listUsersHandler := adminquery.NewListUsersHandler(userRepo, adminRepo)
+	systemStatsHandler := adminquery.NewSystemStatsHandler(userRepo, adminRepo)
 	getMediaHandler := mediaquery.NewGetMediaHandler(userRepo, mediaRepo, favoriteRepo)
 	listMediaHandler := mediaquery.NewListMediaHandler(userRepo, mediaRepo, favoriteRepo)
 	searchMediaHandler := mediaquery.NewSearchMediaHandler(userRepo, mediaRepo, favoriteRepo)
@@ -124,6 +130,8 @@ func main() {
 	restoreMediaHandler := mediacmd.NewRestoreMediaHandler(userRepo, mediaRepo)
 	permanentDeleteMediaHandler := mediacmd.NewPermanentDeleteMediaHandler(userRepo, mediaRepo, storageService)
 	emptyTrashHandler := mediacmd.NewEmptyTrashHandler(userRepo, mediaRepo, storageService)
+	inviteUserHandler := admincmd.NewInviteUserHandler(userRepo, adminRepo, cfg.AppBaseURL)
+	updateUserHandler := admincmd.NewUpdateUserHandler(userRepo, adminRepo, sessionStore)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		AppName:      cfg.AppName,
@@ -133,6 +141,7 @@ func main() {
 			loginHandler,
 			refreshHandler,
 			logoutHandler,
+			acceptInviteHandler,
 			cfg.AppEnv == "production",
 			int(cfg.JWTRefreshTTL.Seconds()),
 		),
@@ -171,6 +180,12 @@ func main() {
 			emptyTrashHandler,
 		),
 		CommentHandler: handlers.NewCommentHandler(listCommentsHandler, addCommentHandler, deleteCommentHandler),
+		AdminHandler: handlers.NewAdminHandler(
+			listUsersHandler,
+			inviteUserHandler,
+			updateUserHandler,
+			systemStatsHandler,
+		),
 	})
 
 	server := &http.Server{

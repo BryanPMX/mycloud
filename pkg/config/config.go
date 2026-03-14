@@ -12,6 +12,7 @@ import (
 type Config struct {
 	AppName          string
 	AppEnv           string
+	AppBaseURL       string
 	Port             string
 	DatabaseURL      string
 	RedisURL         string
@@ -37,6 +38,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		AppName:          getEnv("APP_NAME", "MyCloud"),
 		AppEnv:           getEnv("APP_ENV", "development"),
+		AppBaseURL:       getEnv("APP_BASE_URL", "http://localhost:8080"),
 		Port:             getEnv("PORT", "8080"),
 		DatabaseURL:      strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		RedisURL:         strings.TrimSpace(os.Getenv("REDIS_URL")),
