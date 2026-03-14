@@ -6,7 +6,8 @@ Current implementation note on March 14, 2026:
 - direct multipart upload init, part presigning, completion, and abort are live
 - the worker promotes clean uploads into `fc-originals`, and `GET /media/:id/url` now presigns original-object reads
 - permanent delete and empty-trash flows now perform best-effort MinIO cleanup across staged/original/thumb keys
-- actual thumbnail generation/upload and WebSocket progress events are still pending, so `GET /media/:id/thumb` returns `404` until real objects exist in `fc-thumbs`
+- Redis pub/sub-backed WebSocket progress events are now live at `GET /ws/progress`
+- actual thumbnail generation/upload is still pending, so `GET /media/:id/thumb` returns `404` until real objects exist in `fc-thumbs`
 
 ## 1. MinIO Configuration
 
@@ -38,7 +39,7 @@ fc-thumbs/
   {media_id}/poster.webp   → Video poster frame, 1280px wide
 
 fc-avatars/
-  {user_id}/avatar.webp
+  users/{user_id}/avatar-{timestamp}.{ext}
 ```
 
 Organizing originals by `owner_id/year/month` makes it trivial to calculate per-user disk usage from the filesystem and keeps directory sizes manageable.
@@ -306,7 +307,7 @@ After a file is uploaded and the multipart upload is completed, a background job
 │     ↓                                                            │
 │  9. Update media row → status "ready", thumb keys, dimensions    │
 │     ↓                                                            │
-│ 10. Publish "processing_complete" WebSocket event                │
+│ 10. Publish progress event over Redis pub/sub                    │
 │ 11. ACK job in Redis                                             │
 └─────────────────────────────────────────────────────────────────┘
 ```

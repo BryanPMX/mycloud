@@ -2,4 +2,4 @@
 
 Redis-backed adapters live here.
 
-This includes session storage, queues, rate-limiting helpers, and short-lived coordination state.
+This includes session storage, upload coordination, job queues, and media-progress pub/sub between the worker and API processes.

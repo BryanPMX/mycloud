@@ -2,11 +2,13 @@ package httpapi
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/yourorg/mycloud/internal/delivery/http/handlers"
 	"github.com/yourorg/mycloud/internal/delivery/http/middleware"
+	wsdelivery "github.com/yourorg/mycloud/internal/delivery/ws"
 	pkgauth "github.com/yourorg/mycloud/pkg/auth"
 )
 
@@ -16,6 +18,7 @@ type Dependencies struct {
 	TokenService   pkgauth.Service
 	AuthHandler    *handlers.AuthHandler
 	UserHandler    *handlers.UserHandler
+	ProgressHub    *wsdelivery.ProgressHub
 	MediaHandler   *handlers.MediaHandler
 	AlbumHandler   *handlers.AlbumHandler
 	ShareHandler   *handlers.ShareHandler
@@ -31,7 +34,39 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestID())
+	router.Use(middleware.SecurityHeaders(deps.AppEnv == "production"))
 	router.Use(middleware.StructuredLogger())
+
+	loginRateLimit := middleware.NewRateLimiter(middleware.RateLimitConfig{
+		Name:    "auth_login",
+		Limit:   5,
+		Window:  15 * time.Minute,
+		KeyFunc: middleware.ClientIPKey,
+	})
+	refreshRateLimit := middleware.NewRateLimiter(middleware.RateLimitConfig{
+		Name:    "auth_refresh",
+		Limit:   20,
+		Window:  time.Minute,
+		KeyFunc: middleware.ClientIPKey,
+	})
+	protectedRateLimit := middleware.NewRateLimiter(middleware.RateLimitConfig{
+		Name:    "api_user",
+		Limit:   300,
+		Window:  time.Minute,
+		KeyFunc: middleware.UserIDOrIPKey,
+	})
+	uploadInitRateLimit := middleware.NewRateLimiter(middleware.RateLimitConfig{
+		Name:    "media_upload_init",
+		Limit:   50,
+		Window:  time.Hour,
+		KeyFunc: middleware.UserIDOrIPKey,
+	})
+	partURLRateLimit := middleware.NewRateLimiter(middleware.RateLimitConfig{
+		Name:    "media_upload_part",
+		Limit:   300,
+		Window:  time.Minute,
+		KeyFunc: middleware.UserIDOrIPKey,
+	})
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -39,25 +74,31 @@ func NewRouter(deps Dependencies) *gin.Engine {
 			"service": deps.AppName,
 		})
 	})
+	if deps.ProgressHub != nil {
+		router.GET("/ws/progress", middleware.RequireAuth(deps.TokenService), deps.ProgressHub.Handle)
+	}
 
 	v1 := router.Group("/api/v1")
 	authGroup := v1.Group("/auth")
-	authGroup.POST("/login", deps.AuthHandler.Login)
-	authGroup.POST("/refresh", deps.AuthHandler.Refresh)
+	authGroup.POST("/login", loginRateLimit, deps.AuthHandler.Login)
+	authGroup.POST("/refresh", refreshRateLimit, deps.AuthHandler.Refresh)
 	authGroup.POST("/logout", deps.AuthHandler.Logout)
 	authGroup.POST("/invite/accept", deps.AuthHandler.AcceptInvite)
 
 	protected := v1.Group("/")
 	protected.Use(middleware.RequireAuth(deps.TokenService))
+	protected.Use(protectedRateLimit)
 	protected.GET("/users/me", deps.UserHandler.GetMe)
+	protected.PATCH("/users/me", deps.UserHandler.UpdateMe)
+	protected.PUT("/users/me/avatar", deps.UserHandler.UpdateAvatar)
 	protected.GET("/media", deps.MediaHandler.List)
 	protected.GET("/media/search", deps.MediaHandler.Search)
 	protected.GET("/media/trash", deps.MediaHandler.ListTrash)
 	protected.DELETE("/media/trash", deps.MediaHandler.EmptyTrash)
 	protected.POST("/media/:id/favorite", deps.MediaHandler.Favorite)
 	protected.DELETE("/media/:id/favorite", deps.MediaHandler.Unfavorite)
-	protected.POST("/media/upload/init", deps.MediaHandler.InitUpload)
-	protected.POST("/media/upload/:id/part-url", deps.MediaHandler.PresignPart)
+	protected.POST("/media/upload/init", uploadInitRateLimit, deps.MediaHandler.InitUpload)
+	protected.POST("/media/upload/:id/part-url", partURLRateLimit, deps.MediaHandler.PresignPart)
 	protected.POST("/media/upload/:id/complete", deps.MediaHandler.CompleteUpload)
 	protected.DELETE("/media/upload/:id", deps.MediaHandler.AbortUpload)
 	protected.GET("/media/:id", deps.MediaHandler.Get)

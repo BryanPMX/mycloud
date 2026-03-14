@@ -1,8 +1,8 @@
 # 06 — Authentication & Security
 
 Current implementation status on March 14, 2026:
-- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation plus admin-triggered session revocation, auth middleware, admin role middleware, request IDs, structured request logging, repository-enforced media visibility, application-layer album/share ownership checks, hashed invite acceptance, admin user-management routes, and `audit_log` writes for invite/admin actions
-- Still planned from this design doc: rate limiting, security-header middleware, cleanup orchestration, and SMTP invite delivery
+- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation plus admin-triggered session revocation, auth middleware, admin role middleware, request IDs, structured request logging, Go-side response security headers, fixed-window API rate limiting, repository-enforced media visibility, application-layer album/share ownership checks, hashed invite acceptance, admin user-management routes, self-service profile writes, and `audit_log` writes for invite/admin actions
+- Still planned from this design doc: cleanup orchestration and SMTP invite delivery
 
 ---
 
@@ -449,10 +449,13 @@ add_header Content-Security-Policy  "default-src 'self'; img-src 'self' blob: da
 
 ```go
 // internal/delivery/http/middleware/security_headers.go
-func SecurityHeaders() gin.HandlerFunc {
+func SecurityHeaders(production bool) gin.HandlerFunc {
     return func(c *gin.Context) {
-        c.Header("X-Request-ID", c.GetString("request_id"))
-        // Nginx handles the major headers; Go adds request-scoped ones
+        c.Header("X-Frame-Options", "DENY")
+        c.Header("X-Content-Type-Options", "nosniff")
+        c.Header("Referrer-Policy", "strict-origin")
+        c.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        // HSTS is only added in production.
         c.Next()
     }
 }
@@ -465,25 +468,19 @@ func SecurityHeaders() gin.HandlerFunc {
 | Endpoint | Limit | Window |
 |----------|-------|--------|
 | `POST /auth/login` | 5 attempts | per IP, per 15 minutes |
-| `POST /auth/refresh` | 20 requests | per user, per minute |
+| `POST /auth/refresh` | 20 requests | per client IP, per minute |
 | `POST /media/upload/init` | 50 uploads | per user, per hour |
 | `POST /media/upload/:id/part-url` | 300 requests | per user, per minute |
 | All other API | 300 requests | per user, per minute |
 
-Login rate limiting uses an exponential backoff stored in Redis:
+Current implementation note on March 14, 2026: the Go API now applies these limits with an in-process fixed-window limiter. That is a good fit for the repository's current single-API deployment topology; if we later run multiple API replicas, Redis-backed shared counters are the next hardening step.
 
 ```go
-func (m *LoginRateLimiter) CheckAndIncrement(ctx context.Context, ip string) error {
-    key := fmt.Sprintf("login_attempts:%s", ip)
-    count, _ := m.rdb.Incr(ctx, key).Result()
-    if count == 1 {
-        m.rdb.Expire(ctx, key, 15*time.Minute)
+func NewRateLimiter(config RateLimitConfig) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        // Fixed-window counters keyed by client IP or authenticated user ID.
+        // Exceeded requests return 429 with Retry-After.
     }
-    if count > 5 {
-        ttl, _ := m.rdb.TTL(ctx, key).Result()
-        return fmt.Errorf("too many login attempts, try again in %.0f seconds", ttl.Seconds())
-    }
-    return nil
 }
 ```
 

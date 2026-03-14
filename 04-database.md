@@ -6,7 +6,7 @@ Current implementation status on March 14, 2026:
 - Implemented in [003_favorites.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/003_favorites.up.sql): `favorites` with cascading cleanup and per-user media bookmarks
 - Implemented in [004_media_search_extensions.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/004_media_search_extensions.up.sql): `users.invite_token*`, `pg_trgm`, `media.search_vector`, the owner+taken timeline index, and the media search/metadata GIN indexes
 - Implemented in [005_audit_log.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/005_audit_log.up.sql): append-only `audit_log` storage plus actor/target/action indexes
-- Application layer now exercises `albums`, `album_media`, `shares`, `comments`, `favorites`, and `audit_log` for album creation/listing/detail/update/delete, album membership changes, album media reads, active share management, media comments, favorite/unfavorite flows, media search, trash lifecycle persistence, and invite/admin auditing
+- Application layer now exercises `users`, `albums`, `album_media`, `shares`, `comments`, `favorites`, and `audit_log` for self-service profile writes, album creation/listing/detail/update/delete, album membership changes, album media reads, active share management, media comments, favorite/unfavorite flows, media search, trash lifecycle persistence, and invite/admin auditing
 - Still planned from this design doc: scheduled trash-purge cleanup orchestration
 
 ---

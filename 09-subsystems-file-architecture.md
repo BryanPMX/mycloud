@@ -26,8 +26,8 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 - PostgreSQL audit-log migration plus invite/admin audit persistence
 - Redis client + refresh session store
 - Postgres comments repository plus media comment flows
-- HTTP router, auth middleware, admin role middleware, request IDs, and structured request logging
-- auth endpoints plus `POST /auth/invite/accept`, `GET /users/me`, media list/detail/search/trash routes, presigned original reads, media favorite routes, album/share routes, media comment routes, and admin user-management/stat routes
+- HTTP router, auth middleware, admin role middleware, request IDs, response security headers, fixed-window rate limiting, and structured request logging
+- auth endpoints plus `POST /auth/invite/accept`, `GET /users/me`, `PATCH /users/me`, `PUT /users/me/avatar`, media list/detail/search/trash routes, presigned original reads, media favorite routes, album/share routes, media comment routes, and admin user-management/stat routes
 - album creation/listing/detail/update/delete, album-specific media listing, album-media membership changes, and share list/create/revoke flows
 - direct multipart upload init/part-url/complete/abort flows with MinIO wiring
 - trash restore/permanent-delete/empty-trash flows with best-effort MinIO asset cleanup
@@ -36,6 +36,9 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 
 Still intentionally pending:
 
+- thumbnail generation and richer media metadata extraction in the worker
+- cleanup-job orchestration and automated trash/share cleanup flows
+- SMTP invite delivery
 - Flutter app runtime wiring
 
 ---
@@ -280,7 +283,7 @@ flutter_app/
 - direct upload can be implemented early
 - albums have enough structure to start without building every screen first
 
-Comments, admin, trash, offline queueing, auto-backup, and WebSocket progress handling can be added once those subsystems start.
+Comments, admin, trash, offline queueing, and auto-backup can be added once those subsystems start.
 
 ---
 

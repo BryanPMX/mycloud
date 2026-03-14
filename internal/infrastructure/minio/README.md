@@ -2,4 +2,4 @@
 
 Object storage adapters live here.
 
-This directory should own bucket access, key construction, and presigned URL generation.
+This directory owns bucket access, key construction, presigned URL generation, and object writes across uploads, originals, thumbnails, and avatars.

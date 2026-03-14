@@ -191,6 +191,15 @@ func (b *fakeKeyBuilder) BuildThumbKeys(uuid.UUID, string) domain.ThumbKeys {
 	return b.keys
 }
 
+type fakeProgressPublisher struct {
+	events []domain.MediaProgressEvent
+}
+
+func (p *fakeProgressPublisher) PublishMediaProgress(_ context.Context, event domain.MediaProgressEvent) error {
+	p.events = append(p.events, event)
+	return nil
+}
+
 func TestJobRunnerProcessPromotesUploadAndMarksMediaReady(t *testing.T) {
 	t.Parallel()
 
@@ -199,6 +208,7 @@ func TestJobRunnerProcessPromotesUploadAndMarksMediaReady(t *testing.T) {
 	mediaRepo := &fakeMediaRepo{
 		media: &domain.Media{
 			ID:          mediaID,
+			OwnerID:     uuid.New(),
 			MimeType:    "video/mp4",
 			OriginalKey: "owner/2026/03/media.mp4",
 			Status:      domain.MediaStatusPending,
@@ -219,6 +229,7 @@ func TestJobRunnerProcessPromotesUploadAndMarksMediaReady(t *testing.T) {
 	}
 	storage := &fakeStorageService{openBody: "clean upload"}
 	scanner := &fakeScanner{clean: true}
+	progress := &fakeProgressPublisher{}
 	keyBuilder := &fakeKeyBuilder{
 		keys: domain.ThumbKeys{
 			Small:  "small.webp",
@@ -228,7 +239,7 @@ func TestJobRunnerProcessPromotesUploadAndMarksMediaReady(t *testing.T) {
 		},
 	}
 
-	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, keyBuilder, time.Second)
+	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, progress, keyBuilder, time.Second)
 	runner.process(context.Background(), &domain.Job{ID: jobID})
 
 	if jobRepo.runningID != jobID {
@@ -256,6 +267,12 @@ func TestJobRunnerProcessPromotesUploadAndMarksMediaReady(t *testing.T) {
 	if jobRepo.doneID != jobID {
 		t.Fatal("process() did not mark the job done")
 	}
+	if len(progress.events) != 2 || progress.events[0].Type != domain.MediaProgressStarted || progress.events[1].Type != domain.MediaProgressComplete {
+		t.Fatalf("process() progress events = %#v, want started then complete", progress.events)
+	}
+	if progress.events[1].ThumbURLs.Poster != "poster.webp" {
+		t.Fatal("process() did not publish thumbnail keys in completion event")
+	}
 }
 
 func TestJobRunnerProcessFailsMediaWhenVirusDetected(t *testing.T) {
@@ -266,6 +283,7 @@ func TestJobRunnerProcessFailsMediaWhenVirusDetected(t *testing.T) {
 	mediaRepo := &fakeMediaRepo{
 		media: &domain.Media{
 			ID:          mediaID,
+			OwnerID:     uuid.New(),
 			MimeType:    "image/jpeg",
 			OriginalKey: "owner/2026/03/photo.jpg",
 			Status:      domain.MediaStatusPending,
@@ -283,9 +301,10 @@ func TestJobRunnerProcessFailsMediaWhenVirusDetected(t *testing.T) {
 	}
 	storage := &fakeStorageService{openBody: "infected"}
 	scanner := &fakeScanner{clean: false, threat: "EICAR-Test-Signature"}
+	progress := &fakeProgressPublisher{}
 	keyBuilder := &fakeKeyBuilder{}
 
-	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, keyBuilder, time.Second)
+	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, progress, keyBuilder, time.Second)
 	runner.process(context.Background(), &domain.Job{ID: jobID})
 
 	if mediaRepo.media.Status != domain.MediaStatusFailed {
@@ -303,6 +322,12 @@ func TestJobRunnerProcessFailsMediaWhenVirusDetected(t *testing.T) {
 	if mediaRepo.result != nil {
 		t.Fatal("process() should not apply a processing result on virus detection")
 	}
+	if len(progress.events) != 2 || progress.events[1].Type != domain.MediaProgressFailed {
+		t.Fatalf("process() progress events = %#v, want failure publish", progress.events)
+	}
+	if !strings.Contains(progress.events[1].Reason, "virus detected") {
+		t.Fatal("process() did not publish the failure reason")
+	}
 }
 
 func TestJobRunnerProcessFailsWhenScannerErrors(t *testing.T) {
@@ -313,6 +338,7 @@ func TestJobRunnerProcessFailsWhenScannerErrors(t *testing.T) {
 	mediaRepo := &fakeMediaRepo{
 		media: &domain.Media{
 			ID:          mediaID,
+			OwnerID:     uuid.New(),
 			MimeType:    "image/jpeg",
 			OriginalKey: "owner/2026/03/photo.jpg",
 			Status:      domain.MediaStatusPending,
@@ -329,12 +355,14 @@ func TestJobRunnerProcessFailsWhenScannerErrors(t *testing.T) {
 		},
 	}
 
+	progress := &fakeProgressPublisher{}
 	runner := NewJobRunner(
 		&fakeJobQueue{},
 		jobRepo,
 		mediaRepo,
 		&fakeStorageService{openBody: "upload"},
 		&fakeScanner{err: errors.New("clamd unavailable")},
+		progress,
 		&fakeKeyBuilder{},
 		time.Second,
 	)
@@ -345,5 +373,8 @@ func TestJobRunnerProcessFailsWhenScannerErrors(t *testing.T) {
 	}
 	if mediaRepo.media.Status != domain.MediaStatusFailed {
 		t.Fatal("process() did not mark media failed on scanner error")
+	}
+	if len(progress.events) != 2 || progress.events[1].Type != domain.MediaProgressFailed {
+		t.Fatalf("process() progress events = %#v, want started then failed", progress.events)
 	}
 }

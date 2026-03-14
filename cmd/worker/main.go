@@ -57,11 +57,12 @@ func main() {
 	jobQueue := redisinfra.NewJobQueue(redisClient)
 	jobRepo := postgres.NewJobRepository(db)
 	mediaRepo := postgres.NewMediaRepository(db)
-	storage := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck)
+	progressBus := redisinfra.NewMediaProgressBus(redisClient)
+	storage := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
 	scanner := clamav.NewScanner(cfg.ClamAVSocket)
 	keyBuilder := minioinfra.NewKeyBuilder()
 
-	runner := worker.NewJobRunner(jobQueue, jobRepo, mediaRepo, storage, scanner, keyBuilder, 5*time.Second)
+	runner := worker.NewJobRunner(jobQueue, jobRepo, mediaRepo, storage, scanner, progressBus, keyBuilder, 5*time.Second)
 
 	log.Printf("%s worker started", cfg.AppName)
 	runner.Run(ctx)

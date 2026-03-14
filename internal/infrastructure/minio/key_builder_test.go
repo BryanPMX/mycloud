@@ -45,3 +45,16 @@ func TestKeyBuilderBuildThumbKeysIncludesPosterForVideo(t *testing.T) {
 		t.Fatalf("BuildThumbKeys() poster = %q", keys.Poster)
 	}
 }
+
+func TestKeyBuilderBuildAvatarObjectKeyUsesUserScopeAndImageExtension(t *testing.T) {
+	t.Parallel()
+
+	builder := NewKeyBuilder()
+	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+
+	key := builder.BuildAvatarObjectKey(userID, "image/png", time.Date(2026, time.March, 14, 16, 5, 9, 0, time.UTC))
+	want := "users/11111111-1111-1111-1111-111111111111/avatar-20260314T160509.png"
+	if key != want {
+		t.Fatalf("BuildAvatarObjectKey() = %q, want %q", key, want)
+	}
+}

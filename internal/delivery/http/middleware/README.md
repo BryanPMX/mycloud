@@ -2,4 +2,4 @@
 
 HTTP middleware lives here.
 
-Examples include auth, request IDs, logging, rate limiting, CORS, security headers, and metrics.
+The current stack includes auth, request IDs, structured logging, fixed-window rate limiting, and response security headers.

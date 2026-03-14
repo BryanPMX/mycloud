@@ -34,7 +34,8 @@ As of March 14, 2026, the repository includes the current working backend slices
 - PostgreSQL, Redis, and MinIO wiring in the API composition root
 - initial SQL migration with quota and album-count triggers
 - secure JWT login, refresh, logout, and invite-accept flows
-- authenticated `GET /users/me`
+- authenticated `GET /users/me` plus self-service `PATCH /users/me` and `PUT /users/me/avatar`
+- response security headers and fixed-window rate limiting in the Go HTTP stack
 - authorization-aware `GET /media`, `GET /media/:id`, `GET /media/search`, and trash listing with cursor pagination
 - presigned original download URLs via `GET /media/:id/url`
 - media trash lifecycle: upload abort, soft delete, restore, permanent delete, and empty-trash flows
@@ -45,11 +46,12 @@ As of March 14, 2026, the repository includes the current working backend slices
 - append-only `audit_log` persistence for invite/admin actions via `005_audit_log`
 - direct multipart upload init, part-url presigning, and completion endpoints
 - `process_media` job creation at upload completion
+- Redis pub/sub-backed worker progress events plus authenticated `GET /ws/progress`
 - search-vector and metadata index migration for media search/timeline reads
 - worker-side staged upload scanning, promotion to originals, and media row finalization
 - focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, invite acceptance, admin mutations, media upload commands, favorites, albums, and shares
 
-Actual thumbnail file generation, WebSocket progress events, SMTP invite delivery, user profile writes, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise. The thumbnail read endpoint is wired, but it returns `404` until real thumbnail objects exist in `fc-thumbs`.
+Actual thumbnail file generation, SMTP invite delivery, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise. The thumbnail read endpoint is wired, but it returns `404` until real thumbnail objects exist in `fc-thumbs`.
 
 ### Design Goals
 

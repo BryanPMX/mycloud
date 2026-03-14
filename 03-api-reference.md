@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
 Current implementation status on March 14, 2026:
-- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invite/accept`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/media/search`, `GET /api/v1/media/trash`, `DELETE /api/v1/media/trash`, `GET /api/v1/media/:id`, `GET /api/v1/media/:id/url`, `GET /api/v1/media/:id/thumb`, `DELETE /api/v1/media/:id`, `POST /api/v1/media/:id/restore`, `DELETE /api/v1/media/:id/permanent`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`, `DELETE /api/v1/media/upload/:id`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `GET /api/v1/admin/users`, `POST /api/v1/admin/users/invite`, `PATCH /api/v1/admin/users/:id`, `DELETE /api/v1/admin/users/:id`, `GET /api/v1/admin/stats`
+- Implemented now: `GET /health`, `GET /ws/progress`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invite/accept`, `GET /api/v1/users/me`, `PATCH /api/v1/users/me`, `PUT /api/v1/users/me/avatar`, `GET /api/v1/media`, `GET /api/v1/media/search`, `GET /api/v1/media/trash`, `DELETE /api/v1/media/trash`, `GET /api/v1/media/:id`, `GET /api/v1/media/:id/url`, `GET /api/v1/media/:id/thumb`, `DELETE /api/v1/media/:id`, `POST /api/v1/media/:id/restore`, `DELETE /api/v1/media/:id/permanent`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`, `DELETE /api/v1/media/upload/:id`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `GET /api/v1/admin/users`, `POST /api/v1/admin/users/invite`, `PATCH /api/v1/admin/users/:id`, `DELETE /api/v1/admin/users/:id`, `GET /api/v1/admin/stats`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -188,7 +188,7 @@ Get the authenticated user's profile.
   "id":            "uuid",
   "email":         "user@family.com",
   "display_name":  "Dad",
-  "avatar_url":    "https://...",
+  "avatar_url":    "users/550e8400-e29b-41d4-a716-446655440000/avatar-20260314T160509.png",
   "role":          "member",
   "storage_used":  12884901888,
   "quota_bytes":   21474836480,
@@ -197,6 +197,8 @@ Get the authenticated user's profile.
   "last_login_at": "2024-06-15T09:00:00Z"
 }
 ```
+
+Current implementation note on March 14, 2026: `avatar_url` currently exposes the stored avatar object key, matching the other avatar-bearing DTOs in the API. A separate avatar-read surface or presigned avatar URLs can still be added later if we want the field to become a fully qualified URL.
 
 ---
 
@@ -209,6 +211,8 @@ Update display name.
 ```
 
 **Response 200** — updated user object.
+
+Current implementation note on March 14, 2026: unknown JSON fields are rejected, and blank display names return `400 Bad Request`.
 
 ---
 
@@ -223,8 +227,10 @@ Content-Length: 204800
 
 **Response 200**
 ```json
-{ "avatar_url": "https://your-server.com/..." }
+{ "avatar_url": "users/550e8400-e29b-41d4-a716-446655440000/avatar-20260314T160509.jpg" }
 ```
+
+Current implementation note on March 14, 2026: the API accepts `image/jpeg`, `image/png`, `image/webp`, and `image/heic`; uploads over 5 MB return `413 Payload Too Large`. Replacing an avatar best-effort deletes the previous avatar object from `fc-avatars`.
 
 ---
 
@@ -360,7 +366,7 @@ Finalize a staged multipart upload. The API persists the `media` row as `pending
 }
 ```
 
-The current worker slice scans the staged object, promotes it into the originals bucket, and fills metadata plus thumbnail keys. Actual thumbnail file generation and WebSocket progress updates are still planned.
+The current worker slice scans the staged object, promotes it into the originals bucket, fills metadata plus thumbnail keys, and now emits realtime processing events over `/ws/progress`. Actual thumbnail file generation is still planned, so `GET /media/:id/thumb` can still return `404` until real objects exist in `fc-thumbs`.
 
 ---
 
@@ -840,6 +846,8 @@ Authenticated WebSocket connection. The client receives progress events during m
 
 Upload progress is tracked client-side because file chunks go directly to MinIO. The WebSocket is only for server-side processing status.
 
+Current implementation note on March 14, 2026: this endpoint is live now. The API authenticates the initial upgrade using the same bearer-token or `access_token` cookie flow as the REST API, then fans out worker events received over Redis pub/sub. Events are currently scoped to the uploading owner.
+
 **Messages received from server**
 
 Processing started (virus scan + thumbnails):
@@ -857,12 +865,14 @@ Processing complete:
   "media_id": "uuid",
   "status":   "ready",
   "thumb_urls": {
-    "small":  "https://...",
-    "medium": "https://...",
-    "large":  "https://..."
+    "small":  "550e8400-e29b-41d4-a716-446655440000/small.webp",
+    "medium": "550e8400-e29b-41d4-a716-446655440000/medium.webp",
+    "large":  "550e8400-e29b-41d4-a716-446655440000/large.webp"
   }
 }
 ```
+
+Current implementation note on March 14, 2026: `thumb_urls` currently expose stored thumbnail keys, not presigned URLs. That matches the rest of the current backend while real thumbnail generation is still pending.
 
 Processing failed:
 ```json

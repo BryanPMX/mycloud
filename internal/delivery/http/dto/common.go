@@ -10,12 +10,17 @@ type UserResponse struct {
 	ID          string     `json:"id"`
 	Email       string     `json:"email"`
 	DisplayName string     `json:"display_name"`
+	AvatarURL   *string    `json:"avatar_url"`
 	Role        string     `json:"role"`
 	StorageUsed int64      `json:"storage_used"`
 	QuotaBytes  int64      `json:"quota_bytes"`
 	StoragePct  float64    `json:"storage_pct"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+}
+
+type AvatarURLResponse struct {
+	AvatarURL *string `json:"avatar_url"`
 }
 
 type AdminUserResponse struct {
@@ -157,6 +162,7 @@ func ToUserResponse(user *domain.User) UserResponse {
 		ID:          user.ID.String(),
 		Email:       user.Email,
 		DisplayName: user.DisplayName,
+		AvatarURL:   stringPtr(user.AvatarKey),
 		Role:        string(user.Role),
 		StorageUsed: user.StorageUsed,
 		QuotaBytes:  user.QuotaBytes,

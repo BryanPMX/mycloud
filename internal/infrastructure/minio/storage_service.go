@@ -21,14 +21,16 @@ type StorageService struct {
 	uploadsBucket string
 	originalsBuck string
 	thumbsBucket  string
+	avatarsBucket string
 }
 
-func NewStorageService(core *miniosdk.Core, uploadsBucket, originalsBucket, thumbsBucket string) *StorageService {
+func NewStorageService(core *miniosdk.Core, uploadsBucket, originalsBucket, thumbsBucket, avatarsBucket string) *StorageService {
 	return &StorageService{
 		core:          core,
 		uploadsBucket: uploadsBucket,
 		originalsBuck: originalsBucket,
 		thumbsBucket:  thumbsBucket,
+		avatarsBucket: avatarsBucket,
 	}
 }
 
@@ -101,6 +103,20 @@ func (s *StorageService) UploadExists(ctx context.Context, key string) (bool, er
 
 func (s *StorageService) DeleteUpload(ctx context.Context, key string) error {
 	return s.removeObjectIfExists(ctx, s.uploadsBucket, key, "delete upload object")
+}
+
+func (s *StorageService) UploadAvatar(ctx context.Context, key, mimeType string, body io.Reader, size int64) error {
+	if _, err := s.core.Client.PutObject(ctx, s.avatarsBucket, key, body, size, miniosdk.PutObjectOptions{
+		ContentType: mimeType,
+	}); err != nil {
+		return fmt.Errorf("upload avatar object: %w", err)
+	}
+
+	return nil
+}
+
+func (s *StorageService) DeleteAvatar(ctx context.Context, key string) error {
+	return s.removeObjectIfExists(ctx, s.avatarsBucket, key, "delete avatar object")
 }
 
 func (s *StorageService) OpenUpload(ctx context.Context, key string) (io.ReadCloser, error) {

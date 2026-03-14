@@ -78,6 +78,35 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID, last
 	return nil
 }
 
+func (r *UserRepository) UpdateProfile(ctx context.Context, id uuid.UUID, displayName string) (*domain.User, error) {
+	const query = `
+		UPDATE users
+		SET display_name = $2, updated_at = now()
+		WHERE id = $1
+		RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
+		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+	`
+
+	return scanUser(r.db.QueryRow(ctx, query, id, strings.TrimSpace(displayName)))
+}
+
+func (r *UserRepository) UpdateAvatarKey(ctx context.Context, id uuid.UUID, avatarKey string) (*domain.User, error) {
+	const query = `
+		UPDATE users
+		SET avatar_key = $2, updated_at = now()
+		WHERE id = $1
+		RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
+		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+	`
+
+	var value *string
+	if trimmed := strings.TrimSpace(avatarKey); trimmed != "" {
+		value = &trimmed
+	}
+
+	return scanUser(r.db.QueryRow(ctx, query, id, value))
+}
+
 func (r userRow) toDomain() *domain.User {
 	avatarKey := ""
 	if r.AvatarKey != nil {

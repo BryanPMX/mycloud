@@ -2,4 +2,4 @@
 
 User-profile write flows live here.
 
-Examples include profile updates and avatar upload orchestration.
+This directory now owns self-service display-name updates plus avatar upload orchestration and avatar-object cleanup.

@@ -18,6 +18,7 @@ type JobRunner struct {
 	mediaRepo   domain.MediaRepository
 	storage     domain.StorageService
 	scanner     domain.VirusScanner
+	progress    domain.MediaProgressPublisher
 	keyBuilder  domain.MediaKeyBuilder
 	pollTimeout time.Duration
 }
@@ -28,6 +29,7 @@ func NewJobRunner(
 	mediaRepo domain.MediaRepository,
 	storage domain.StorageService,
 	scanner domain.VirusScanner,
+	progress domain.MediaProgressPublisher,
 	keyBuilder domain.MediaKeyBuilder,
 	pollTimeout time.Duration,
 ) *JobRunner {
@@ -41,6 +43,7 @@ func NewJobRunner(
 		mediaRepo:   mediaRepo,
 		storage:     storage,
 		scanner:     scanner,
+		progress:    progress,
 		keyBuilder:  keyBuilder,
 		pollTimeout: pollTimeout,
 	}
@@ -82,17 +85,17 @@ func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
 	}
 
 	if job.Type != domain.JobTypeProcessMedia {
-		r.failJob(ctx, job.ID, job.MediaID, fmt.Errorf("unsupported job type %q", job.Type))
+		r.failJob(ctx, job.ID, job.MediaID, nil, fmt.Errorf("unsupported job type %q", job.Type))
 		return
 	}
 	if job.MediaID == nil || *job.MediaID == uuid.Nil {
-		r.failJob(ctx, job.ID, nil, errors.New("missing media id"))
+		r.failJob(ctx, job.ID, nil, nil, errors.New("missing media id"))
 		return
 	}
 
 	media, err := r.mediaRepo.FindByID(ctx, *job.MediaID)
 	if err != nil {
-		r.failJob(ctx, job.ID, job.MediaID, err)
+		r.failJob(ctx, job.ID, job.MediaID, nil, err)
 		return
 	}
 	if media.Status == domain.MediaStatusReady {
@@ -100,30 +103,36 @@ func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
 		return
 	}
 	if err := r.mediaRepo.UpdateStatus(ctx, media.ID, domain.MediaStatusProcessing); err != nil {
-		r.failJob(ctx, job.ID, job.MediaID, err)
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
 		return
 	}
+	r.publishProgress(ctx, domain.MediaProgressEvent{
+		Type:       domain.MediaProgressStarted,
+		MediaID:    media.ID,
+		OwnerID:    media.OwnerID,
+		OccurredOn: time.Now().UTC(),
+	})
 
 	obj, err := r.storage.OpenUpload(ctx, media.OriginalKey)
 	if err != nil {
-		r.failJob(ctx, job.ID, job.MediaID, err)
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
 		return
 	}
 
 	clean, threat, scanErr := r.scanner.ScanReader(ctx, obj)
 	_ = obj.Close()
 	if scanErr != nil {
-		r.failJob(ctx, job.ID, job.MediaID, scanErr)
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, scanErr)
 		return
 	}
 	if !clean {
 		_ = r.storage.DeleteUpload(ctx, media.OriginalKey)
-		r.failJob(ctx, job.ID, job.MediaID, fmt.Errorf("virus detected: %s", strings.TrimSpace(threat)))
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, fmt.Errorf("virus detected: %s", strings.TrimSpace(threat)))
 		return
 	}
 
 	if err := r.storage.PromoteUpload(ctx, media.OriginalKey); err != nil {
-		r.failJob(ctx, job.ID, job.MediaID, err)
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
 		return
 	}
 	_ = r.storage.DeleteUpload(ctx, media.OriginalKey)
@@ -133,18 +142,42 @@ func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
 		Metadata:  buildProcessingMetadata(media, job.ID, now),
 	}
 	if err := r.mediaRepo.ApplyProcessingResult(ctx, media.ID, result); err != nil {
-		r.failJob(ctx, job.ID, job.MediaID, err)
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
 		return
 	}
+	r.publishProgress(ctx, domain.MediaProgressEvent{
+		Type:       domain.MediaProgressComplete,
+		MediaID:    media.ID,
+		OwnerID:    media.OwnerID,
+		Status:     string(domain.MediaStatusReady),
+		ThumbURLs:  result.ThumbKeys,
+		OccurredOn: time.Now().UTC(),
+	})
 
 	_ = r.jobRepo.MarkDone(ctx, job.ID, time.Now().UTC())
 }
 
-func (r *JobRunner) failJob(ctx context.Context, jobID uuid.UUID, mediaID *uuid.UUID, err error) {
+func (r *JobRunner) failJob(ctx context.Context, jobID uuid.UUID, mediaID *uuid.UUID, ownerID *uuid.UUID, err error) {
 	if mediaID != nil && *mediaID != uuid.Nil {
 		_ = r.mediaRepo.UpdateStatus(ctx, *mediaID, domain.MediaStatusFailed)
 	}
+	if mediaID != nil && *mediaID != uuid.Nil && ownerID != nil && *ownerID != uuid.Nil {
+		r.publishProgress(ctx, domain.MediaProgressEvent{
+			Type:       domain.MediaProgressFailed,
+			MediaID:    *mediaID,
+			OwnerID:    *ownerID,
+			Reason:     err.Error(),
+			OccurredOn: time.Now().UTC(),
+		})
+	}
 	_ = r.jobRepo.MarkFailed(ctx, jobID, err.Error(), time.Now().UTC())
+}
+
+func (r *JobRunner) publishProgress(ctx context.Context, event domain.MediaProgressEvent) {
+	if r.progress == nil {
+		return
+	}
+	_ = r.progress.PublishMediaProgress(ctx, event)
 }
 
 func buildProcessingMetadata(media *domain.Media, jobID uuid.UUID, processedAt time.Time) map[string]any {

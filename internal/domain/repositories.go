@@ -13,6 +13,12 @@ type UserRepository interface {
 	UpdateLastLogin(ctx context.Context, id uuid.UUID, lastLoginAt time.Time) error
 }
 
+type UserProfileRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
+	UpdateProfile(ctx context.Context, id uuid.UUID, displayName string) (*User, error)
+	UpdateAvatarKey(ctx context.Context, id uuid.UUID, avatarKey string) (*User, error)
+}
+
 type AdminRepository interface {
 	ListUsers(ctx context.Context) ([]*User, error)
 	CreateOrRefreshInvite(ctx context.Context, params InviteUserParams, audit *AuditLog) (*User, error)

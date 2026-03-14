@@ -12,6 +12,7 @@ import (
 	commentcmd "github.com/yourorg/mycloud/internal/application/commands/comments"
 	mediacmd "github.com/yourorg/mycloud/internal/application/commands/media"
 	sharecmd "github.com/yourorg/mycloud/internal/application/commands/shares"
+	usercmd "github.com/yourorg/mycloud/internal/application/commands/users"
 	adminquery "github.com/yourorg/mycloud/internal/application/queries/admin"
 	albumquery "github.com/yourorg/mycloud/internal/application/queries/albums"
 	commentquery "github.com/yourorg/mycloud/internal/application/queries/comments"
@@ -20,6 +21,7 @@ import (
 	userquery "github.com/yourorg/mycloud/internal/application/queries/users"
 	httpapi "github.com/yourorg/mycloud/internal/delivery/http"
 	"github.com/yourorg/mycloud/internal/delivery/http/handlers"
+	wsdelivery "github.com/yourorg/mycloud/internal/delivery/ws"
 	minioinfra "github.com/yourorg/mycloud/internal/infrastructure/minio"
 	"github.com/yourorg/mycloud/internal/infrastructure/postgres"
 	redisinfra "github.com/yourorg/mycloud/internal/infrastructure/redis"
@@ -82,14 +84,23 @@ func main() {
 	sessionStore := redisinfra.NewSessionStore(redisClient)
 	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
 	jobQueue := redisinfra.NewJobQueue(redisClient)
-	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck)
+	progressBus := redisinfra.NewMediaProgressBus(redisClient)
+	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
 	keyBuilder := minioinfra.NewKeyBuilder()
+	progressHub := wsdelivery.NewProgressHub(progressBus)
+	go func() {
+		if err := progressHub.Run(context.Background()); err != nil && err != context.Canceled {
+			log.Printf("progress hub stopped: %v", err)
+		}
+	}()
 
 	loginHandler := authcmd.NewLoginHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	refreshHandler := authcmd.NewRefreshHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
 	acceptInviteHandler := authcmd.NewAcceptInviteHandler(adminRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
+	updateProfileHandler := usercmd.NewUpdateProfileHandler(userRepo)
+	updateAvatarHandler := usercmd.NewUpdateAvatarHandler(userRepo, storageService, keyBuilder)
 	listUsersHandler := adminquery.NewListUsersHandler(userRepo, adminRepo)
 	systemStatsHandler := adminquery.NewSystemStatsHandler(userRepo, adminRepo)
 	getMediaHandler := mediaquery.NewGetMediaHandler(userRepo, mediaRepo, favoriteRepo)
@@ -160,7 +171,8 @@ func main() {
 			createShareHandler,
 			revokeShareHandler,
 		),
-		UserHandler: handlers.NewUserHandler(getMeHandler),
+		UserHandler: handlers.NewUserHandler(getMeHandler, updateProfileHandler, updateAvatarHandler),
+		ProgressHub: progressHub,
 		MediaHandler: handlers.NewMediaHandler(
 			getMediaHandler,
 			listMediaHandler,

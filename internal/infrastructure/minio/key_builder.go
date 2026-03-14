@@ -41,6 +41,20 @@ func (b *KeyBuilder) BuildThumbKeys(mediaID uuid.UUID, mimeType string) domain.T
 	return keys
 }
 
+func (b *KeyBuilder) BuildAvatarObjectKey(userID uuid.UUID, mimeType string, now time.Time) string {
+	ts := now.UTC()
+	return fmt.Sprintf("users/%s/avatar-%04d%02d%02dT%02d%02d%02d%s",
+		userID.String(),
+		ts.Year(),
+		int(ts.Month()),
+		ts.Day(),
+		ts.Hour(),
+		ts.Minute(),
+		ts.Second(),
+		sanitizeExtension(extensionFromMIME(mimeType)),
+	)
+}
+
 func normalizedExtension(filename, mimeType string) string {
 	raw := strings.ToLower(strings.TrimSpace(filepath.Ext(filename)))
 	if ext := sanitizeExtension(raw); ext != "" {
