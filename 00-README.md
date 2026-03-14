@@ -28,22 +28,23 @@ MyCloud is a **private, high-quality media cloud** for up to 50+ family members,
 
 ## Current Implementation Status
 
-As of March 13, 2026, the repository includes the first working backend slice:
+As of March 14, 2026, the repository includes the current working backend slices:
 
 - runtime config loading from environment variables
 - PostgreSQL, Redis, and MinIO wiring in the API composition root
 - initial SQL migration with quota and album-count triggers
 - secure JWT login, refresh, and logout flows
 - authenticated `GET /users/me`
-- authorization-aware `GET /media` with cursor pagination
-- album creation/listing, album-media membership, and album share management
+- authorization-aware `GET /media` with cursor pagination and favorites filtering
+- album creation/listing/detail/update/delete, album-media membership, and album share management
 - media comment read/write/delete flows backed by PostgreSQL soft deletes
+- media favorite/unfavorite flows backed by PostgreSQL favorites
 - direct multipart upload init, part-url presigning, and completion endpoints
 - `process_media` job creation at upload completion
 - worker-side staged upload scanning, promotion to originals, and media row finalization
-- focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, media upload commands, albums, and shares
+- focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, media upload commands, favorites, albums, and shares
 
-Actual thumbnail file generation, WebSocket progress events, album detail/update/delete flows, favorites, invite flow, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
+Actual thumbnail file generation, WebSocket progress events, invite flow, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
 
 ### Design Goals
 

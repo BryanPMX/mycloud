@@ -35,6 +35,7 @@ type MediaResponse struct {
 	Height       int        `json:"height"`
 	DurationSecs float64    `json:"duration_secs"`
 	Status       string     `json:"status"`
+	IsFavorite   bool       `json:"is_favorite"`
 	TakenAt      *time.Time `json:"taken_at,omitempty"`
 	UploadedAt   time.Time  `json:"uploaded_at"`
 	ThumbURLs    ThumbURLs  `json:"thumb_urls"`
@@ -126,6 +127,7 @@ func ToMediaResponse(media *domain.Media) MediaResponse {
 		Height:       media.Height,
 		DurationSecs: media.DurationSecs,
 		Status:       string(media.Status),
+		IsFavorite:   media.IsFavorite,
 		TakenAt:      media.TakenAt,
 		UploadedAt:   media.UploadedAt,
 		ThumbURLs: ThumbURLs{

@@ -1,21 +1,28 @@
 # MyCloud
 
-This repository now contains both the design set and the first implemented backend slice for MyCloud.
+This repository now contains both the design set and the current implemented backend slices for MyCloud.
 
 Current backend slice:
-- PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, and `jobs`
+- PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, `comments`, `favorites`, and `jobs`
 - JWT access/refresh auth with Redis-backed refresh session rotation
 - MinIO wiring for direct multipart uploads
 - Redis-backed `process_media` job enqueue plus worker promotion/scan flow
-- album list/create, album-media add/remove, and album share management
+- album list/create/detail/update/delete, album-media add/remove, and album share management
 - comment persistence plus media comment list/create/delete endpoints
+- media favorites on `GET /media` and `GET /albums/:id/media`, plus favorite/unfavorite endpoints
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/users/me`
 - `GET /api/v1/media`
+- `POST /api/v1/media/:id/favorite`
+- `DELETE /api/v1/media/:id/favorite`
 - `GET /api/v1/albums`
 - `POST /api/v1/albums`
+- `GET /api/v1/albums/:id`
+- `PATCH /api/v1/albums/:id`
+- `DELETE /api/v1/albums/:id`
+- `GET /api/v1/albums/:id/media`
 - `POST /api/v1/albums/:id/media`
 - `DELETE /api/v1/albums/:id/media/:mediaId`
 - `GET /api/v1/albums/:id/shares`

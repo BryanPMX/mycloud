@@ -16,6 +16,8 @@ import (
 )
 
 type MediaHandler struct {
+	favoriteHandler       *mediacmd.FavoriteMediaHandler
+	unfavoriteHandler     *mediacmd.UnfavoriteMediaHandler
 	listHandler           *mediaquery.ListMediaHandler
 	initUploadHandler     *mediacmd.InitUploadHandler
 	partURLHandler        *mediacmd.PresignUploadPartHandler
@@ -24,11 +26,15 @@ type MediaHandler struct {
 
 func NewMediaHandler(
 	listHandler *mediaquery.ListMediaHandler,
+	favoriteHandler *mediacmd.FavoriteMediaHandler,
+	unfavoriteHandler *mediacmd.UnfavoriteMediaHandler,
 	initUploadHandler *mediacmd.InitUploadHandler,
 	partURLHandler *mediacmd.PresignUploadPartHandler,
 	completeUploadHandler *mediacmd.CompleteUploadHandler,
 ) *MediaHandler {
 	return &MediaHandler{
+		favoriteHandler:       favoriteHandler,
+		unfavoriteHandler:     unfavoriteHandler,
 		listHandler:           listHandler,
 		initUploadHandler:     initUploadHandler,
 		partURLHandler:        partURLHandler,
@@ -53,10 +59,21 @@ func (h *MediaHandler) List(c *gin.Context) {
 		limit = value
 	}
 
+	favoritesOnly := false
+	if raw := c.Query("favorites"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			writeError(c, errInvalidInput())
+			return
+		}
+		favoritesOnly = value
+	}
+
 	page, err := h.listHandler.Execute(c.Request.Context(), mediaquery.ListMediaQuery{
-		UserID: userID,
-		Cursor: c.Query("cursor"),
-		Limit:  limit,
+		UserID:        userID,
+		Cursor:        c.Query("cursor"),
+		Limit:         limit,
+		FavoritesOnly: favoritesOnly,
 	})
 	if err != nil {
 		writeError(c, err)
@@ -73,6 +90,54 @@ func (h *MediaHandler) List(c *gin.Context) {
 		"next_cursor": page.NextCursor,
 		"total":       page.Total,
 	})
+}
+
+func (h *MediaHandler) Favorite(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	if err := h.favoriteHandler.Execute(c.Request.Context(), mediacmd.FavoriteMediaCommand{
+		UserID:  userID,
+		MediaID: mediaID,
+	}); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *MediaHandler) Unfavorite(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	if err := h.unfavoriteHandler.Execute(c.Request.Context(), mediacmd.UnfavoriteMediaCommand{
+		UserID:  userID,
+		MediaID: mediaID,
+	}); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 func (h *MediaHandler) InitUpload(c *gin.Context) {

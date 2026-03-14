@@ -42,6 +42,22 @@ func (r *fakeMediaRepo) ApplyProcessingResult(context.Context, uuid.UUID, domain
 	return nil
 }
 
+type fakeFavoriteRepo struct {
+	mediaIDs []uuid.UUID
+}
+
+func (r *fakeFavoriteRepo) Create(context.Context, *domain.Favorite) error {
+	return nil
+}
+
+func (r *fakeFavoriteRepo) Delete(context.Context, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+
+func (r *fakeFavoriteRepo) ListMediaIDsByUser(context.Context, uuid.UUID, []uuid.UUID) ([]uuid.UUID, error) {
+	return r.mediaIDs, nil
+}
+
 func TestGetAlbumHandlerExecuteReturnsSharedAlbum(t *testing.T) {
 	t.Parallel()
 
@@ -86,6 +102,7 @@ func TestListAlbumMediaHandlerExecuteReturnsPageForReadableAlbum(t *testing.T) {
 		&fakeUserRepo{user: user},
 		&fakeAlbumRepo{visibleAlbum: album},
 		&fakeMediaRepo{page: expectedPage},
+		&fakeFavoriteRepo{mediaIDs: []uuid.UUID{media.ID}},
 	)
 
 	page, err := handler.Execute(context.Background(), ListAlbumMediaQuery{
@@ -99,6 +116,9 @@ func TestListAlbumMediaHandlerExecuteReturnsPageForReadableAlbum(t *testing.T) {
 	if len(page.Items) != 1 || page.Items[0].ID != media.ID || page.NextCursor != expectedPage.NextCursor || page.Total != expectedPage.Total {
 		t.Fatalf("Execute() returned unexpected page: %#v", page)
 	}
+	if !page.Items[0].IsFavorite {
+		t.Fatal("Execute() did not annotate album media favorites")
+	}
 }
 
 func TestListAlbumMediaHandlerExecuteRequiresReadableAlbum(t *testing.T) {
@@ -111,6 +131,7 @@ func TestListAlbumMediaHandlerExecuteRequiresReadableAlbum(t *testing.T) {
 		&fakeUserRepo{user: user},
 		&fakeAlbumRepo{},
 		&fakeMediaRepo{},
+		&fakeFavoriteRepo{},
 	)
 
 	_, err := handler.Execute(context.Background(), ListAlbumMediaQuery{

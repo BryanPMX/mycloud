@@ -74,6 +74,7 @@ func main() {
 	albumRepo := postgres.NewAlbumRepository(db)
 	shareRepo := postgres.NewShareRepository(db)
 	commentRepo := postgres.NewCommentRepository(db)
+	favoriteRepo := postgres.NewFavoriteRepository(db)
 	jobRepo := postgres.NewJobRepository(db)
 	sessionStore := redisinfra.NewSessionStore(redisClient)
 	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
@@ -85,10 +86,12 @@ func main() {
 	refreshHandler := authcmd.NewRefreshHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
-	listMediaHandler := mediaquery.NewListMediaHandler(userRepo, mediaRepo)
+	listMediaHandler := mediaquery.NewListMediaHandler(userRepo, mediaRepo, favoriteRepo)
 	getAlbumHandler := albumquery.NewGetAlbumHandler(userRepo, albumRepo)
 	listAlbumsHandler := albumquery.NewListAlbumsHandler(userRepo, albumRepo)
-	listAlbumMediaHandler := albumquery.NewListAlbumMediaHandler(userRepo, albumRepo, mediaRepo)
+	listAlbumMediaHandler := albumquery.NewListAlbumMediaHandler(userRepo, albumRepo, mediaRepo, favoriteRepo)
+	favoriteMediaHandler := mediacmd.NewFavoriteMediaHandler(userRepo, mediaRepo, favoriteRepo)
+	unfavoriteMediaHandler := mediacmd.NewUnfavoriteMediaHandler(userRepo, mediaRepo, favoriteRepo)
 	createAlbumHandler := albumcmd.NewCreateAlbumHandler(userRepo, albumRepo)
 	updateAlbumHandler := albumcmd.NewUpdateAlbumHandler(userRepo, albumRepo)
 	deleteAlbumHandler := albumcmd.NewDeleteAlbumHandler(userRepo, albumRepo)
@@ -138,8 +141,15 @@ func main() {
 			createShareHandler,
 			revokeShareHandler,
 		),
-		UserHandler:    handlers.NewUserHandler(getMeHandler),
-		MediaHandler:   handlers.NewMediaHandler(listMediaHandler, initUploadHandler, partURLHandler, completeUploadHandler),
+		UserHandler: handlers.NewUserHandler(getMeHandler),
+		MediaHandler: handlers.NewMediaHandler(
+			listMediaHandler,
+			favoriteMediaHandler,
+			unfavoriteMediaHandler,
+			initUploadHandler,
+			partURLHandler,
+			completeUploadHandler,
+		),
 		CommentHandler: handlers.NewCommentHandler(listCommentsHandler, addCommentHandler, deleteCommentHandler),
 	})
 

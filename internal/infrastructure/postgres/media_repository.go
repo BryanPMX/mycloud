@@ -227,10 +227,16 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
+		  AND ($3::bool = false OR EXISTS (
+		    SELECT 1
+		    FROM favorites f
+		    WHERE f.user_id = $1
+		      AND f.media_id = m.id
+		  ))
 	`
 
 	var total int
-	if err := r.db.QueryRow(ctx, countQuery, userID, uuid.Nil).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, countQuery, userID, uuid.Nil, opts.FavoritesOnly).Scan(&total); err != nil {
 		return domain.MediaPage{}, err
 	}
 
@@ -252,12 +258,18 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
-		  AND ($3::timestamptz IS NULL OR $4::uuid IS NULL OR (m.uploaded_at, m.id) < ($3, $4))
+		  AND ($3::bool = false OR EXISTS (
+		    SELECT 1
+		    FROM favorites f
+		    WHERE f.user_id = $1
+		      AND f.media_id = m.id
+		  ))
+		  AND ($4::timestamptz IS NULL OR $5::uuid IS NULL OR (m.uploaded_at, m.id) < ($4, $5))
 		ORDER BY m.uploaded_at DESC, m.id DESC
-		LIMIT $5
+		LIMIT $6
 	`
 
-	rows, err := r.db.Query(ctx, listQuery, userID, uuid.Nil, cursorTime, cursorID, limit+1)
+	rows, err := r.db.Query(ctx, listQuery, userID, uuid.Nil, opts.FavoritesOnly, cursorTime, cursorID, limit+1)
 	if err != nil {
 		return domain.MediaPage{}, err
 	}

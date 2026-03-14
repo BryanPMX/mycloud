@@ -1,10 +1,11 @@
 # 04 — Database Design (PostgreSQL)
 
-Current implementation status on March 13, 2026:
+Current implementation status on March 14, 2026:
 - Implemented in [001_initial_schema.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/001_initial_schema.up.sql): `users`, `media`, `albums`, `album_media`, `shares`, `jobs`, plus storage/accounting and album visibility triggers
 - Implemented in [002_comments.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/002_comments.up.sql): `comments` with soft-delete semantics and ordered media-thread lookup
-- Application layer now exercises `albums`, `album_media`, and `shares` for album creation/listing/detail/update/delete, album membership changes, album media reads, and active share management
-- Still planned from this design doc: `favorites`, `audit_log`, and the broader search/metadata extensions described below
+- Implemented in [003_favorites.up.sql](/Users/bryanpmx/Documents/Projects/mycloud/migrations/003_favorites.up.sql): `favorites` with cascading cleanup and per-user media bookmarks
+- Application layer now exercises `albums`, `album_media`, `shares`, `comments`, and `favorites` for album creation/listing/detail/update/delete, album membership changes, album media reads, active share management, media comments, and favorite/unfavorite flows
+- Still planned from this design doc: `audit_log` and the broader search/metadata extensions described below
 
 ---
 

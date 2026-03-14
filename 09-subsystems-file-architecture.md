@@ -16,15 +16,16 @@ The goal is to keep the first implementation pass clear and lightweight without 
 
 ## Current Status
 
-As of March 13, 2026, the following starter work is now implemented for MyCloud:
+As of March 14, 2026, the following starter work is now implemented for MyCloud:
 
 - backend core domain models and repository contracts
 - environment config, JWT/password helpers, and cursor pagination helpers
 - PostgreSQL pool + repositories for users, visible media, albums, shares, and comments
+- PostgreSQL favorites persistence plus favorite-aware media list reads
 - Redis client + refresh session store
 - Postgres comments repository plus media comment flows
 - HTTP router, auth middleware, request IDs, and structured request logging
-- auth endpoints plus `GET /users/me`, `GET /media`, album/share routes, and media comment routes
+- auth endpoints plus `GET /users/me`, `GET /media`, media favorite routes, album/share routes, and media comment routes
 - album creation/listing/detail/update/delete, album-specific media listing, album-media membership changes, and share list/create/revoke flows
 - direct multipart upload init/complete flows with MinIO wiring
 - `process_media` queueing plus worker-side staging, scanning, and promotion
@@ -32,7 +33,7 @@ As of March 13, 2026, the following starter work is now implemented for MyCloud:
 
 Still intentionally pending:
 
-- favorites and audit log persistence
+- audit log persistence
 - Flutter app runtime wiring
 
 ---
@@ -157,7 +158,7 @@ pkg/
 - `delivery/` gives us an HTTP API and upload-progress WebSocket entry point.
 - `pkg/` keeps auth, config, MIME validation, and cursor logic out of the main app layers.
 
-Files for comments, shares, favorites, trash, admin, metrics, audit logs, and email can be added when those subsystems begin implementation.
+Files for trash, admin, metrics, audit logs, and email can be added when those subsystems begin implementation.
 
 ---
 
@@ -180,7 +181,7 @@ migrations/
 - `shares`
 - `jobs`
 
-Comments, favorites, audit logs, and admin-specific tables can be added in later migrations.
+Audit logs and admin-specific tables can be added in later migrations.
 
 ---
 
@@ -277,7 +278,7 @@ flutter_app/
 - direct upload can be implemented early
 - albums have enough structure to start without building every screen first
 
-Comments, admin, trash, favorites, offline queueing, auto-backup, and WebSocket progress handling can be added once those subsystems start.
+Comments, admin, trash, offline queueing, auto-backup, and WebSocket progress handling can be added once those subsystems start.
 
 ---
 

@@ -16,20 +16,23 @@ type ListAlbumMediaQuery struct {
 }
 
 type ListAlbumMediaHandler struct {
-	userRepo  domain.UserRepository
-	albumRepo domain.AlbumRepository
-	mediaRepo domain.MediaRepository
+	userRepo     domain.UserRepository
+	albumRepo    domain.AlbumRepository
+	mediaRepo    domain.MediaRepository
+	favoriteRepo domain.FavoriteRepository
 }
 
 func NewListAlbumMediaHandler(
 	userRepo domain.UserRepository,
 	albumRepo domain.AlbumRepository,
 	mediaRepo domain.MediaRepository,
+	favoriteRepo domain.FavoriteRepository,
 ) *ListAlbumMediaHandler {
 	return &ListAlbumMediaHandler{
-		userRepo:  userRepo,
-		albumRepo: albumRepo,
-		mediaRepo: mediaRepo,
+		userRepo:     userRepo,
+		albumRepo:    albumRepo,
+		mediaRepo:    mediaRepo,
+		favoriteRepo: favoriteRepo,
 	}
 }
 
@@ -42,8 +45,26 @@ func (h *ListAlbumMediaHandler) Execute(ctx context.Context, query ListAlbumMedi
 		return domain.MediaPage{}, err
 	}
 
-	return h.mediaRepo.ListByAlbum(ctx, query.AlbumID, domain.ListMediaOptions{
+	page, err := h.mediaRepo.ListByAlbum(ctx, query.AlbumID, domain.ListMediaOptions{
 		Cursor: query.Cursor,
 		Limit:  query.Limit,
 	})
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	favoriteIDs, err := h.favoriteRepo.ListMediaIDsByUser(ctx, query.UserID, collectMediaIDs(page.Items))
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	favorites := make(map[uuid.UUID]struct{}, len(favoriteIDs))
+	for _, favoriteID := range favoriteIDs {
+		favorites[favoriteID] = struct{}{}
+	}
+	for _, item := range page.Items {
+		_, item.IsFavorite = favorites[item.ID]
+	}
+
+	return page, nil
 }

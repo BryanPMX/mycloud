@@ -50,6 +50,12 @@ type CommentRepository interface {
 	SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error
 }
 
+type FavoriteRepository interface {
+	Create(ctx context.Context, favorite *Favorite) error
+	Delete(ctx context.Context, userID, mediaID uuid.UUID) error
+	ListMediaIDsByUser(ctx context.Context, userID uuid.UUID, mediaIDs []uuid.UUID) ([]uuid.UUID, error)
+}
+
 type JobRepository interface {
 	Create(ctx context.Context, job *Job) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Job, error)

@@ -35,6 +35,7 @@ type Media struct {
 	OriginalKey  string
 	ThumbKeys    ThumbKeys
 	Status       MediaStatus
+	IsFavorite   bool
 	TakenAt      *time.Time
 	UploadedAt   time.Time
 	DeletedAt    *time.Time
@@ -42,8 +43,9 @@ type Media struct {
 }
 
 type ListMediaOptions struct {
-	Cursor string
-	Limit  int
+	Cursor        string
+	Limit         int
+	FavoritesOnly bool
 }
 
 type MediaPage struct {

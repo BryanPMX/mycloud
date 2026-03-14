@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
-Current implementation status on March 13, 2026:
-- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
+Current implementation status on March 14, 2026:
+- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -51,7 +51,7 @@ Pass `?cursor=<next_cursor>` to get the next page. Empty `next_cursor` = last pa
 
 ### Media DTO
 All media endpoints return this shape (abbreviated fields omitted where noted).
-Current implementation note on March 13, 2026: `thumb_urls` still expose stored object keys today; presigned asset URLs are part of the next media read-management slice.
+Current implementation note on March 14, 2026: `is_favorite` is populated from the favorites table, while `thumb_urls` still expose stored object keys today; presigned asset URLs are part of the next media read-management slice.
 ```json
 {
   "id":            "uuid",
@@ -228,6 +228,8 @@ Content-Length: 204800
 
 ### GET /media
 List the authenticated user's own media plus media shared with them.
+
+Current implementation note on March 14, 2026: `cursor`, `limit`, and `favorites` are live today. The other filters below remain planned.
 
 **Query Parameters**
 

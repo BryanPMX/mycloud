@@ -47,3 +47,12 @@ func requireReadableAlbum(
 
 	return user, album, nil
 }
+
+func collectMediaIDs(items []*domain.Media) []uuid.UUID {
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+
+	return ids
+}

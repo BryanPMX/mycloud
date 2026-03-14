@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_favorites_user;
+DROP TABLE IF EXISTS favorites CASCADE;
