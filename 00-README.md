@@ -16,7 +16,7 @@
 | 04 | `04-database.md` | PostgreSQL schema, indexes, migrations, query patterns |
 | 05 | `05-storage-media.md` | MinIO layout, upload flow, FFmpeg/libvips processing pipeline |
 | 06 | `06-auth-security.md` | JWT strategy, refresh tokens, authorization, security hardening |
-| 07 | `07-flutter-client.md` | Flutter app structure, Riverpod, routing, upload, offline |
+| 07 | `07-flutter-client.md` | Current Flutter foundation shell plus the longer-term client architecture plan |
 | 08 | `08-infrastructure.md` | Docker Compose, Nginx, monitoring, backup, scaling |
 | 09 | `09-subsystems-file-architecture.md` | Starter subsystem decomposition and essential implementation file architecture |
 
@@ -28,7 +28,7 @@ MyCloud is a **private, high-quality media cloud** for up to 50+ family members,
 
 ## Current Implementation Status
 
-As of March 14, 2026, the repository includes the current working backend slices:
+As of March 14, 2026, the repository includes the current working backend and Flutter foundation slices:
 
 - runtime config loading from environment variables
 - PostgreSQL, Redis, and MinIO wiring in the API composition root
@@ -52,8 +52,10 @@ As of March 14, 2026, the repository includes the current working backend slices
 - worker-side staged upload scanning, promotion to originals, real WebP thumbnail generation, richer metadata extraction, and media row finalization
 - SMTP invite delivery when SMTP transport is configured, with Mailpit-friendly local defaults in `.env.example`
 - focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, invite acceptance, admin mutations, media upload commands, favorites, albums, and shares
+- Flutter `MaterialApp.router` foundation shell with SDK-only routing, adaptive `NavigationBar`/`NavigationRail` layout, seeded auth/media/album/profile/admin screens, and environment-backed endpoint config
+- Flutter smoke coverage for boot, demo sign-in, and route navigation in `flutter_app/test/core/smoke_test.dart`
 
-The Flutter app and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
+The Flutter client now has a validated shell and screen structure. Live API wiring, uploads, secure storage, offline behavior, and the remaining infrastructure extras are still planned work unless a section explicitly says otherwise.
 
 ### Design Goals
 

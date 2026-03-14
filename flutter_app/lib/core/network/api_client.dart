@@ -1,3 +1,64 @@
+import '../config/app_config.dart';
+
 class ApiClient {
-  const ApiClient();
+  const ApiClient(this.config);
+
+  final AppConfig config;
+
+  Uri loginUri() => endpoint('/auth/login');
+
+  Uri refreshUri() => endpoint('/auth/refresh');
+
+  Uri logoutUri() => endpoint('/auth/logout');
+
+  Uri acceptInviteUri() => endpoint('/auth/invite/accept');
+
+  Uri currentUserUri() => endpoint('/users/me');
+
+  Uri mediaListUri() => endpoint('/media');
+
+  Uri mediaSearchUri(String query) =>
+      endpoint('/media/search', queryParameters: {'q': query});
+
+  Uri mediaThumbUri(
+    String mediaId, {
+    String size = 'medium',
+    int ttlSeconds = 300,
+  }) {
+    return endpoint(
+      '/media/$mediaId/thumb',
+      queryParameters: {'size': size, 'ttl': '$ttlSeconds'},
+    );
+  }
+
+  Uri mediaDownloadUri(String mediaId, {int ttlSeconds = 3600}) {
+    return endpoint(
+      '/media/$mediaId/url',
+      queryParameters: {'ttl': '$ttlSeconds'},
+    );
+  }
+
+  Uri albumsUri() => endpoint('/albums');
+
+  Uri adminStatsUri() => endpoint('/admin/stats');
+
+  Uri adminUsersUri() => endpoint('/admin/users');
+
+  Uri uploadInitUri() => endpoint('/media/upload/init');
+
+  Uri endpoint(String path, {Map<String, String>? queryParameters}) {
+    final cleanedPath = path.startsWith('/') ? path.substring(1) : path;
+    final baseSegments = config.apiBaseUri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: true);
+    final extraSegments =
+        cleanedPath.split('/').where((segment) => segment.isNotEmpty);
+
+    return config.apiBaseUri.replace(
+      pathSegments: [...baseSegments, ...extraSegments],
+      queryParameters: queryParameters == null || queryParameters.isEmpty
+          ? null
+          : queryParameters,
+    );
+  }
 }

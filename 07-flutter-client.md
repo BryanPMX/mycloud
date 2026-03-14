@@ -1,14 +1,71 @@
 # 07 — Flutter Client Architecture
 
 Current implementation note on March 14, 2026:
-- `flutter_app/` currently contains the app shell, feature folders, placeholder screens/providers, and smoke/integration test scaffolding, but it is not wired end-to-end to the backend yet.
-- The backend is now stable enough to start the Flutter auth, profile, media library, album, comment, and upload flows. The remaining client-side work is now mostly integration and UX, not missing backend slices.
+- `flutter_app/` now boots a real `MaterialApp.router` foundation shell with `main.dart`, `app.dart`, a custom Router, a non-placeholder theme, seeded auth/media/album/profile/admin screens, and shared layout/widgets.
+- The current slice is intentionally SDK-only: it uses `ChangeNotifier`, a custom `RouterDelegate`, and seeded contract-aligned models/providers so the shell stays package-light until the live API transport lands.
+- `AppConfig` now defaults to the confirmed deployment plan: `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. These values can be overridden with `--dart-define`.
+- `flutter analyze` and `flutter test test/core/smoke_test.dart` both pass for the new foundation slice.
+- Recent repo logs show the backend is already ready for the next Flutter continuations: auth/session restore, media reads + presigned thumbs, multipart uploads + `/ws/progress`, then profile/albums/comments/admin CRUD integration.
 - Confirmed deployment domain plan for the eventual Flutter rollout: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
 - Flutter should treat `https://api.mynube.live` as the API base URL and `wss://api.mynube.live/ws/progress` as the WebSocket origin. Backend `APP_BASE_URL` should remain `https://mynube.live` because admin invite emails currently build browser-facing invite links from that value.
 
+Reference docs used for the current shell:
+- Flutter navigation overview: [docs.flutter.dev/ui/navigation](https://docs.flutter.dev/ui/navigation)
+- `MaterialApp.router`: [api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html](https://api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html)
+- `NavigationRail` for wider layouts: [api.flutter.dev/flutter/material/NavigationRail-class.html](https://api.flutter.dev/flutter/material/NavigationRail-class.html)
+
 ---
 
-## 1. Project Structure
+## 1. Current Implemented Slice
+
+```
+lib/
+├── main.dart                        # Widgets binding + AppConfig bootstrap
+├── app.dart                         # MaterialApp.router + controller composition
+├── core/
+│   ├── config/app_config.dart       # APP_BASE_URL / API_BASE_URL / WS_BASE_URL
+│   ├── network/api_client.dart      # Endpoint builder for the live backend
+│   ├── router/app_router.dart       # RouterDelegate + route parsing
+│   └── theme/app_theme.dart         # Material 3 theme and shell styling
+├── features/
+│   ├── auth/                        # Demo sign-in + seeded session state
+│   ├── media/                       # Contract-aligned media models + grid/detail UI
+│   ├── albums/                      # Owned/shared album overview UI
+│   ├── profile/                     # Endpoint/status + rollout checklist UI
+│   ├── admin/                       # Repo-log summary + next-step planning UI
+│   └── comments/                    # Seeded comment data for media detail
+├── shared/
+│   ├── widgets/main_scaffold.dart   # Adaptive rail/bottom-nav shell
+│   └── utils/                       # Date + file-size formatters
+└── test/core/smoke_test.dart        # Boot, sign-in, and navigation widget smoke test
+```
+
+## 2. Current Dependency Set
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+```
+
+## 3. Recommended Next Flutter Continuation
+
+1. Wire `POST /auth/login`, `POST /auth/refresh`, and `GET /users/me` into the current auth shell.
+2. Replace seeded media data with `GET /media`, `GET /media/search`, `GET /media/:id/thumb`, and `GET /media/:id/url`.
+3. Add the multipart upload manager around `POST /media/upload/init`, `POST /media/upload/:id/part-url`, `POST /media/upload/:id/complete`, and `DELETE /media/upload/:id`.
+4. Subscribe to `GET /ws/progress` so pending uploads transition into real worker-driven processing states.
+5. Finish profile/avatar, albums, comments, and admin list/stats flows against the already-live backend endpoints.
+
+## 4. Target Architecture Reference
+
+The rest of this document remains the broader target-state client plan. It is still useful for the eventual integration phase, but it is not a line-by-line description of the current `flutter_app/` implementation.
+
+## 5. Target Project Structure
 
 ```
 lib/
@@ -91,7 +148,7 @@ lib/
 
 ---
 
-## 2. Dependencies (pubspec.yaml)
+## 6. Planned Dependencies (Target State)
 
 ```yaml
 dependencies:

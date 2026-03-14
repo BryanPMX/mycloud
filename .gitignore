@@ -74,6 +74,12 @@ flutter_app/android/.gradle/
 flutter_app/android/app/debug/
 flutter_app/android/app/profile/
 flutter_app/android/app/release/
+flutter_app/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+flutter_app/android/local.properties
+flutter_app/ios/Flutter/Generated.xcconfig
+flutter_app/ios/Flutter/flutter_export_environment.sh
+flutter_app/ios/Flutter/ephemeral/
+flutter_app/ios/Runner/GeneratedPluginRegistrant.*
 
 # Optional local deploy output
 public/

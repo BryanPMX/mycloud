@@ -1,6 +1,6 @@
 # MyCloud
 
-This repository now contains both the design set and the current implemented backend slices for MyCloud.
+This repository now contains both the design set and the current implemented backend plus Flutter foundation slices for MyCloud.
 
 Current deployment domain plan:
 - `https://mynube.live` for the future Flutter web app
@@ -8,7 +8,7 @@ Current deployment domain plan:
 - `https://minio.mynube.live` for MinIO presigned upload/download traffic
 - `https://console.mynube.live` for the MinIO console/admin surface
 
-Current backend slice:
+Current implemented slices:
 - PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, `comments`, `favorites`, `jobs`, and `audit_log`
 - JWT access/refresh auth with Redis-backed refresh session rotation and invite acceptance
 - MinIO wiring for direct multipart uploads
@@ -55,6 +55,8 @@ Current backend slice:
 - `POST /api/v1/media/upload/:id/part-url`
 - `POST /api/v1/media/upload/:id/complete`
 - `GET /health`
+- Flutter `MaterialApp.router` foundation shell with adaptive navigation, themed login/media/albums/profile/admin surfaces, seeded contract-aligned models/providers, and environment-aware endpoint config
+- validated Flutter tooling pass with `flutter analyze` and `flutter test test/core/smoke_test.dart`
 
 Use the numbered design docs for architecture and implementation status:
 - [00-README.md](/Users/bryanpmx/Documents/Projects/mycloud/00-README.md) for the document index and status summary

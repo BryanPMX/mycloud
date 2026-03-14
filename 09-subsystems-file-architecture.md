@@ -33,10 +33,11 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 - trash restore/permanent-delete/empty-trash flows with best-effort MinIO asset cleanup
 - `process_media` queueing plus worker-side staging, scanning, and promotion
 - initial migrations and local API/Postgres/Redis/MinIO compose setup
+- Flutter app runtime wiring via `MaterialApp.router`, environment-backed config, adaptive shell navigation, seeded contract-aligned feature models, and an initial widget smoke test
 
 Still intentionally pending:
 
-- Flutter app runtime wiring
+- live Flutter auth/media/upload API integration, secure token storage, invite acceptance, and the richer mobile/offline slices
 
 ---
 
