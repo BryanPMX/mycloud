@@ -9,10 +9,15 @@ Current implementation note on March 14, 2026:
 - Redis pub/sub-backed WebSocket progress events are now live at `GET /ws/progress`
 - worker-side WebP thumbnail generation/upload is now live, and `GET /media/:id/thumb` presigns those generated objects from `fc-thumbs`
 - ffprobe-backed metadata extraction now fills dimensions, duration, `taken_at` when discoverable, and structured metadata fields during processing
+- the runtime now supports separate internal and public MinIO endpoints so the API/worker can talk to `minio:9000` on the Docker network while presigned upload/download URLs still target the public `minio.mynube.live` host
 
 ## 1. MinIO Configuration
 
 MinIO is an S3-compatible object store that runs on your Ubuntu server. It handles all binary storage — staged uploads, originals, generated thumbnails, and avatars.
+
+In production, use:
+- `MINIO_ENDPOINT=minio:9000` and `MINIO_SECURE=false` for internal API/worker connectivity
+- `MINIO_PUBLIC_ENDPOINT=minio.mynube.live` and `MINIO_PUBLIC_SECURE=true` for presigned URLs returned to browsers and mobile clients
 
 ### Buckets
 

@@ -6,7 +6,7 @@ Current implementation note on March 14, 2026:
 - The local compose stack now also includes Mailpit-friendly SMTP defaults so invite delivery can be tested end-to-end without external mail infrastructure.
 - The full Nginx, monitoring, and host-level backup automation in this doc remain the target production shape. The repository now includes lighter-weight helper scripts in [scripts/init-minio.sh](/Users/bryanpmx/Documents/Projects/mycloud/scripts/init-minio.sh), [scripts/backup-postgres.sh](/Users/bryanpmx/Documents/Projects/mycloud/scripts/backup-postgres.sh), and [scripts/backup-minio.sh](/Users/bryanpmx/Documents/Projects/mycloud/scripts/backup-minio.sh) for local bootstrap and backups.
 - Confirmed public domain plan for production: `mynube.live` for the Flutter web app, `api.mynube.live` for the Go API, `minio.mynube.live` for MinIO S3/presigned traffic, and `console.mynube.live` for the MinIO console/admin surface.
-- Production env mapping should follow that domain plan: `APP_BASE_URL=https://mynube.live`, `MINIO_ENDPOINT=minio.mynube.live`, and `MINIO_SECURE=true`. The current invite flow uses `APP_BASE_URL` for email links, so it should point at the browser-facing app origin rather than the API origin.
+- Production env mapping should follow that domain plan: `APP_BASE_URL=https://mynube.live`, internal MinIO connectivity should use `MINIO_ENDPOINT=minio:9000` plus `MINIO_SECURE=false`, and public presigned URLs should use `MINIO_PUBLIC_ENDPOINT=minio.mynube.live` plus `MINIO_PUBLIC_SECURE=true`. The current invite flow uses `APP_BASE_URL` for email links, so it should point at the browser-facing app origin rather than the API origin.
 
 ---
 

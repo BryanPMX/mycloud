@@ -18,15 +18,21 @@ import (
 
 type StorageService struct {
 	core          *miniosdk.Core
+	presignClient *miniosdk.Client
 	uploadsBucket string
 	originalsBuck string
 	thumbsBucket  string
 	avatarsBucket string
 }
 
-func NewStorageService(core *miniosdk.Core, uploadsBucket, originalsBucket, thumbsBucket, avatarsBucket string) *StorageService {
+func NewStorageService(core *miniosdk.Core, presignClient *miniosdk.Client, uploadsBucket, originalsBucket, thumbsBucket, avatarsBucket string) *StorageService {
+	if presignClient == nil && core != nil {
+		presignClient = core.Client
+	}
+
 	return &StorageService{
 		core:          core,
+		presignClient: presignClient,
 		uploadsBucket: uploadsBucket,
 		originalsBuck: originalsBucket,
 		thumbsBucket:  thumbsBucket,
@@ -50,7 +56,7 @@ func (s *StorageService) PresignUploadPart(ctx context.Context, key, uploadID st
 	params.Set("partNumber", strconv.Itoa(partNum))
 	params.Set("uploadId", uploadID)
 
-	u, err := s.core.PresignHeader(ctx, http.MethodPut, s.uploadsBucket, key, ttl, params, nil)
+	u, err := s.presignClient.PresignHeader(ctx, http.MethodPut, s.uploadsBucket, key, ttl, params, nil)
 	if err != nil {
 		return "", fmt.Errorf("presign upload part %d: %w", partNum, err)
 	}
@@ -165,7 +171,7 @@ func (s *StorageService) UploadThumbnail(ctx context.Context, key, mimeType stri
 }
 
 func (s *StorageService) PresignOriginalDownload(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.core.Client.PresignedGetObject(ctx, s.originalsBuck, key, ttl, nil)
+	u, err := s.presignClient.PresignedGetObject(ctx, s.originalsBuck, key, ttl, nil)
 	if err != nil {
 		return "", fmt.Errorf("presign original download: %w", err)
 	}
@@ -174,7 +180,7 @@ func (s *StorageService) PresignOriginalDownload(ctx context.Context, key string
 }
 
 func (s *StorageService) PresignThumbnail(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.core.Client.PresignedGetObject(ctx, s.thumbsBucket, key, ttl, nil)
+	u, err := s.presignClient.PresignedGetObject(ctx, s.thumbsBucket, key, ttl, nil)
 	if err != nil {
 		return "", fmt.Errorf("presign thumbnail: %w", err)
 	}

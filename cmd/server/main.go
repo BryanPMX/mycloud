@@ -68,6 +68,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("connect minio: %v", err)
 	}
+	minioPresignClient, err := minioinfra.NewClient(
+		cfg.MinIOPublicEndpoint,
+		cfg.MinIOAccessKey,
+		cfg.MinIOSecretKey,
+		cfg.MinIOPublicSecure,
+	)
+	if err != nil {
+		log.Fatalf("create minio presign client: %v", err)
+	}
 
 	tokenService, err := pkgauth.NewJWTService(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	if err != nil {
@@ -90,7 +99,7 @@ func main() {
 	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
 	jobQueue := redisinfra.NewJobQueue(redisClient)
 	progressBus := redisinfra.NewMediaProgressBus(redisClient)
-	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
+	storageService := minioinfra.NewStorageService(minioCore, minioPresignClient, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
 	keyBuilder := minioinfra.NewKeyBuilder()
 	progressHub := wsdelivery.NewProgressHub(progressBus)
 	go func() {

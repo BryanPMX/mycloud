@@ -12,6 +12,7 @@ Current backend slice:
 - PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, `comments`, `favorites`, `jobs`, and `audit_log`
 - JWT access/refresh auth with Redis-backed refresh session rotation and invite acceptance
 - MinIO wiring for direct multipart uploads
+- split internal/public MinIO endpoint support so server-side object operations stay on the Docker network while presigned URLs can target the public object host
 - Redis-backed `process_media` and scheduled `cleanup` jobs, with worker-side scan, thumbnail generation, metadata extraction, and promotion flow
 - self-service profile writes via `PATCH /api/v1/users/me` and avatar uploads via `PUT /api/v1/users/me/avatar`
 - fixed-window API rate limiting plus response security headers in the Go middleware stack

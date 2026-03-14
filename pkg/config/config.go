@@ -10,67 +10,78 @@ import (
 )
 
 type Config struct {
-	AppName          string
-	AppEnv           string
-	AppBaseURL       string
-	Port             string
-	DatabaseURL      string
-	RedisURL         string
-	MinIOEndpoint    string
-	MinIOAccessKey   string
-	MinIOSecretKey   string
-	MinIOSecure      bool
-	MinIOUploadsBuck string
-	MinIOOrigBuck    string
-	MinIOThumbsBuck  string
-	MinIOAvatarsBuck string
-	ClamAVSocket     string
-	SMTPHost         string
-	SMTPPort         int
-	SMTPUser         string
-	SMTPPass         string
-	SMTPFrom         string
-	JWTSecret        string
-	JWTIssuer        string
-	JWTAccessTTL     time.Duration
-	JWTRefreshTTL    time.Duration
-	CleanupInterval  time.Duration
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
-	IdleTimeout      time.Duration
+	AppName             string
+	AppEnv              string
+	AppBaseURL          string
+	Port                string
+	DatabaseURL         string
+	RedisURL            string
+	MinIOEndpoint       string
+	MinIOPublicEndpoint string
+	MinIOAccessKey      string
+	MinIOSecretKey      string
+	MinIOSecure         bool
+	MinIOPublicSecure   bool
+	MinIOUploadsBuck    string
+	MinIOOrigBuck       string
+	MinIOThumbsBuck     string
+	MinIOAvatarsBuck    string
+	ClamAVSocket        string
+	SMTPHost            string
+	SMTPPort            int
+	SMTPUser            string
+	SMTPPass            string
+	SMTPFrom            string
+	JWTSecret           string
+	JWTIssuer           string
+	JWTAccessTTL        time.Duration
+	JWTRefreshTTL       time.Duration
+	CleanupInterval     time.Duration
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
+	IdleTimeout         time.Duration
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppName:          getEnv("APP_NAME", "MyCloud"),
-		AppEnv:           getEnv("APP_ENV", "development"),
-		AppBaseURL:       getEnv("APP_BASE_URL", "http://localhost:8080"),
-		Port:             getEnv("PORT", "8080"),
-		DatabaseURL:      strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		RedisURL:         strings.TrimSpace(os.Getenv("REDIS_URL")),
-		MinIOEndpoint:    strings.TrimSpace(os.Getenv("MINIO_ENDPOINT")),
-		MinIOAccessKey:   strings.TrimSpace(os.Getenv("MINIO_ACCESS_KEY")),
-		MinIOSecretKey:   strings.TrimSpace(os.Getenv("MINIO_SECRET_KEY")),
-		MinIOUploadsBuck: getEnv("MINIO_UPLOADS_BUCKET", "fc-uploads"),
-		MinIOOrigBuck:    getEnv("MINIO_ORIGINALS_BUCKET", "fc-originals"),
-		MinIOThumbsBuck:  getEnv("MINIO_THUMBS_BUCKET", "fc-thumbs"),
-		MinIOAvatarsBuck: getEnv("MINIO_AVATARS_BUCKET", "fc-avatars"),
-		ClamAVSocket:     strings.TrimSpace(os.Getenv("CLAMAV_SOCKET")),
-		SMTPHost:         strings.TrimSpace(os.Getenv("SMTP_HOST")),
-		SMTPUser:         strings.TrimSpace(os.Getenv("SMTP_USER")),
-		SMTPPass:         os.Getenv("SMTP_PASS"),
-		SMTPFrom:         strings.TrimSpace(os.Getenv("SMTP_FROM")),
-		JWTSecret:        os.Getenv("JWT_SECRET"),
-		JWTIssuer:        getEnv("JWT_ISSUER", "mycloud"),
-		ReadTimeout:      10 * time.Second,
-		WriteTimeout:     15 * time.Second,
-		IdleTimeout:      60 * time.Second,
+		AppName:             getEnv("APP_NAME", "MyCloud"),
+		AppEnv:              getEnv("APP_ENV", "development"),
+		AppBaseURL:          getEnv("APP_BASE_URL", "http://localhost:8080"),
+		Port:                getEnv("PORT", "8080"),
+		DatabaseURL:         strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		RedisURL:            strings.TrimSpace(os.Getenv("REDIS_URL")),
+		MinIOEndpoint:       strings.TrimSpace(os.Getenv("MINIO_ENDPOINT")),
+		MinIOPublicEndpoint: strings.TrimSpace(os.Getenv("MINIO_PUBLIC_ENDPOINT")),
+		MinIOAccessKey:      strings.TrimSpace(os.Getenv("MINIO_ACCESS_KEY")),
+		MinIOSecretKey:      strings.TrimSpace(os.Getenv("MINIO_SECRET_KEY")),
+		MinIOUploadsBuck:    getEnv("MINIO_UPLOADS_BUCKET", "fc-uploads"),
+		MinIOOrigBuck:       getEnv("MINIO_ORIGINALS_BUCKET", "fc-originals"),
+		MinIOThumbsBuck:     getEnv("MINIO_THUMBS_BUCKET", "fc-thumbs"),
+		MinIOAvatarsBuck:    getEnv("MINIO_AVATARS_BUCKET", "fc-avatars"),
+		ClamAVSocket:        strings.TrimSpace(os.Getenv("CLAMAV_SOCKET")),
+		SMTPHost:            strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPUser:            strings.TrimSpace(os.Getenv("SMTP_USER")),
+		SMTPPass:            os.Getenv("SMTP_PASS"),
+		SMTPFrom:            strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		JWTSecret:           os.Getenv("JWT_SECRET"),
+		JWTIssuer:           getEnv("JWT_ISSUER", "mycloud"),
+		ReadTimeout:         10 * time.Second,
+		WriteTimeout:        15 * time.Second,
+		IdleTimeout:         60 * time.Second,
 	}
 	minioSecure, err := parseBool("MINIO_SECURE", false)
 	if err != nil {
 		return Config{}, err
 	}
 	cfg.MinIOSecure = minioSecure
+	if cfg.MinIOPublicEndpoint == "" {
+		cfg.MinIOPublicEndpoint = cfg.MinIOEndpoint
+	}
+	minioPublicSecure, err := parseBool("MINIO_PUBLIC_SECURE", cfg.MinIOSecure)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.MinIOPublicSecure = minioPublicSecure
 
 	accessMinutes, err := parsePositiveInt("JWT_ACCESS_TTL_MINUTES", 15)
 	if err != nil {

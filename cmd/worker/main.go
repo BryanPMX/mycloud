@@ -60,7 +60,7 @@ func main() {
 	mediaRepo := postgres.NewMediaRepository(db)
 	shareRepo := postgres.NewShareRepository(db)
 	progressBus := redisinfra.NewMediaProgressBus(redisClient)
-	storage := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
+	storage := minioinfra.NewStorageService(minioCore, nil, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
 	scanner := clamav.NewScanner(cfg.ClamAVSocket)
 	keyBuilder := minioinfra.NewKeyBuilder()
 	processor := worker.NewFFMpegMediaProcessor(storage, keyBuilder)
