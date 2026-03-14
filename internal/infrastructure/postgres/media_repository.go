@@ -448,7 +448,8 @@ func (r *MediaRepository) ApplyProcessingResult(ctx context.Context, id uuid.UUI
 		    thumb_medium_key = NULLIF($7, ''),
 		    thumb_large_key = NULLIF($8, ''),
 		    thumb_poster_key = NULLIF($9, ''),
-		    metadata = $10
+		    metadata = $10,
+		    taken_at = COALESCE($11, taken_at)
 		WHERE id = $1
 		  AND deleted_at IS NULL
 	`
@@ -464,6 +465,7 @@ func (r *MediaRepository) ApplyProcessingResult(ctx context.Context, id uuid.UUI
 		result.ThumbKeys.Large,
 		result.ThumbKeys.Poster,
 		metadata,
+		result.TakenAt,
 	)
 	if err != nil {
 		return err
@@ -473,6 +475,24 @@ func (r *MediaRepository) ApplyProcessingResult(ctx context.Context, id uuid.UUI
 	}
 
 	return nil
+}
+
+func (r *MediaRepository) DeleteExpiredTrash(ctx context.Context, before time.Time) ([]*domain.Media, error) {
+	const query = `
+		DELETE FROM media
+		WHERE deleted_at IS NOT NULL
+		  AND deleted_at <= $1
+		RETURNING id, owner_id, filename, mime_type, size_bytes, width, height,
+		          duration_secs::float8, original_key, thumb_small_key, thumb_medium_key,
+		          thumb_large_key, thumb_poster_key, status, taken_at, uploaded_at,
+		          deleted_at, metadata
+	`
+	rows, err := r.db.Query(ctx, query, before)
+	if err != nil {
+		return nil, err
+	}
+
+	return scanMediaRows(rows)
 }
 
 type mediaRow struct {

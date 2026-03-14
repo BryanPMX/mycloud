@@ -1,5 +1,9 @@
 # 02 — Go Backend
 
+Current implementation note on March 14, 2026:
+- This document started as the backend starter blueprint. The checked-in backend has expanded beyond the minimal tree below and now includes admin, favorites, comments, trash lifecycle, audit logging, self-service profile writes, avatar uploads, rate limiting, security headers, SMTP invite delivery, scheduled cleanup jobs, real thumbnail generation, richer metadata extraction, and Redis-backed WebSocket progress delivery.
+- The main backend/database work remaining is now incremental hardening and polish rather than missing major slices.
+
 ---
 
 ## 1. Project Layout

@@ -31,20 +31,26 @@ type InviteUserResult struct {
 }
 
 type InviteUserHandler struct {
-	userRepo   domain.UserRepository
-	adminRepo  domain.AdminRepository
-	appBaseURL string
+	userRepo    domain.UserRepository
+	adminRepo   domain.AdminRepository
+	emailSender domain.InviteEmailSender
+	appName     string
+	appBaseURL  string
 }
 
 func NewInviteUserHandler(
 	userRepo domain.UserRepository,
 	adminRepo domain.AdminRepository,
+	emailSender domain.InviteEmailSender,
+	appName string,
 	appBaseURL string,
 ) *InviteUserHandler {
 	return &InviteUserHandler{
-		userRepo:   userRepo,
-		adminRepo:  adminRepo,
-		appBaseURL: strings.TrimRight(strings.TrimSpace(appBaseURL), "/"),
+		userRepo:    userRepo,
+		adminRepo:   adminRepo,
+		emailSender: emailSender,
+		appName:     strings.TrimSpace(appName),
+		appBaseURL:  strings.TrimRight(strings.TrimSpace(appBaseURL), "/"),
 	}
 }
 
@@ -96,11 +102,24 @@ func (h *InviteUserHandler) Execute(ctx context.Context, command InviteUserComma
 		return nil, err
 	}
 
-	return &InviteUserResult{
+	result := &InviteUserResult{
 		User:      invitedUser,
 		InviteURL: buildInviteURL(h.appBaseURL, token),
 		ExpiresAt: expiresAt,
-	}, nil
+	}
+	if h.emailSender != nil {
+		if err := h.emailSender.SendInviteEmail(ctx, domain.InviteEmail{
+			AppName:     h.appName,
+			To:          invitedUser.Email,
+			DisplayName: invitedUser.DisplayName,
+			InviteURL:   result.InviteURL,
+			ExpiresAt:   result.ExpiresAt,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
 }
 
 func normalizeRole(raw string) (domain.UserRole, error) {

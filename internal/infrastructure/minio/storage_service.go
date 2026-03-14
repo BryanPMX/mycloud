@@ -128,6 +128,15 @@ func (s *StorageService) OpenUpload(ctx context.Context, key string) (io.ReadClo
 	return obj, nil
 }
 
+func (s *StorageService) OpenOriginal(ctx context.Context, key string) (io.ReadCloser, error) {
+	obj, err := s.core.Client.GetObject(ctx, s.originalsBuck, key, miniosdk.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get original object: %w", err)
+	}
+
+	return obj, nil
+}
+
 func (s *StorageService) PromoteUpload(ctx context.Context, key string) error {
 	if _, err := s.core.CopyObject(
 		ctx,
@@ -140,6 +149,16 @@ func (s *StorageService) PromoteUpload(ctx context.Context, key string) error {
 		miniosdk.PutObjectOptions{},
 	); err != nil {
 		return fmt.Errorf("promote upload object: %w", err)
+	}
+
+	return nil
+}
+
+func (s *StorageService) UploadThumbnail(ctx context.Context, key, mimeType string, body io.Reader, size int64) error {
+	if _, err := s.core.Client.PutObject(ctx, s.thumbsBucket, key, body, size, miniosdk.PutObjectOptions{
+		ContentType: mimeType,
+	}); err != nil {
+		return fmt.Errorf("upload thumbnail object: %w", err)
 	}
 
 	return nil

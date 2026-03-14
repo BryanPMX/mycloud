@@ -113,6 +113,38 @@ func (r *JobRepository) FindLatestByMediaAndType(ctx context.Context, mediaID uu
 	return row.toDomain()
 }
 
+func (r *JobRepository) FindLatestByType(ctx context.Context, jobType domain.JobType) (*domain.Job, error) {
+	const query = `
+		SELECT id, media_id, type, status, payload, error, attempts, created_at, started_at, completed_at
+		FROM jobs
+		WHERE type = $1
+		ORDER BY created_at DESC, id DESC
+		LIMIT 1
+	`
+
+	row := jobRow{}
+	if err := r.db.QueryRow(ctx, query, jobType).Scan(
+		&row.ID,
+		&row.MediaID,
+		&row.Type,
+		&row.Status,
+		&row.Payload,
+		&row.Error,
+		&row.Attempts,
+		&row.CreatedAt,
+		&row.StartedAt,
+		&row.CompletedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+
+		return nil, err
+	}
+
+	return row.toDomain()
+}
+
 func (r *JobRepository) MarkRunning(ctx context.Context, id uuid.UUID, startedAt time.Time) error {
 	const query = `
 		UPDATE jobs

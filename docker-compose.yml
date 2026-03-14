@@ -12,6 +12,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      mailpit:
+        condition: service_started
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -28,6 +30,8 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_started
+      clamav:
         condition: service_started
     restart: unless-stopped
 
@@ -80,6 +84,20 @@ services:
       - "9001:9001"
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:v1.22
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav-debian:stable
+    volumes:
+      - clamav_data:/var/lib/clamav
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:
+  clamav_data:

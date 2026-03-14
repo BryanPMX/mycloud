@@ -86,6 +86,7 @@ type MediaProcessingResult struct {
 	Width        int
 	Height       int
 	DurationSecs float64
+	TakenAt      *time.Time
 	ThumbKeys    ThumbKeys
 	Metadata     map[string]any
 }

@@ -139,6 +139,21 @@ func (r *ShareRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (r *ShareRepository) DeleteExpired(ctx context.Context, before time.Time) (int, error) {
+	const query = `
+		DELETE FROM shares
+		WHERE expires_at IS NOT NULL
+		  AND expires_at <= $1
+	`
+
+	tag, err := r.db.Exec(ctx, query, before)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(tag.RowsAffected()), nil
+}
+
 type shareRow struct {
 	ID                   uuid.UUID
 	AlbumID              uuid.UUID

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	maintenancecmd "github.com/yourorg/mycloud/internal/application/commands/maintenance"
 	"github.com/yourorg/mycloud/internal/domain"
 )
 
@@ -45,6 +46,10 @@ func (r *fakeJobRepo) FindByID(_ context.Context, id uuid.UUID) (*domain.Job, er
 }
 
 func (r *fakeJobRepo) FindLatestByMediaAndType(context.Context, uuid.UUID, domain.JobType) (*domain.Job, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (r *fakeJobRepo) FindLatestByType(context.Context, domain.JobType) (*domain.Job, error) {
 	return nil, domain.ErrNotFound
 }
 
@@ -179,16 +184,13 @@ func (s *fakeScanner) ScanReader(context.Context, io.Reader) (bool, string, erro
 	return s.clean, s.threat, s.err
 }
 
-type fakeKeyBuilder struct {
-	keys domain.ThumbKeys
+type fakeMediaProcessor struct {
+	result domain.MediaProcessingResult
+	err    error
 }
 
-func (b *fakeKeyBuilder) BuildMediaObjectKey(uuid.UUID, uuid.UUID, string, string, time.Time) string {
-	return ""
-}
-
-func (b *fakeKeyBuilder) BuildThumbKeys(uuid.UUID, string) domain.ThumbKeys {
-	return b.keys
+func (p *fakeMediaProcessor) Process(context.Context, *domain.Media) (domain.MediaProcessingResult, error) {
+	return p.result, p.err
 }
 
 type fakeProgressPublisher struct {
@@ -230,16 +232,24 @@ func TestJobRunnerProcessPromotesUploadAndMarksMediaReady(t *testing.T) {
 	storage := &fakeStorageService{openBody: "clean upload"}
 	scanner := &fakeScanner{clean: true}
 	progress := &fakeProgressPublisher{}
-	keyBuilder := &fakeKeyBuilder{
-		keys: domain.ThumbKeys{
-			Small:  "small.webp",
-			Medium: "medium.webp",
-			Large:  "large.webp",
-			Poster: "poster.webp",
+	processor := &fakeMediaProcessor{
+		result: domain.MediaProcessingResult{
+			Width:        1920,
+			Height:       1080,
+			DurationSecs: 4.5,
+			ThumbKeys: domain.ThumbKeys{
+				Small:  "small.webp",
+				Medium: "medium.webp",
+				Large:  "large.webp",
+				Poster: "poster.webp",
+			},
+			Metadata: map[string]any{
+				"extracted": map[string]any{"codec_name": "h264"},
+			},
 		},
 	}
 
-	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, progress, keyBuilder, time.Second)
+	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, progress, processor, nil, time.Second)
 	runner.process(context.Background(), &domain.Job{ID: jobID})
 
 	if jobRepo.runningID != jobID {
@@ -259,6 +269,9 @@ func TestJobRunnerProcessPromotesUploadAndMarksMediaReady(t *testing.T) {
 	}
 	if mediaRepo.result == nil || mediaRepo.result.ThumbKeys.Poster != "poster.webp" {
 		t.Fatal("process() did not apply thumbnail keys")
+	}
+	if mediaRepo.result.Width != 1920 || mediaRepo.result.Height != 1080 || mediaRepo.result.DurationSecs != 4.5 {
+		t.Fatal("process() did not apply extracted media metadata")
 	}
 	processing, ok := mediaRepo.result.Metadata["processing"].(map[string]any)
 	if !ok || processing["scan_status"] != "clean" {
@@ -302,9 +315,9 @@ func TestJobRunnerProcessFailsMediaWhenVirusDetected(t *testing.T) {
 	storage := &fakeStorageService{openBody: "infected"}
 	scanner := &fakeScanner{clean: false, threat: "EICAR-Test-Signature"}
 	progress := &fakeProgressPublisher{}
-	keyBuilder := &fakeKeyBuilder{}
+	processor := &fakeMediaProcessor{}
 
-	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, progress, keyBuilder, time.Second)
+	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, mediaRepo, storage, scanner, progress, processor, nil, time.Second)
 	runner.process(context.Background(), &domain.Job{ID: jobID})
 
 	if mediaRepo.media.Status != domain.MediaStatusFailed {
@@ -363,7 +376,8 @@ func TestJobRunnerProcessFailsWhenScannerErrors(t *testing.T) {
 		&fakeStorageService{openBody: "upload"},
 		&fakeScanner{err: errors.New("clamd unavailable")},
 		progress,
-		&fakeKeyBuilder{},
+		&fakeMediaProcessor{},
+		nil,
 		time.Second,
 	)
 	runner.process(context.Background(), &domain.Job{ID: jobID})
@@ -376,5 +390,61 @@ func TestJobRunnerProcessFailsWhenScannerErrors(t *testing.T) {
 	}
 	if len(progress.events) != 2 || progress.events[1].Type != domain.MediaProgressFailed {
 		t.Fatalf("process() progress events = %#v, want started then failed", progress.events)
+	}
+}
+
+type fakeMediaMaintenanceRepo struct {
+	deleted []*domain.Media
+}
+
+func (r *fakeMediaMaintenanceRepo) DeleteExpiredTrash(context.Context, time.Time) ([]*domain.Media, error) {
+	return r.deleted, nil
+}
+
+type fakeShareMaintenanceRepo struct {
+	count int
+}
+
+func (r *fakeShareMaintenanceRepo) DeleteExpired(context.Context, time.Time) (int, error) {
+	return r.count, nil
+}
+
+type fakeMediaCleaner struct {
+	deleted []*domain.Media
+}
+
+func (c *fakeMediaCleaner) DeleteMediaAssets(_ context.Context, media *domain.Media) error {
+	c.deleted = append(c.deleted, media)
+	return nil
+}
+
+func TestJobRunnerProcessCleanupMarksJobDone(t *testing.T) {
+	t.Parallel()
+
+	jobID := uuid.New()
+	jobRepo := &fakeJobRepo{
+		jobs: map[uuid.UUID]*domain.Job{
+			jobID: {
+				ID:     jobID,
+				Type:   domain.JobTypeCleanup,
+				Status: domain.JobStatusQueued,
+			},
+		},
+	}
+
+	cleanup := maintenancecmd.NewRunCleanupHandler(
+		&fakeMediaMaintenanceRepo{deleted: []*domain.Media{{ID: uuid.New()}}},
+		&fakeShareMaintenanceRepo{count: 2},
+		&fakeMediaCleaner{},
+	)
+
+	runner := NewJobRunner(&fakeJobQueue{}, jobRepo, &fakeMediaRepo{}, &fakeStorageService{}, &fakeScanner{}, &fakeProgressPublisher{}, &fakeMediaProcessor{}, cleanup, time.Second)
+	runner.process(context.Background(), &domain.Job{ID: jobID})
+
+	if jobRepo.doneID != jobID {
+		t.Fatal("process() did not mark cleanup job done")
+	}
+	if jobRepo.failedID != uuid.Nil {
+		t.Fatal("process() unexpectedly failed cleanup job")
 	}
 }

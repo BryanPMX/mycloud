@@ -188,6 +188,17 @@ func (r *fakeJobRepo) FindLatestByMediaAndType(context.Context, uuid.UUID, domai
 	return r.existing, nil
 }
 
+func (r *fakeJobRepo) FindLatestByType(context.Context, domain.JobType) (*domain.Job, error) {
+	if r.findErr != nil {
+		return nil, r.findErr
+	}
+	if r.existing == nil {
+		return nil, domain.ErrNotFound
+	}
+
+	return r.existing, nil
+}
+
 func (r *fakeJobRepo) MarkRunning(context.Context, uuid.UUID, time.Time) error {
 	return nil
 }

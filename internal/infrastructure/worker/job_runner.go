@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	maintenancecmd "github.com/yourorg/mycloud/internal/application/commands/maintenance"
 	"github.com/yourorg/mycloud/internal/domain"
 )
 
@@ -19,7 +20,8 @@ type JobRunner struct {
 	storage     domain.StorageService
 	scanner     domain.VirusScanner
 	progress    domain.MediaProgressPublisher
-	keyBuilder  domain.MediaKeyBuilder
+	processor   domain.MediaProcessor
+	cleanup     *maintenancecmd.RunCleanupHandler
 	pollTimeout time.Duration
 }
 
@@ -30,7 +32,8 @@ func NewJobRunner(
 	storage domain.StorageService,
 	scanner domain.VirusScanner,
 	progress domain.MediaProgressPublisher,
-	keyBuilder domain.MediaKeyBuilder,
+	processor domain.MediaProcessor,
+	cleanup *maintenancecmd.RunCleanupHandler,
 	pollTimeout time.Duration,
 ) *JobRunner {
 	if pollTimeout <= 0 {
@@ -44,7 +47,8 @@ func NewJobRunner(
 		storage:     storage,
 		scanner:     scanner,
 		progress:    progress,
-		keyBuilder:  keyBuilder,
+		processor:   processor,
+		cleanup:     cleanup,
 		pollTimeout: pollTimeout,
 	}
 }
@@ -84,15 +88,21 @@ func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
 		return
 	}
 
-	if job.Type != domain.JobTypeProcessMedia {
+	switch job.Type {
+	case domain.JobTypeProcessMedia:
+		if job.MediaID == nil || *job.MediaID == uuid.Nil {
+			r.failJob(ctx, job.ID, nil, nil, errors.New("missing media id"))
+			return
+		}
+		r.processMediaJob(ctx, job)
+	case domain.JobTypeCleanup:
+		r.processCleanupJob(ctx, job)
+	default:
 		r.failJob(ctx, job.ID, job.MediaID, nil, fmt.Errorf("unsupported job type %q", job.Type))
-		return
 	}
-	if job.MediaID == nil || *job.MediaID == uuid.Nil {
-		r.failJob(ctx, job.ID, nil, nil, errors.New("missing media id"))
-		return
-	}
+}
 
+func (r *JobRunner) processMediaJob(ctx context.Context, job *domain.Job) {
 	media, err := r.mediaRepo.FindByID(ctx, *job.MediaID)
 	if err != nil {
 		r.failJob(ctx, job.ID, job.MediaID, nil, err)
@@ -137,10 +147,17 @@ func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
 	}
 	_ = r.storage.DeleteUpload(ctx, media.OriginalKey)
 
-	result := domain.MediaProcessingResult{
-		ThumbKeys: r.keyBuilder.BuildThumbKeys(media.ID, media.MimeType),
-		Metadata:  buildProcessingMetadata(media, job.ID, now),
+	if r.processor == nil {
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, errors.New("media processor not configured"))
+		return
 	}
+	processedAt := time.Now().UTC()
+	result, err := r.processor.Process(ctx, media)
+	if err != nil {
+		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
+		return
+	}
+	result.Metadata = buildProcessingMetadata(media.Metadata, result.Metadata, job.ID, processedAt)
 	if err := r.mediaRepo.ApplyProcessingResult(ctx, media.ID, result); err != nil {
 		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
 		return
@@ -153,6 +170,20 @@ func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
 		ThumbURLs:  result.ThumbKeys,
 		OccurredOn: time.Now().UTC(),
 	})
+
+	_ = r.jobRepo.MarkDone(ctx, job.ID, time.Now().UTC())
+}
+
+func (r *JobRunner) processCleanupJob(ctx context.Context, job *domain.Job) {
+	if r.cleanup == nil {
+		r.failJob(ctx, job.ID, nil, nil, errors.New("cleanup handler not configured"))
+		return
+	}
+
+	if _, err := r.cleanup.Execute(ctx); err != nil {
+		r.failJob(ctx, job.ID, nil, nil, err)
+		return
+	}
 
 	_ = r.jobRepo.MarkDone(ctx, job.ID, time.Now().UTC())
 }
@@ -180,8 +211,11 @@ func (r *JobRunner) publishProgress(ctx context.Context, event domain.MediaProgr
 	_ = r.progress.PublishMediaProgress(ctx, event)
 }
 
-func buildProcessingMetadata(media *domain.Media, jobID uuid.UUID, processedAt time.Time) map[string]any {
-	metadata := cloneMetadata(media.Metadata)
+func buildProcessingMetadata(existing map[string]any, extracted map[string]any, jobID uuid.UUID, processedAt time.Time) map[string]any {
+	metadata := cloneMetadata(existing)
+	for key, value := range extracted {
+		metadata[key] = value
+	}
 	metadata["processing"] = map[string]any{
 		"job_id":       jobID.String(),
 		"processed_at": processedAt,

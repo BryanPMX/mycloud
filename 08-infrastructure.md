@@ -1,5 +1,11 @@
 # 08 — Infrastructure
 
+Current implementation note on March 14, 2026:
+- The checked-in local `docker-compose.yml` is intentionally slimmer than the full target deployment in this document, but it now includes the core backend services needed to exercise the current API and worker locally: API, worker, PostgreSQL, Redis, MinIO, and ClamAV.
+- The checked-in [.env.example](/Users/bryanpmx/Documents/Projects/mycloud/.env.example) now points `CLAMAV_SOCKET` at `tcp://clamav:3310` for local scan parity. Existing developer `.env` files still need that value set before the worker will actually call ClamAV.
+- The local compose stack now also includes Mailpit-friendly SMTP defaults so invite delivery can be tested end-to-end without external mail infrastructure.
+- The full Nginx, monitoring, and host-level backup automation in this doc remain the target production shape. The repository now includes lighter-weight helper scripts in [scripts/init-minio.sh](/Users/bryanpmx/Documents/Projects/mycloud/scripts/init-minio.sh), [scripts/backup-postgres.sh](/Users/bryanpmx/Documents/Projects/mycloud/scripts/backup-postgres.sh), and [scripts/backup-minio.sh](/Users/bryanpmx/Documents/Projects/mycloud/scripts/backup-minio.sh) for local bootstrap and backups.
+
 ---
 
 ## 1. Docker Compose
@@ -617,6 +623,8 @@ func Metrics() gin.HandlerFunc {
 ## 6. Backup Strategy
 
 Three-tier backup: Postgres WAL archiving, MinIO bucket versioning, and nightly rsync to a separate disk.
+
+Current implementation note on March 14, 2026: the repository-level scripts now cover the first practical local step here. `scripts/backup-postgres.sh` writes a timestamped compressed SQL dump using `DATABASE_URL`, and `scripts/backup-minio.sh` mirrors the MinIO buckets into a timestamped backup directory using `mc`. The cron and rsync examples below are still the fuller production-target design.
 
 ### Nightly Database Backup
 

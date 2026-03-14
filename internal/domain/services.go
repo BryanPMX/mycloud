@@ -26,6 +26,11 @@ type StorageService interface {
 	PromoteUpload(ctx context.Context, key string) error
 }
 
+type MediaProcessingStorage interface {
+	OpenOriginal(ctx context.Context, key string) (io.ReadCloser, error)
+	UploadThumbnail(ctx context.Context, key, mimeType string, body io.Reader, size int64) error
+}
+
 type AvatarStorage interface {
 	UploadAvatar(ctx context.Context, key, mimeType string, body io.Reader, size int64) error
 	DeleteAvatar(ctx context.Context, key string) error
@@ -66,10 +71,26 @@ type VirusScanner interface {
 	ScanReader(ctx context.Context, r io.Reader) (clean bool, threat string, err error)
 }
 
+type MediaProcessor interface {
+	Process(ctx context.Context, media *Media) (MediaProcessingResult, error)
+}
+
 type MediaProgressPublisher interface {
 	PublishMediaProgress(ctx context.Context, event MediaProgressEvent) error
 }
 
 type MediaProgressSubscriber interface {
 	SubscribeMediaProgress(ctx context.Context, handler func(MediaProgressEvent)) error
+}
+
+type InviteEmail struct {
+	AppName     string
+	To          string
+	DisplayName string
+	InviteURL   string
+	ExpiresAt   time.Time
+}
+
+type InviteEmailSender interface {
+	SendInviteEmail(ctx context.Context, invite InviteEmail) error
 }

@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	maintenancecmd "github.com/yourorg/mycloud/internal/application/commands/maintenance"
 	"github.com/yourorg/mycloud/internal/infrastructure/clamav"
 	minioinfra "github.com/yourorg/mycloud/internal/infrastructure/minio"
 	"github.com/yourorg/mycloud/internal/infrastructure/postgres"
@@ -57,12 +58,18 @@ func main() {
 	jobQueue := redisinfra.NewJobQueue(redisClient)
 	jobRepo := postgres.NewJobRepository(db)
 	mediaRepo := postgres.NewMediaRepository(db)
+	shareRepo := postgres.NewShareRepository(db)
 	progressBus := redisinfra.NewMediaProgressBus(redisClient)
 	storage := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
 	scanner := clamav.NewScanner(cfg.ClamAVSocket)
 	keyBuilder := minioinfra.NewKeyBuilder()
+	processor := worker.NewFFMpegMediaProcessor(storage, keyBuilder)
+	cleanupHandler := maintenancecmd.NewRunCleanupHandler(mediaRepo, shareRepo, storage)
+	scheduler := worker.NewCleanupScheduler(jobRepo, jobQueue, cfg.CleanupInterval)
 
-	runner := worker.NewJobRunner(jobQueue, jobRepo, mediaRepo, storage, scanner, progressBus, keyBuilder, 5*time.Second)
+	go scheduler.Run(ctx)
+
+	runner := worker.NewJobRunner(jobQueue, jobRepo, mediaRepo, storage, scanner, progressBus, processor, cleanupHandler, 5*time.Second)
 
 	log.Printf("%s worker started", cfg.AppName)
 	runner.Run(ctx)

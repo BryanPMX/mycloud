@@ -1,5 +1,9 @@
 # 07 — Flutter Client Architecture
 
+Current implementation note on March 14, 2026:
+- `flutter_app/` currently contains the app shell, feature folders, placeholder screens/providers, and smoke/integration test scaffolding, but it is not wired end-to-end to the backend yet.
+- The backend is now stable enough to start the Flutter auth, profile, media library, album, comment, and upload flows. The remaining client-side work is now mostly integration and UX, not missing backend slices.
+
 ---
 
 ## 1. Project Structure

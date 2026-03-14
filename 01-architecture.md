@@ -7,8 +7,8 @@
 MyCloud's backend follows **Clean Architecture** (Robert C. Martin). The fundamental rule is the **Dependency Rule**: source code dependencies must point only inward. Inner layers define interfaces; outer layers implement them.
 
 Current implementation note on March 14, 2026:
-- The live code now covers the backend composition root, Postgres/Redis/MinIO adapters, auth/session flows, authorization-aware media list/detail/search reads, presigned original downloads, media trash flows, album/share/comment/favorite slices, direct upload completion/abort, and worker job enqueueing.
-- Broader list filtering/sorting, actual thumbnail generation, WebSocket progress, and email/event side effects in the rest of this document are still planned.
+- The live code now covers the backend composition root, Postgres/Redis/MinIO adapters, auth/session flows, self-service profile writes, authorization-aware media list/detail/search reads, presigned original downloads, media trash flows, album/share/comment/favorite slices, direct upload completion/abort, worker job enqueueing, worker-side thumbnail generation and metadata extraction, scheduled cleanup orchestration, Go-side security hardening, SMTP invite delivery, and Redis-backed WebSocket progress fan-out.
+- Broader list filtering/sorting and the larger infrastructure/UI work in the rest of this document are still planned.
 
 ```
 ┌──────────────────────────────────────────────┐

@@ -366,7 +366,7 @@ Finalize a staged multipart upload. The API persists the `media` row as `pending
 }
 ```
 
-The current worker slice scans the staged object, promotes it into the originals bucket, fills metadata plus thumbnail keys, and now emits realtime processing events over `/ws/progress`. Actual thumbnail file generation is still planned, so `GET /media/:id/thumb` can still return `404` until real objects exist in `fc-thumbs`.
+The current worker slice scans the staged object, promotes it into the originals bucket, extracts richer media metadata, generates WebP thumbnails into `fc-thumbs`, and emits realtime processing events over `/ws/progress`.
 
 ---
 
@@ -422,7 +422,7 @@ Get presigned thumbnail URL(s).
 ```
 
 All thumbnails are private. Every thumbnail URL is presigned and short-lived.
-Current implementation note on March 14, 2026: the endpoint is live, but the worker still only records thumbnail keys today. Until actual thumbnail files are generated into `fc-thumbs`, this endpoint will return `404`.
+Current implementation note on March 14, 2026: the endpoint is live and now returns working presigned reads once worker processing completes successfully.
 
 ---
 
@@ -747,7 +747,7 @@ List all registered users.
 ### POST /admin/users/invite
 Send an invite link to a new family member.
 
-Current implementation note on March 14, 2026: this endpoint is live now. The backend generates a 72-hour invite token, stores only the sha256 hash, returns the `invite_url`, and writes an `audit_log` entry. SMTP delivery is still planned, so the current response also includes `expires_at`.
+Current implementation note on March 14, 2026: this endpoint is live now. The backend generates a 72-hour invite token, stores only the sha256 hash, sends the invite email when SMTP is configured, returns the `invite_url` as an operator fallback, and writes an `audit_log` entry.
 
 **Request**
 ```json
@@ -767,7 +767,7 @@ Current implementation note on March 14, 2026: this endpoint is live now. The ba
 }
 ```
 
-The current backend returns the invite URL directly. Email transport is still planned.
+The current backend still returns the invite URL directly as a support fallback even when SMTP delivery is enabled.
 
 ---
 
@@ -872,7 +872,7 @@ Processing complete:
 }
 ```
 
-Current implementation note on March 14, 2026: `thumb_urls` currently expose stored thumbnail keys, not presigned URLs. That matches the rest of the current backend while real thumbnail generation is still pending.
+Current implementation note on March 14, 2026: `thumb_urls` currently expose stored thumbnail keys, not presigned URLs. Use `GET /media/:id/thumb` for presigned reads.
 
 Processing failed:
 ```json

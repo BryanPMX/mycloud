@@ -46,12 +46,14 @@ As of March 14, 2026, the repository includes the current working backend slices
 - append-only `audit_log` persistence for invite/admin actions via `005_audit_log`
 - direct multipart upload init, part-url presigning, and completion endpoints
 - `process_media` job creation at upload completion
+- scheduled `cleanup` job enqueueing for trash-purge and expired-share maintenance
 - Redis pub/sub-backed worker progress events plus authenticated `GET /ws/progress`
 - search-vector and metadata index migration for media search/timeline reads
-- worker-side staged upload scanning, promotion to originals, and media row finalization
+- worker-side staged upload scanning, promotion to originals, real WebP thumbnail generation, richer metadata extraction, and media row finalization
+- SMTP invite delivery when SMTP transport is configured, with Mailpit-friendly local defaults in `.env.example`
 - focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, invite acceptance, admin mutations, media upload commands, favorites, albums, and shares
 
-Actual thumbnail file generation, SMTP invite delivery, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise. The thumbnail read endpoint is wired, but it returns `404` until real thumbnail objects exist in `fc-thumbs`.
+The Flutter app and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
 
 ### Design Goals
 

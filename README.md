@@ -6,10 +6,11 @@ Current backend slice:
 - PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, `comments`, `favorites`, `jobs`, and `audit_log`
 - JWT access/refresh auth with Redis-backed refresh session rotation and invite acceptance
 - MinIO wiring for direct multipart uploads
-- Redis-backed `process_media` job enqueue plus worker promotion/scan flow
+- Redis-backed `process_media` and scheduled `cleanup` jobs, with worker-side scan, thumbnail generation, metadata extraction, and promotion flow
 - self-service profile writes via `PATCH /api/v1/users/me` and avatar uploads via `PUT /api/v1/users/me/avatar`
 - fixed-window API rate limiting plus response security headers in the Go middleware stack
 - Redis-backed worker progress events plus authenticated `GET /ws/progress`
+- SMTP-backed admin invite delivery when SMTP is configured, while still returning `invite_url` in the response
 - admin user list/invite/update/deactivate endpoints and admin system stats
 - album list/create/detail/update/delete, album-media add/remove, and album share management
 - comment persistence plus media comment list/create/delete endpoints

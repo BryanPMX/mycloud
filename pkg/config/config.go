@@ -25,10 +25,16 @@ type Config struct {
 	MinIOThumbsBuck  string
 	MinIOAvatarsBuck string
 	ClamAVSocket     string
+	SMTPHost         string
+	SMTPPort         int
+	SMTPUser         string
+	SMTPPass         string
+	SMTPFrom         string
 	JWTSecret        string
 	JWTIssuer        string
 	JWTAccessTTL     time.Duration
 	JWTRefreshTTL    time.Duration
+	CleanupInterval  time.Duration
 	ReadTimeout      time.Duration
 	WriteTimeout     time.Duration
 	IdleTimeout      time.Duration
@@ -50,6 +56,10 @@ func Load() (Config, error) {
 		MinIOThumbsBuck:  getEnv("MINIO_THUMBS_BUCKET", "fc-thumbs"),
 		MinIOAvatarsBuck: getEnv("MINIO_AVATARS_BUCKET", "fc-avatars"),
 		ClamAVSocket:     strings.TrimSpace(os.Getenv("CLAMAV_SOCKET")),
+		SMTPHost:         strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPUser:         strings.TrimSpace(os.Getenv("SMTP_USER")),
+		SMTPPass:         os.Getenv("SMTP_PASS"),
+		SMTPFrom:         strings.TrimSpace(os.Getenv("SMTP_FROM")),
 		JWTSecret:        os.Getenv("JWT_SECRET"),
 		JWTIssuer:        getEnv("JWT_ISSUER", "mycloud"),
 		ReadTimeout:      10 * time.Second,
@@ -72,6 +82,18 @@ func Load() (Config, error) {
 	}
 	cfg.JWTAccessTTL = time.Duration(accessMinutes) * time.Minute
 	cfg.JWTRefreshTTL = time.Duration(refreshDays) * 24 * time.Hour
+
+	smtpPort, err := parsePositiveInt("SMTP_PORT", 1025)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.SMTPPort = smtpPort
+
+	cleanupMinutes, err := parsePositiveInt("CLEANUP_INTERVAL_MINUTES", 60)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.CleanupInterval = time.Duration(cleanupMinutes) * time.Minute
 
 	var missing []string
 	if cfg.DatabaseURL == "" {

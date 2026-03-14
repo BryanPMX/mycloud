@@ -102,16 +102,29 @@ func (s *fakeAdminSessionStore) RevokeAllForUser(_ context.Context, userID uuid.
 	return nil
 }
 
+type fakeInviteEmailSender struct {
+	invites []domain.InviteEmail
+	err     error
+}
+
+func (s *fakeInviteEmailSender) SendInviteEmail(_ context.Context, invite domain.InviteEmail) error {
+	s.invites = append(s.invites, invite)
+	return s.err
+}
+
 func TestInviteUserHandlerExecuteCreatesInviteURLAndHashedToken(t *testing.T) {
 	t.Parallel()
 
 	adminUser := &domain.User{ID: uuid.New(), Active: true, Role: domain.RoleAdmin}
 	invitedUser := &domain.User{ID: uuid.New(), Email: "new.member@example.com"}
 	adminRepo := &fakeAdminRepo{invitedUser: invitedUser}
+	emailSender := &fakeInviteEmailSender{}
 
 	handler := NewInviteUserHandler(
 		&fakeAdminUserRepo{user: adminUser},
 		adminRepo,
+		emailSender,
+		"MyCloud",
 		"https://app.example.com",
 	)
 
@@ -149,6 +162,12 @@ func TestInviteUserHandlerExecuteCreatesInviteURLAndHashedToken(t *testing.T) {
 	}
 	if adminRepo.inviteAudit == nil || adminRepo.inviteAudit.Action != domain.AuditActionAdminInviteUser {
 		t.Fatal("Execute() did not record invite audit metadata")
+	}
+	if got, want := len(emailSender.invites), 1; got != want {
+		t.Fatalf("SendInviteEmail() count = %d, want %d", got, want)
+	}
+	if got, want := emailSender.invites[0].To, invitedUser.Email; got != want {
+		t.Fatalf("SendInviteEmail() recipient = %q, want %q", got, want)
 	}
 }
 

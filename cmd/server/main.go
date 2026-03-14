@@ -22,6 +22,7 @@ import (
 	httpapi "github.com/yourorg/mycloud/internal/delivery/http"
 	"github.com/yourorg/mycloud/internal/delivery/http/handlers"
 	wsdelivery "github.com/yourorg/mycloud/internal/delivery/ws"
+	emailinfra "github.com/yourorg/mycloud/internal/infrastructure/email"
 	minioinfra "github.com/yourorg/mycloud/internal/infrastructure/minio"
 	"github.com/yourorg/mycloud/internal/infrastructure/postgres"
 	redisinfra "github.com/yourorg/mycloud/internal/infrastructure/redis"
@@ -71,6 +72,10 @@ func main() {
 	tokenService, err := pkgauth.NewJWTService(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	if err != nil {
 		log.Fatalf("create token service: %v", err)
+	}
+	inviteSender, err := emailinfra.NewSMTPSender(cfg.AppName, cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
+	if err != nil {
+		log.Fatalf("create invite email sender: %v", err)
 	}
 
 	userRepo := postgres.NewUserRepository(db)
@@ -141,7 +146,7 @@ func main() {
 	restoreMediaHandler := mediacmd.NewRestoreMediaHandler(userRepo, mediaRepo)
 	permanentDeleteMediaHandler := mediacmd.NewPermanentDeleteMediaHandler(userRepo, mediaRepo, storageService)
 	emptyTrashHandler := mediacmd.NewEmptyTrashHandler(userRepo, mediaRepo, storageService)
-	inviteUserHandler := admincmd.NewInviteUserHandler(userRepo, adminRepo, cfg.AppBaseURL)
+	inviteUserHandler := admincmd.NewInviteUserHandler(userRepo, adminRepo, inviteSender, cfg.AppName, cfg.AppBaseURL)
 	updateUserHandler := admincmd.NewUpdateUserHandler(userRepo, adminRepo, sessionStore)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{

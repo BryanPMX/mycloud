@@ -36,9 +36,6 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 
 Still intentionally pending:
 
-- thumbnail generation and richer media metadata extraction in the worker
-- cleanup-job orchestration and automated trash/share cleanup flows
-- SMTP invite delivery
 - Flutter app runtime wiring
 
 ---

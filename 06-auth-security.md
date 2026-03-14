@@ -1,8 +1,8 @@
 # 06 — Authentication & Security
 
 Current implementation status on March 14, 2026:
-- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation plus admin-triggered session revocation, auth middleware, admin role middleware, request IDs, structured request logging, Go-side response security headers, fixed-window API rate limiting, repository-enforced media visibility, application-layer album/share ownership checks, hashed invite acceptance, admin user-management routes, self-service profile writes, and `audit_log` writes for invite/admin actions
-- Still planned from this design doc: cleanup orchestration and SMTP invite delivery
+- Implemented now: JWT access/refresh tokens, bcrypt password verification, Redis-backed refresh session rotation plus admin-triggered session revocation, auth middleware, admin role middleware, request IDs, structured request logging, Go-side response security headers, fixed-window API rate limiting, repository-enforced media visibility, application-layer album/share ownership checks, hashed invite acceptance, admin user-management routes, self-service profile writes, scheduled cleanup orchestration, SMTP invite delivery, and `audit_log` writes for invite/admin actions
+- Still planned from this design doc: larger infrastructure hardening beyond the current single-node deployment assumptions
 
 ---
 
@@ -490,7 +490,7 @@ func NewRateLimiter(config RateLimitConfig) gin.HandlerFunc {
 
 Users are added by admin invitation only — there is no public registration.
 
-Current implementation note on March 14, 2026: the backend now issues hashed 72-hour invite tokens, exposes `POST /api/v1/admin/users/invite` and `POST /api/v1/auth/invite/accept`, and records invite/admin actions in `audit_log`. The current API returns `invite_url` directly; SMTP delivery remains planned.
+Current implementation note on March 14, 2026: the backend now issues hashed 72-hour invite tokens, exposes `POST /api/v1/admin/users/invite` and `POST /api/v1/auth/invite/accept`, records invite/admin actions in `audit_log`, and sends invite email over SMTP when `SMTP_HOST` and `SMTP_FROM` are configured. The API still returns `invite_url` directly as an operator fallback.
 
 ```
 Admin calls POST /admin/users/invite { email, role, quota_gb }

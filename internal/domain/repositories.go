@@ -38,6 +38,10 @@ type MediaRepository interface {
 	ApplyProcessingResult(ctx context.Context, id uuid.UUID, result MediaProcessingResult) error
 }
 
+type MediaMaintenanceRepository interface {
+	DeleteExpiredTrash(ctx context.Context, before time.Time) ([]*Media, error)
+}
+
 type MediaReadRepository interface {
 	FindByIDForUser(ctx context.Context, id, userID uuid.UUID) (*Media, error)
 	SearchVisibleToUser(ctx context.Context, userID uuid.UUID, opts SearchMediaOptions) (MediaPage, error)
@@ -73,6 +77,10 @@ type ShareRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
+type ShareMaintenanceRepository interface {
+	DeleteExpired(ctx context.Context, before time.Time) (int, error)
+}
+
 type CommentRepository interface {
 	Create(ctx context.Context, comment *Comment) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Comment, error)
@@ -90,6 +98,7 @@ type JobRepository interface {
 	Create(ctx context.Context, job *Job) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Job, error)
 	FindLatestByMediaAndType(ctx context.Context, mediaID uuid.UUID, jobType JobType) (*Job, error)
+	FindLatestByType(ctx context.Context, jobType JobType) (*Job, error)
 	MarkRunning(ctx context.Context, id uuid.UUID, startedAt time.Time) error
 	MarkDone(ctx context.Context, id uuid.UUID, completedAt time.Time) error
 	MarkFailed(ctx context.Context, id uuid.UUID, message string, completedAt time.Time) error
