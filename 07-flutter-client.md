@@ -3,6 +3,8 @@
 Current implementation note on March 14, 2026:
 - `flutter_app/` currently contains the app shell, feature folders, placeholder screens/providers, and smoke/integration test scaffolding, but it is not wired end-to-end to the backend yet.
 - The backend is now stable enough to start the Flutter auth, profile, media library, album, comment, and upload flows. The remaining client-side work is now mostly integration and UX, not missing backend slices.
+- Confirmed deployment domain plan for the eventual Flutter rollout: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
+- Flutter should treat `https://api.mynube.live` as the API base URL and `wss://api.mynube.live/ws/progress` as the WebSocket origin. Backend `APP_BASE_URL` should remain `https://mynube.live` because admin invite emails currently build browser-facing invite links from that value.
 
 ---
 

@@ -1,11 +1,10 @@
-version: "3.9"
-
 services:
   api:
     image: ghcr.io/${GHCR_OWNER}/mycloud-api:${IMAGE_TAG:-latest}
     environment:
       APP_NAME: ${APP_NAME}
       APP_ENV: ${APP_ENV}
+      APP_BASE_URL: ${APP_BASE_URL}
       PORT: ${PORT}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
@@ -140,7 +139,7 @@ services:
     restart: unless-stopped
 
   clamav:
-    image: clamav/clamav:1.4_base
+    image: clamav/clamav-debian:stable
     volumes:
       - clamav_db:/var/lib/clamav
     restart: unless-stopped

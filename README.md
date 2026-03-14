@@ -2,6 +2,12 @@
 
 This repository now contains both the design set and the current implemented backend slices for MyCloud.
 
+Current deployment domain plan:
+- `https://mynube.live` for the future Flutter web app
+- `https://api.mynube.live` for the Go API
+- `https://minio.mynube.live` for MinIO presigned upload/download traffic
+- `https://console.mynube.live` for the MinIO console/admin surface
+
 Current backend slice:
 - PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, `comments`, `favorites`, `jobs`, and `audit_log`
 - JWT access/refresh auth with Redis-backed refresh session rotation and invite acceptance
