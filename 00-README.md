@@ -35,16 +35,19 @@ As of March 14, 2026, the repository includes the current working backend slices
 - initial SQL migration with quota and album-count triggers
 - secure JWT login, refresh, and logout flows
 - authenticated `GET /users/me`
-- authorization-aware `GET /media` with cursor pagination and favorites filtering
+- authorization-aware `GET /media`, `GET /media/:id`, `GET /media/search`, and trash listing with cursor pagination
+- presigned original download URLs via `GET /media/:id/url`
+- media trash lifecycle: upload abort, soft delete, restore, permanent delete, and empty-trash flows
 - album creation/listing/detail/update/delete, album-media membership, and album share management
 - media comment read/write/delete flows backed by PostgreSQL soft deletes
 - media favorite/unfavorite flows backed by PostgreSQL favorites
 - direct multipart upload init, part-url presigning, and completion endpoints
 - `process_media` job creation at upload completion
+- search-vector and metadata index migration for media search/timeline reads
 - worker-side staged upload scanning, promotion to originals, and media row finalization
 - focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, media upload commands, favorites, albums, and shares
 
-Actual thumbnail file generation, WebSocket progress events, invite flow, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise.
+Actual thumbnail file generation, WebSocket progress events, invite flow, the Flutter app, and infrastructure extras in the rest of the design docs are still planned work unless a section explicitly says otherwise. The thumbnail read endpoint is wired, but it returns `404` until real thumbnail objects exist in `fc-thumbs`.
 
 ### Design Goals
 

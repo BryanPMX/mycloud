@@ -38,7 +38,14 @@ type MediaResponse struct {
 	IsFavorite   bool       `json:"is_favorite"`
 	TakenAt      *time.Time `json:"taken_at,omitempty"`
 	UploadedAt   time.Time  `json:"uploaded_at"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
+	PurgesAt     *time.Time `json:"purges_at,omitempty"`
 	ThumbURLs    ThumbURLs  `json:"thumb_urls"`
+}
+
+type AssetURLResponse struct {
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 type UploadInitResponse struct {
@@ -117,6 +124,8 @@ func ToUserResponse(user *domain.User) UserResponse {
 }
 
 func ToMediaResponse(media *domain.Media) MediaResponse {
+	purgesAt := media.PurgesAt()
+
 	return MediaResponse{
 		ID:           media.ID.String(),
 		OwnerID:      media.OwnerID.String(),
@@ -130,6 +139,8 @@ func ToMediaResponse(media *domain.Media) MediaResponse {
 		IsFavorite:   media.IsFavorite,
 		TakenAt:      media.TakenAt,
 		UploadedAt:   media.UploadedAt,
+		DeletedAt:    media.DeletedAt,
+		PurgesAt:     purgesAt,
 		ThumbURLs: ThumbURLs{
 			Small:  stringPtr(media.ThumbKeys.Small),
 			Medium: stringPtr(media.ThumbKeys.Medium),

@@ -34,12 +34,8 @@ func NewListMediaHandler(
 }
 
 func (h *ListMediaHandler) Execute(ctx context.Context, query ListMediaQuery) (domain.MediaPage, error) {
-	user, err := h.userRepo.FindByID(ctx, query.UserID)
-	if err != nil {
+	if _, err := requireActiveUser(ctx, h.userRepo, query.UserID); err != nil {
 		return domain.MediaPage{}, err
-	}
-	if !user.Active {
-		return domain.MediaPage{}, domain.ErrUnauthorized
 	}
 
 	page, err := h.mediaRepo.ListVisibleToUser(ctx, query.UserID, domain.ListMediaOptions{
@@ -58,27 +54,9 @@ func (h *ListMediaHandler) Execute(ctx context.Context, query ListMediaQuery) (d
 		return page, nil
 	}
 
-	favoriteIDs, err := h.favoriteRepo.ListMediaIDsByUser(ctx, query.UserID, collectMediaIDs(page.Items))
-	if err != nil {
+	if err := markFavorites(ctx, h.favoriteRepo, query.UserID, page.Items); err != nil {
 		return domain.MediaPage{}, err
 	}
 
-	favorites := make(map[uuid.UUID]struct{}, len(favoriteIDs))
-	for _, favoriteID := range favoriteIDs {
-		favorites[favoriteID] = struct{}{}
-	}
-	for _, item := range page.Items {
-		_, item.IsFavorite = favorites[item.ID]
-	}
-
 	return page, nil
-}
-
-func collectMediaIDs(items []*domain.Media) []uuid.UUID {
-	ids := make([]uuid.UUID, 0, len(items))
-	for _, item := range items {
-		ids = append(ids, item.ID)
-	}
-
-	return ids
 }

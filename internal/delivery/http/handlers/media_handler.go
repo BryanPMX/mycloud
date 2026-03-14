@@ -16,30 +16,85 @@ import (
 )
 
 type MediaHandler struct {
-	favoriteHandler       *mediacmd.FavoriteMediaHandler
-	unfavoriteHandler     *mediacmd.UnfavoriteMediaHandler
-	listHandler           *mediaquery.ListMediaHandler
-	initUploadHandler     *mediacmd.InitUploadHandler
-	partURLHandler        *mediacmd.PresignUploadPartHandler
-	completeUploadHandler *mediacmd.CompleteUploadHandler
+	getHandler             *mediaquery.GetMediaHandler
+	listHandler            *mediaquery.ListMediaHandler
+	searchHandler          *mediaquery.SearchMediaHandler
+	listTrashHandler       *mediaquery.ListTrashHandler
+	getDownloadURLHandler  *mediaquery.GetMediaDownloadURLHandler
+	getThumbURLHandler     *mediaquery.GetMediaThumbURLHandler
+	favoriteHandler        *mediacmd.FavoriteMediaHandler
+	unfavoriteHandler      *mediacmd.UnfavoriteMediaHandler
+	initUploadHandler      *mediacmd.InitUploadHandler
+	partURLHandler         *mediacmd.PresignUploadPartHandler
+	completeUploadHandler  *mediacmd.CompleteUploadHandler
+	abortUploadHandler     *mediacmd.AbortUploadHandler
+	deleteHandler          *mediacmd.DeleteMediaHandler
+	restoreHandler         *mediacmd.RestoreMediaHandler
+	permanentDeleteHandler *mediacmd.PermanentDeleteMediaHandler
+	emptyTrashHandler      *mediacmd.EmptyTrashHandler
 }
 
 func NewMediaHandler(
+	getHandler *mediaquery.GetMediaHandler,
 	listHandler *mediaquery.ListMediaHandler,
+	searchHandler *mediaquery.SearchMediaHandler,
+	listTrashHandler *mediaquery.ListTrashHandler,
+	getDownloadURLHandler *mediaquery.GetMediaDownloadURLHandler,
+	getThumbURLHandler *mediaquery.GetMediaThumbURLHandler,
 	favoriteHandler *mediacmd.FavoriteMediaHandler,
 	unfavoriteHandler *mediacmd.UnfavoriteMediaHandler,
 	initUploadHandler *mediacmd.InitUploadHandler,
 	partURLHandler *mediacmd.PresignUploadPartHandler,
 	completeUploadHandler *mediacmd.CompleteUploadHandler,
+	abortUploadHandler *mediacmd.AbortUploadHandler,
+	deleteHandler *mediacmd.DeleteMediaHandler,
+	restoreHandler *mediacmd.RestoreMediaHandler,
+	permanentDeleteHandler *mediacmd.PermanentDeleteMediaHandler,
+	emptyTrashHandler *mediacmd.EmptyTrashHandler,
 ) *MediaHandler {
 	return &MediaHandler{
-		favoriteHandler:       favoriteHandler,
-		unfavoriteHandler:     unfavoriteHandler,
-		listHandler:           listHandler,
-		initUploadHandler:     initUploadHandler,
-		partURLHandler:        partURLHandler,
-		completeUploadHandler: completeUploadHandler,
+		getHandler:             getHandler,
+		listHandler:            listHandler,
+		searchHandler:          searchHandler,
+		listTrashHandler:       listTrashHandler,
+		getDownloadURLHandler:  getDownloadURLHandler,
+		getThumbURLHandler:     getThumbURLHandler,
+		favoriteHandler:        favoriteHandler,
+		unfavoriteHandler:      unfavoriteHandler,
+		initUploadHandler:      initUploadHandler,
+		partURLHandler:         partURLHandler,
+		completeUploadHandler:  completeUploadHandler,
+		abortUploadHandler:     abortUploadHandler,
+		deleteHandler:          deleteHandler,
+		restoreHandler:         restoreHandler,
+		permanentDeleteHandler: permanentDeleteHandler,
+		emptyTrashHandler:      emptyTrashHandler,
 	}
+}
+
+func (h *MediaHandler) Get(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	result, err := h.getHandler.Execute(c.Request.Context(), mediaquery.GetMediaQuery{
+		UserID:  userID,
+		MediaID: mediaID,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.ToMediaResponse(result.Media))
 }
 
 func (h *MediaHandler) List(c *gin.Context) {
@@ -49,24 +104,15 @@ func (h *MediaHandler) List(c *gin.Context) {
 		return
 	}
 
-	limit := 50
-	if raw := c.Query("limit"); raw != "" {
-		value, err := strconv.Atoi(raw)
-		if err != nil {
-			writeError(c, errInvalidInput())
-			return
-		}
-		limit = value
+	favoritesOnly, err := parseBoolQuery(c, "favorites")
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
 	}
-
-	favoritesOnly := false
-	if raw := c.Query("favorites"); raw != "" {
-		value, err := strconv.ParseBool(raw)
-		if err != nil {
-			writeError(c, errInvalidInput())
-			return
-		}
-		favoritesOnly = value
+	limit, err := parseLimitQuery(c)
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
 	}
 
 	page, err := h.listHandler.Execute(c.Request.Context(), mediaquery.ListMediaQuery{
@@ -80,15 +126,128 @@ func (h *MediaHandler) List(c *gin.Context) {
 		return
 	}
 
-	items := make([]dto.MediaResponse, 0, len(page.Items))
-	for _, item := range page.Items {
-		items = append(items, dto.ToMediaResponse(item))
+	c.JSON(http.StatusOK, mediaPageResponse(page))
+}
+
+func (h *MediaHandler) Search(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+	limit, err := parseLimitQuery(c)
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"items":       items,
-		"next_cursor": page.NextCursor,
-		"total":       page.Total,
+	page, err := h.searchHandler.Execute(c.Request.Context(), mediaquery.SearchMediaQuery{
+		UserID: userID,
+		Query:  c.Query("q"),
+		Cursor: c.Query("cursor"),
+		Limit:  limit,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, mediaPageResponse(page))
+}
+
+func (h *MediaHandler) ListTrash(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+	limit, err := parseLimitQuery(c)
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	page, err := h.listTrashHandler.Execute(c.Request.Context(), mediaquery.ListTrashQuery{
+		UserID: userID,
+		Cursor: c.Query("cursor"),
+		Limit:  limit,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, mediaPageResponse(page))
+}
+
+func (h *MediaHandler) GetDownloadURL(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	ttlSeconds, err := parseIntQuery(c, "ttl")
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	result, err := h.getDownloadURLHandler.Execute(c.Request.Context(), mediaquery.GetMediaDownloadURLQuery{
+		UserID:     userID,
+		MediaID:    mediaID,
+		TTLSeconds: ttlSeconds,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AssetURLResponse{
+		URL:       result.URL,
+		ExpiresAt: result.ExpiresAt,
+	})
+}
+
+func (h *MediaHandler) GetThumbURL(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	ttlSeconds, err := parseIntQuery(c, "ttl")
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	result, err := h.getThumbURLHandler.Execute(c.Request.Context(), mediaquery.GetMediaThumbURLQuery{
+		UserID:     userID,
+		MediaID:    mediaID,
+		Size:       c.Query("size"),
+		TTLSeconds: ttlSeconds,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AssetURLResponse{
+		URL:       result.URL,
+		ExpiresAt: result.ExpiresAt,
 	})
 }
 
@@ -263,6 +422,165 @@ func (h *MediaHandler) CompleteUpload(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ToUploadCompleteResponse(result.Media))
 }
 
+func (h *MediaHandler) AbortUpload(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	if err := h.abortUploadHandler.Execute(c.Request.Context(), mediacmd.AbortUploadCommand{
+		UserID:  userID,
+		MediaID: mediaID,
+	}); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *MediaHandler) Delete(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	if err := h.deleteHandler.Execute(c.Request.Context(), mediacmd.DeleteMediaCommand{
+		UserID:  userID,
+		MediaID: mediaID,
+	}); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *MediaHandler) Restore(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	if err := h.restoreHandler.Execute(c.Request.Context(), mediacmd.RestoreMediaCommand{
+		UserID:  userID,
+		MediaID: mediaID,
+	}); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *MediaHandler) PermanentDelete(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	mediaID, err := parseMediaIDParam(c.Param("id"))
+	if err != nil {
+		writeError(c, errInvalidInput())
+		return
+	}
+
+	if err := h.permanentDeleteHandler.Execute(c.Request.Context(), mediacmd.PermanentDeleteMediaCommand{
+		UserID:  userID,
+		MediaID: mediaID,
+	}); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *MediaHandler) EmptyTrash(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c)
+	if !ok {
+		writeError(c, errUnauthorized())
+		return
+	}
+
+	if err := h.emptyTrashHandler.Execute(c.Request.Context(), mediacmd.EmptyTrashCommand{
+		UserID: userID,
+	}); err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func mediaPageResponse(page domain.MediaPage) gin.H {
+	items := make([]dto.MediaResponse, 0, len(page.Items))
+	for _, item := range page.Items {
+		items = append(items, dto.ToMediaResponse(item))
+	}
+
+	return gin.H{
+		"items":       items,
+		"next_cursor": page.NextCursor,
+		"total":       page.Total,
+	}
+}
+
 func parseMediaIDParam(raw string) (uuid.UUID, error) {
 	return uuid.Parse(raw)
+}
+
+func parseLimitQuery(c *gin.Context) (int, error) {
+	value, err := parseIntQuery(c, "limit")
+	if err != nil {
+		return 0, err
+	}
+	if value == 0 {
+		return 50, nil
+	}
+	if value < 0 {
+		return 0, domain.ErrInvalidInput
+	}
+
+	return value, nil
+}
+
+func parseIntQuery(c *gin.Context, name string) (int, error) {
+	raw := c.Query(name)
+	if raw == "" {
+		return 0, nil
+	}
+
+	return strconv.Atoi(raw)
+}
+
+func parseBoolQuery(c *gin.Context, name string) (bool, error) {
+	raw := c.Query(name)
+	if raw == "" {
+		return false, nil
+	}
+
+	return strconv.ParseBool(raw)
 }

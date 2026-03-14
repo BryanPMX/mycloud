@@ -60,6 +60,7 @@ node_modules/
 
 # Go cache and local tooling
 .gocache/
+.gomodcache/
 go.work.sum
 
 # Flutter and Dart generated files

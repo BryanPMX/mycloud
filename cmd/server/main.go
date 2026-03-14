@@ -79,14 +79,19 @@ func main() {
 	sessionStore := redisinfra.NewSessionStore(redisClient)
 	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
 	jobQueue := redisinfra.NewJobQueue(redisClient)
-	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck)
+	storageService := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck)
 	keyBuilder := minioinfra.NewKeyBuilder()
 
 	loginHandler := authcmd.NewLoginHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	refreshHandler := authcmd.NewRefreshHandler(userRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
+	getMediaHandler := mediaquery.NewGetMediaHandler(userRepo, mediaRepo, favoriteRepo)
 	listMediaHandler := mediaquery.NewListMediaHandler(userRepo, mediaRepo, favoriteRepo)
+	searchMediaHandler := mediaquery.NewSearchMediaHandler(userRepo, mediaRepo, favoriteRepo)
+	listTrashHandler := mediaquery.NewListTrashHandler(userRepo, mediaRepo, favoriteRepo)
+	getDownloadURLHandler := mediaquery.NewGetMediaDownloadURLHandler(userRepo, mediaRepo, storageService)
+	getThumbURLHandler := mediaquery.NewGetMediaThumbURLHandler(userRepo, mediaRepo, storageService)
 	getAlbumHandler := albumquery.NewGetAlbumHandler(userRepo, albumRepo)
 	listAlbumsHandler := albumquery.NewListAlbumsHandler(userRepo, albumRepo)
 	listAlbumMediaHandler := albumquery.NewListAlbumMediaHandler(userRepo, albumRepo, mediaRepo, favoriteRepo)
@@ -114,6 +119,11 @@ func main() {
 	)
 	partURLHandler := mediacmd.NewPresignUploadPartHandler(userRepo, storageService, uploadStore, 15*time.Minute)
 	completeUploadHandler := mediacmd.NewCompleteUploadHandler(userRepo, mediaRepo, jobRepo, jobQueue, storageService, uploadStore)
+	abortUploadHandler := mediacmd.NewAbortUploadHandler(userRepo, storageService, uploadStore)
+	deleteMediaHandler := mediacmd.NewDeleteMediaHandler(userRepo, mediaRepo)
+	restoreMediaHandler := mediacmd.NewRestoreMediaHandler(userRepo, mediaRepo)
+	permanentDeleteMediaHandler := mediacmd.NewPermanentDeleteMediaHandler(userRepo, mediaRepo, storageService)
+	emptyTrashHandler := mediacmd.NewEmptyTrashHandler(userRepo, mediaRepo, storageService)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		AppName:      cfg.AppName,
@@ -143,12 +153,22 @@ func main() {
 		),
 		UserHandler: handlers.NewUserHandler(getMeHandler),
 		MediaHandler: handlers.NewMediaHandler(
+			getMediaHandler,
 			listMediaHandler,
+			searchMediaHandler,
+			listTrashHandler,
+			getDownloadURLHandler,
+			getThumbURLHandler,
 			favoriteMediaHandler,
 			unfavoriteMediaHandler,
 			initUploadHandler,
 			partURLHandler,
 			completeUploadHandler,
+			abortUploadHandler,
+			deleteMediaHandler,
+			restoreMediaHandler,
+			permanentDeleteMediaHandler,
+			emptyTrashHandler,
 		),
 		CommentHandler: handlers.NewCommentHandler(listCommentsHandler, addCommentHandler, deleteCommentHandler),
 	})

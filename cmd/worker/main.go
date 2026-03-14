@@ -57,7 +57,7 @@ func main() {
 	jobQueue := redisinfra.NewJobQueue(redisClient)
 	jobRepo := postgres.NewJobRepository(db)
 	mediaRepo := postgres.NewMediaRepository(db)
-	storage := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck)
+	storage := minioinfra.NewStorageService(minioCore, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck)
 	scanner := clamav.NewScanner(cfg.ClamAVSocket)
 	keyBuilder := minioinfra.NewKeyBuilder()
 

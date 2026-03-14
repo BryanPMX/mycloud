@@ -23,6 +23,21 @@ type MediaRepository interface {
 	ApplyProcessingResult(ctx context.Context, id uuid.UUID, result MediaProcessingResult) error
 }
 
+type MediaReadRepository interface {
+	FindByIDForUser(ctx context.Context, id, userID uuid.UUID) (*Media, error)
+	SearchVisibleToUser(ctx context.Context, userID uuid.UUID, opts SearchMediaOptions) (MediaPage, error)
+}
+
+type MediaTrashRepository interface {
+	FindByIDIncludingDeleted(ctx context.Context, id uuid.UUID) (*Media, error)
+	FindOwnedByUserIncludingDeleted(ctx context.Context, id, userID uuid.UUID) (*Media, error)
+	ListTrashedOwnedByUser(ctx context.Context, userID uuid.UUID, opts ListTrashOptions) (MediaPage, error)
+	SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error
+	Restore(ctx context.Context, id uuid.UUID) error
+	HardDelete(ctx context.Context, id uuid.UUID) error
+	HardDeleteAllTrashedOwnedByUser(ctx context.Context, ownerID uuid.UUID) ([]*Media, error)
+}
+
 type AlbumRepository interface {
 	Create(ctx context.Context, album *Album) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Album, error)

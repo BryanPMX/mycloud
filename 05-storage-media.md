@@ -2,6 +2,12 @@
 
 ---
 
+Current implementation note on March 14, 2026:
+- direct multipart upload init, part presigning, completion, and abort are live
+- the worker promotes clean uploads into `fc-originals`, and `GET /media/:id/url` now presigns original-object reads
+- permanent delete and empty-trash flows now perform best-effort MinIO cleanup across staged/original/thumb keys
+- actual thumbnail generation/upload and WebSocket progress events are still pending, so `GET /media/:id/thumb` returns `404` until real objects exist in `fc-thumbs`
+
 ## 1. MinIO Configuration
 
 MinIO is an S3-compatible object store that runs on your Ubuntu server. It handles all binary storage — staged uploads, originals, generated thumbnails, and avatars.

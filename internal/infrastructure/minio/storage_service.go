@@ -2,6 +2,7 @@ package minio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,13 +20,15 @@ type StorageService struct {
 	core          *miniosdk.Core
 	uploadsBucket string
 	originalsBuck string
+	thumbsBucket  string
 }
 
-func NewStorageService(core *miniosdk.Core, uploadsBucket, originalsBucket string) *StorageService {
+func NewStorageService(core *miniosdk.Core, uploadsBucket, originalsBucket, thumbsBucket string) *StorageService {
 	return &StorageService{
 		core:          core,
 		uploadsBucket: uploadsBucket,
 		originalsBuck: originalsBucket,
+		thumbsBucket:  thumbsBucket,
 	}
 }
 
@@ -72,6 +75,10 @@ func (s *StorageService) CompleteUpload(ctx context.Context, key, uploadID strin
 
 func (s *StorageService) AbortUpload(ctx context.Context, key, uploadID string) error {
 	if err := s.core.AbortMultipartUpload(ctx, s.uploadsBucket, key, uploadID); err != nil {
+		code := miniosdk.ToErrorResponse(err).Code
+		if strings.EqualFold(code, "NoSuchUpload") {
+			return nil
+		}
 		return fmt.Errorf("abort multipart upload: %w", err)
 	}
 
@@ -93,11 +100,7 @@ func (s *StorageService) UploadExists(ctx context.Context, key string) (bool, er
 }
 
 func (s *StorageService) DeleteUpload(ctx context.Context, key string) error {
-	if err := s.core.RemoveObject(ctx, s.uploadsBucket, key, miniosdk.RemoveObjectOptions{}); err != nil {
-		return fmt.Errorf("delete upload object: %w", err)
-	}
-
-	return nil
+	return s.removeObjectIfExists(ctx, s.uploadsBucket, key, "delete upload object")
 }
 
 func (s *StorageService) OpenUpload(ctx context.Context, key string) (io.ReadCloser, error) {
@@ -124,4 +127,88 @@ func (s *StorageService) PromoteUpload(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+func (s *StorageService) PresignOriginalDownload(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.core.Client.PresignedGetObject(ctx, s.originalsBuck, key, ttl, nil)
+	if err != nil {
+		return "", fmt.Errorf("presign original download: %w", err)
+	}
+
+	return u.String(), nil
+}
+
+func (s *StorageService) PresignThumbnail(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.core.Client.PresignedGetObject(ctx, s.thumbsBucket, key, ttl, nil)
+	if err != nil {
+		return "", fmt.Errorf("presign thumbnail: %w", err)
+	}
+
+	return u.String(), nil
+}
+
+func (s *StorageService) OriginalExists(ctx context.Context, key string) (bool, error) {
+	return s.objectExists(ctx, s.originalsBuck, key, "stat original object")
+}
+
+func (s *StorageService) ThumbnailExists(ctx context.Context, key string) (bool, error) {
+	return s.objectExists(ctx, s.thumbsBucket, key, "stat thumbnail object")
+}
+
+func (s *StorageService) DeleteMediaAssets(ctx context.Context, media *domain.Media) error {
+	if media == nil {
+		return nil
+	}
+
+	var joined error
+	if media.OriginalKey != "" {
+		joined = errors.Join(
+			joined,
+			s.removeObjectIfExists(ctx, s.uploadsBucket, media.OriginalKey, "delete staged media object"),
+			s.removeObjectIfExists(ctx, s.originalsBuck, media.OriginalKey, "delete original media object"),
+		)
+	}
+
+	for _, key := range []string{
+		media.ThumbKeys.Small,
+		media.ThumbKeys.Medium,
+		media.ThumbKeys.Large,
+		media.ThumbKeys.Poster,
+	} {
+		if key == "" {
+			continue
+		}
+		joined = errors.Join(joined, s.removeObjectIfExists(ctx, s.thumbsBucket, key, "delete thumbnail object"))
+	}
+
+	return joined
+}
+
+func (s *StorageService) objectExists(ctx context.Context, bucket, key, action string) (bool, error) {
+	if _, err := s.core.StatObject(ctx, bucket, key, miniosdk.StatObjectOptions{}); err != nil {
+		if isObjectNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("%s: %w", action, err)
+	}
+
+	return true, nil
+}
+
+func (s *StorageService) removeObjectIfExists(ctx context.Context, bucket, key, action string) error {
+	if key == "" {
+		return nil
+	}
+	if err := s.core.RemoveObject(ctx, bucket, key, miniosdk.RemoveObjectOptions{}); err != nil && !isObjectNotFound(err) {
+		return fmt.Errorf("%s: %w", action, err)
+	}
+
+	return nil
+}
+
+func isObjectNotFound(err error) bool {
+	code := miniosdk.ToErrorResponse(err).Code
+	return strings.EqualFold(code, "NotFound") ||
+		strings.EqualFold(code, "NoSuchKey") ||
+		strings.EqualFold(code, "NoSuchObject")
 }

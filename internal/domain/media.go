@@ -13,6 +13,7 @@ const (
 	MediaStatusProcessing MediaStatus = "processing"
 	MediaStatusReady      MediaStatus = "ready"
 	MediaStatusFailed     MediaStatus = "failed"
+	TrashRetentionWindow              = 30 * 24 * time.Hour
 )
 
 type ThumbKeys struct {
@@ -48,6 +49,17 @@ type ListMediaOptions struct {
 	FavoritesOnly bool
 }
 
+type SearchMediaOptions struct {
+	Query  string
+	Cursor string
+	Limit  int
+}
+
+type ListTrashOptions struct {
+	Cursor string
+	Limit  int
+}
+
 type MediaPage struct {
 	Items      []*Media
 	NextCursor string
@@ -76,4 +88,13 @@ type MediaProcessingResult struct {
 	DurationSecs float64
 	ThumbKeys    ThumbKeys
 	Metadata     map[string]any
+}
+
+func (m Media) PurgesAt() *time.Time {
+	if m.DeletedAt == nil {
+		return nil
+	}
+
+	value := m.DeletedAt.Add(TrashRetentionWindow)
+	return &value
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,13 @@ import (
 	"github.com/yourorg/mycloud/internal/domain"
 	"github.com/yourorg/mycloud/pkg/pagination"
 )
+
+const mediaSelectColumns = `
+	m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
+	m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
+	m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
+	m.deleted_at, m.metadata
+`
 
 type MediaRepository struct {
 	db *pgxpool.Pool
@@ -74,74 +82,34 @@ func (r *MediaRepository) Create(ctx context.Context, media *domain.Media) error
 }
 
 func (r *MediaRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Media, error) {
-	const query = `
-		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
-		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
-		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
-		       m.deleted_at, m.metadata
+	return r.findOne(ctx, `
+		SELECT `+mediaSelectColumns+`
 		FROM media m
 		WHERE m.id = $1
 		  AND m.deleted_at IS NULL
-	`
-
-	row := mediaRow{}
-	if err := r.db.QueryRow(ctx, query, id).Scan(
-		&row.ID,
-		&row.OwnerID,
-		&row.Filename,
-		&row.MimeType,
-		&row.SizeBytes,
-		&row.Width,
-		&row.Height,
-		&row.DurationSecs,
-		&row.OriginalKey,
-		&row.ThumbSmallKey,
-		&row.ThumbMediumKey,
-		&row.ThumbLargeKey,
-		&row.ThumbPosterKey,
-		&row.Status,
-		&row.TakenAt,
-		&row.UploadedAt,
-		&row.DeletedAt,
-		&row.Metadata,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrNotFound
-		}
-
-		return nil, err
-	}
-
-	return row.toDomain()
+	`, id)
 }
 
-type mediaRow struct {
-	ID             uuid.UUID
-	OwnerID        uuid.UUID
-	Filename       string
-	MimeType       string
-	SizeBytes      int64
-	Width          *int
-	Height         *int
-	DurationSecs   *float64
-	OriginalKey    string
-	ThumbSmallKey  *string
-	ThumbMediumKey *string
-	ThumbLargeKey  *string
-	ThumbPosterKey *string
-	Status         string
-	TakenAt        *time.Time
-	UploadedAt     time.Time
-	DeletedAt      *time.Time
-	Metadata       []byte
+func (r *MediaRepository) FindByIDIncludingDeleted(ctx context.Context, id uuid.UUID) (*domain.Media, error) {
+	return r.findOne(ctx, `
+		SELECT `+mediaSelectColumns+`
+		FROM media m
+		WHERE m.id = $1
+	`, id)
+}
+
+func (r *MediaRepository) FindOwnedByUserIncludingDeleted(ctx context.Context, id, userID uuid.UUID) (*domain.Media, error) {
+	return r.findOne(ctx, `
+		SELECT `+mediaSelectColumns+`
+		FROM media m
+		WHERE m.id = $1
+		  AND m.owner_id = $2
+	`, id, userID)
 }
 
 func (r *MediaRepository) FindByIDForUser(ctx context.Context, id, userID uuid.UUID) (*domain.Media, error) {
-	const query = `
-		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
-		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
-		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
-		       m.deleted_at, m.metadata
+	return r.findOne(ctx, `
+		SELECT `+mediaSelectColumns+`
 		FROM media m
 		WHERE m.id = $1
 		  AND m.deleted_at IS NULL
@@ -156,60 +124,13 @@ func (r *MediaRepository) FindByIDForUser(ctx context.Context, id, userID uuid.U
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
-	`
-
-	row := mediaRow{}
-	if err := r.db.QueryRow(ctx, query, id, userID, uuid.Nil).Scan(
-		&row.ID,
-		&row.OwnerID,
-		&row.Filename,
-		&row.MimeType,
-		&row.SizeBytes,
-		&row.Width,
-		&row.Height,
-		&row.DurationSecs,
-		&row.OriginalKey,
-		&row.ThumbSmallKey,
-		&row.ThumbMediumKey,
-		&row.ThumbLargeKey,
-		&row.ThumbPosterKey,
-		&row.Status,
-		&row.TakenAt,
-		&row.UploadedAt,
-		&row.DeletedAt,
-		&row.Metadata,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrNotFound
-		}
-
-		return nil, err
-	}
-
-	return row.toDomain()
+	`, id, userID, uuid.Nil)
 }
 
 func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUID, opts domain.ListMediaOptions) (domain.MediaPage, error) {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	var (
-		cursorTime any
-		cursorID   any
-	)
-	if opts.Cursor != "" {
-		uploadedAt, id, err := pagination.DecodeTimeUUID(opts.Cursor)
-		if err != nil {
-			return domain.MediaPage{}, domain.ErrInvalidInput
-		}
-
-		cursorTime = uploadedAt
-		cursorID = id
+	limit, cursorTime, cursorID, err := decodePageCursor(opts.Cursor, opts.Limit)
+	if err != nil {
+		return domain.MediaPage{}, err
 	}
 
 	const countQuery = `
@@ -241,10 +162,7 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 	}
 
 	const listQuery = `
-		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
-		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
-		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
-		       m.deleted_at, m.metadata
+		SELECT ` + mediaSelectColumns + `
 		FROM media m
 		WHERE m.deleted_at IS NULL
 		  AND (
@@ -273,83 +191,122 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 	if err != nil {
 		return domain.MediaPage{}, err
 	}
-	defer rows.Close()
 
-	items := make([]*domain.Media, 0, limit+1)
-	for rows.Next() {
-		row := mediaRow{}
-		if err := rows.Scan(
-			&row.ID,
-			&row.OwnerID,
-			&row.Filename,
-			&row.MimeType,
-			&row.SizeBytes,
-			&row.Width,
-			&row.Height,
-			&row.DurationSecs,
-			&row.OriginalKey,
-			&row.ThumbSmallKey,
-			&row.ThumbMediumKey,
-			&row.ThumbLargeKey,
-			&row.ThumbPosterKey,
-			&row.Status,
-			&row.TakenAt,
-			&row.UploadedAt,
-			&row.DeletedAt,
-			&row.Metadata,
-		); err != nil {
-			return domain.MediaPage{}, err
-		}
+	return r.readMediaPage(rows, limit, func(item *domain.Media) (string, error) {
+		return pagination.EncodeTimeUUID(item.UploadedAt, item.ID)
+	}, total)
+}
 
-		item, err := row.toDomain()
-		if err != nil {
-			return domain.MediaPage{}, err
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
+func (r *MediaRepository) SearchVisibleToUser(ctx context.Context, userID uuid.UUID, opts domain.SearchMediaOptions) (domain.MediaPage, error) {
+	limit, cursorTime, cursorID, err := decodePageCursor(opts.Cursor, opts.Limit)
+	if err != nil {
 		return domain.MediaPage{}, err
 	}
 
-	nextCursor := ""
-	if len(items) > limit {
-		last := items[limit-1]
-		nextCursor, err = pagination.EncodeTimeUUID(last.UploadedAt, last.ID)
-		if err != nil {
-			return domain.MediaPage{}, err
-		}
-
-		items = items[:limit]
+	searchQuery := strings.TrimSpace(opts.Query)
+	if searchQuery == "" {
+		return domain.MediaPage{}, domain.ErrInvalidInput
 	}
 
-	return domain.MediaPage{
-		Items:      items,
-		NextCursor: nextCursor,
-		Total:      total,
-	}, nil
+	const countQuery = `
+		SELECT count(*)
+		FROM media m
+		WHERE m.deleted_at IS NULL
+		  AND (
+		    m.owner_id = $1
+		    OR EXISTS (
+		      SELECT 1
+		      FROM album_media am
+		      JOIN shares s ON s.album_id = am.album_id
+		      WHERE am.media_id = m.id
+		        AND s.shared_with IN ($1, $2)
+		        AND (s.expires_at IS NULL OR s.expires_at > now())
+		    )
+		  )
+		  AND m.search_vector @@ plainto_tsquery('english', $3)
+	`
+
+	var total int
+	if err := r.db.QueryRow(ctx, countQuery, userID, uuid.Nil, searchQuery).Scan(&total); err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	const listQuery = `
+		SELECT ` + mediaSelectColumns + `
+		FROM media m
+		WHERE m.deleted_at IS NULL
+		  AND (
+		    m.owner_id = $1
+		    OR EXISTS (
+		      SELECT 1
+		      FROM album_media am
+		      JOIN shares s ON s.album_id = am.album_id
+		      WHERE am.media_id = m.id
+		        AND s.shared_with IN ($1, $2)
+		        AND (s.expires_at IS NULL OR s.expires_at > now())
+		    )
+		  )
+		  AND m.search_vector @@ plainto_tsquery('english', $3)
+		  AND ($4::timestamptz IS NULL OR $5::uuid IS NULL OR (m.uploaded_at, m.id) < ($4, $5))
+		ORDER BY m.uploaded_at DESC, m.id DESC
+		LIMIT $6
+	`
+
+	rows, err := r.db.Query(ctx, listQuery, userID, uuid.Nil, searchQuery, cursorTime, cursorID, limit+1)
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	return r.readMediaPage(rows, limit, func(item *domain.Media) (string, error) {
+		return pagination.EncodeTimeUUID(item.UploadedAt, item.ID)
+	}, total)
+}
+
+func (r *MediaRepository) ListTrashedOwnedByUser(ctx context.Context, userID uuid.UUID, opts domain.ListTrashOptions) (domain.MediaPage, error) {
+	limit, cursorTime, cursorID, err := decodePageCursor(opts.Cursor, opts.Limit)
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	const countQuery = `
+		SELECT count(*)
+		FROM media m
+		WHERE m.owner_id = $1
+		  AND m.deleted_at IS NOT NULL
+	`
+
+	var total int
+	if err := r.db.QueryRow(ctx, countQuery, userID).Scan(&total); err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	const listQuery = `
+		SELECT ` + mediaSelectColumns + `
+		FROM media m
+		WHERE m.owner_id = $1
+		  AND m.deleted_at IS NOT NULL
+		  AND ($2::timestamptz IS NULL OR $3::uuid IS NULL OR (m.deleted_at, m.id) < ($2, $3))
+		ORDER BY m.deleted_at DESC, m.id DESC
+		LIMIT $4
+	`
+
+	rows, err := r.db.Query(ctx, listQuery, userID, cursorTime, cursorID, limit+1)
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	return r.readMediaPage(rows, limit, func(item *domain.Media) (string, error) {
+		if item.DeletedAt == nil {
+			return "", domain.ErrNotFound
+		}
+		return pagination.EncodeTimeUUID(item.DeletedAt.UTC(), item.ID)
+	}, total)
 }
 
 func (r *MediaRepository) ListByAlbum(ctx context.Context, albumID uuid.UUID, opts domain.ListMediaOptions) (domain.MediaPage, error) {
-	limit := opts.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	var (
-		cursorTime any
-		cursorID   any
-	)
-	if opts.Cursor != "" {
-		uploadedAt, id, err := pagination.DecodeTimeUUID(opts.Cursor)
-		if err != nil {
-			return domain.MediaPage{}, domain.ErrInvalidInput
-		}
-
-		cursorTime = uploadedAt
-		cursorID = id
+	limit, cursorTime, cursorID, err := decodePageCursor(opts.Cursor, opts.Limit)
+	if err != nil {
+		return domain.MediaPage{}, err
 	}
 
 	const countQuery = `
@@ -366,10 +323,7 @@ func (r *MediaRepository) ListByAlbum(ctx context.Context, albumID uuid.UUID, op
 	}
 
 	const listQuery = `
-		SELECT m.id, m.owner_id, m.filename, m.mime_type, m.size_bytes, m.width, m.height,
-		       m.duration_secs::float8, m.original_key, m.thumb_small_key, m.thumb_medium_key,
-		       m.thumb_large_key, m.thumb_poster_key, m.status, m.taken_at, m.uploaded_at,
-		       m.deleted_at, m.metadata
+		SELECT ` + mediaSelectColumns + `
 		FROM media m
 		JOIN album_media am ON am.media_id = m.id
 		WHERE am.album_id = $1
@@ -383,60 +337,80 @@ func (r *MediaRepository) ListByAlbum(ctx context.Context, albumID uuid.UUID, op
 	if err != nil {
 		return domain.MediaPage{}, err
 	}
+
+	return r.readMediaPage(rows, limit, func(item *domain.Media) (string, error) {
+		return pagination.EncodeTimeUUID(item.UploadedAt, item.ID)
+	}, total)
+}
+
+func (r *MediaRepository) SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error {
+	const query = `
+		UPDATE media
+		SET deleted_at = $2
+		WHERE id = $1
+		  AND deleted_at IS NULL
+	`
+
+	tag, err := r.db.Exec(ctx, query, id, deletedAt.UTC())
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *MediaRepository) Restore(ctx context.Context, id uuid.UUID) error {
+	const query = `
+		UPDATE media
+		SET deleted_at = NULL
+		WHERE id = $1
+		  AND deleted_at IS NOT NULL
+	`
+
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *MediaRepository) HardDelete(ctx context.Context, id uuid.UUID) error {
+	const query = `
+		DELETE FROM media
+		WHERE id = $1
+		  AND deleted_at IS NOT NULL
+	`
+
+	tag, err := r.db.Exec(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *MediaRepository) HardDeleteAllTrashedOwnedByUser(ctx context.Context, ownerID uuid.UUID) ([]*domain.Media, error) {
+	rows, err := r.db.Query(ctx, `
+		DELETE FROM media AS m
+		WHERE owner_id = $1
+		  AND deleted_at IS NOT NULL
+		RETURNING `+mediaSelectColumns, ownerID)
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 
-	items := make([]*domain.Media, 0, limit+1)
-	for rows.Next() {
-		row := mediaRow{}
-		if err := rows.Scan(
-			&row.ID,
-			&row.OwnerID,
-			&row.Filename,
-			&row.MimeType,
-			&row.SizeBytes,
-			&row.Width,
-			&row.Height,
-			&row.DurationSecs,
-			&row.OriginalKey,
-			&row.ThumbSmallKey,
-			&row.ThumbMediumKey,
-			&row.ThumbLargeKey,
-			&row.ThumbPosterKey,
-			&row.Status,
-			&row.TakenAt,
-			&row.UploadedAt,
-			&row.DeletedAt,
-			&row.Metadata,
-		); err != nil {
-			return domain.MediaPage{}, err
-		}
-
-		item, err := row.toDomain()
-		if err != nil {
-			return domain.MediaPage{}, err
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return domain.MediaPage{}, err
-	}
-
-	nextCursor := ""
-	if len(items) > limit {
-		last := items[limit-1]
-		nextCursor, err = pagination.EncodeTimeUUID(last.UploadedAt, last.ID)
-		if err != nil {
-			return domain.MediaPage{}, err
-		}
-
-		items = items[:limit]
-	}
-
-	return domain.MediaPage{
-		Items:      items,
-		NextCursor: nextCursor,
-		Total:      total,
-	}, nil
+	return scanMediaRows(rows)
 }
 
 func (r *MediaRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.MediaStatus) error {
@@ -501,6 +475,27 @@ func (r *MediaRepository) ApplyProcessingResult(ctx context.Context, id uuid.UUI
 	return nil
 }
 
+type mediaRow struct {
+	ID             uuid.UUID
+	OwnerID        uuid.UUID
+	Filename       string
+	MimeType       string
+	SizeBytes      int64
+	Width          *int
+	Height         *int
+	DurationSecs   *float64
+	OriginalKey    string
+	ThumbSmallKey  *string
+	ThumbMediumKey *string
+	ThumbLargeKey  *string
+	ThumbPosterKey *string
+	Status         string
+	TakenAt        *time.Time
+	UploadedAt     time.Time
+	DeletedAt      *time.Time
+	Metadata       []byte
+}
+
 func (r mediaRow) toDomain() (*domain.Media, error) {
 	var metadata map[string]any
 	if len(r.Metadata) > 0 {
@@ -534,6 +529,126 @@ func (r mediaRow) toDomain() (*domain.Media, error) {
 		DeletedAt:  r.DeletedAt,
 		Metadata:   metadata,
 	}, nil
+}
+
+func (r *MediaRepository) findOne(ctx context.Context, query string, args ...any) (*domain.Media, error) {
+	row := mediaRow{}
+	if err := r.db.QueryRow(ctx, query, args...).Scan(
+		&row.ID,
+		&row.OwnerID,
+		&row.Filename,
+		&row.MimeType,
+		&row.SizeBytes,
+		&row.Width,
+		&row.Height,
+		&row.DurationSecs,
+		&row.OriginalKey,
+		&row.ThumbSmallKey,
+		&row.ThumbMediumKey,
+		&row.ThumbLargeKey,
+		&row.ThumbPosterKey,
+		&row.Status,
+		&row.TakenAt,
+		&row.UploadedAt,
+		&row.DeletedAt,
+		&row.Metadata,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+
+		return nil, err
+	}
+
+	return row.toDomain()
+}
+
+func (r *MediaRepository) readMediaPage(
+	rows pgx.Rows,
+	limit int,
+	nextCursor func(*domain.Media) (string, error),
+	total int,
+) (domain.MediaPage, error) {
+	defer rows.Close()
+
+	items, err := scanMediaRows(rows)
+	if err != nil {
+		return domain.MediaPage{}, err
+	}
+
+	cursor := ""
+	if len(items) > limit {
+		cursor, err = nextCursor(items[limit-1])
+		if err != nil {
+			return domain.MediaPage{}, err
+		}
+		items = items[:limit]
+	}
+
+	return domain.MediaPage{
+		Items:      items,
+		NextCursor: cursor,
+		Total:      total,
+	}, nil
+}
+
+func scanMediaRows(rows pgx.Rows) ([]*domain.Media, error) {
+	items := make([]*domain.Media, 0)
+	for rows.Next() {
+		row := mediaRow{}
+		if err := rows.Scan(
+			&row.ID,
+			&row.OwnerID,
+			&row.Filename,
+			&row.MimeType,
+			&row.SizeBytes,
+			&row.Width,
+			&row.Height,
+			&row.DurationSecs,
+			&row.OriginalKey,
+			&row.ThumbSmallKey,
+			&row.ThumbMediumKey,
+			&row.ThumbLargeKey,
+			&row.ThumbPosterKey,
+			&row.Status,
+			&row.TakenAt,
+			&row.UploadedAt,
+			&row.DeletedAt,
+			&row.Metadata,
+		); err != nil {
+			return nil, err
+		}
+
+		item, err := row.toDomain()
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
+func decodePageCursor(cursor string, limit int) (int, any, any, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if cursor == "" {
+		return limit, nil, nil, nil
+	}
+
+	cursorTime, cursorID, err := pagination.DecodeTimeUUID(cursor)
+	if err != nil {
+		return 0, nil, nil, domain.ErrInvalidInput
+	}
+
+	return limit, cursorTime, cursorID, nil
 }
 
 func derefInt(value *int) int {

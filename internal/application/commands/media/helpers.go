@@ -47,3 +47,16 @@ func normalizeCompletedParts(parts []domain.CompletedPart) ([]domain.CompletedPa
 
 	return normalized, nil
 }
+
+func loadOwnedOrAdminMedia(
+	ctx context.Context,
+	repo domain.MediaTrashRepository,
+	user *domain.User,
+	mediaID uuid.UUID,
+) (*domain.Media, error) {
+	if user.IsAdmin() {
+		return repo.FindByIDIncludingDeleted(ctx, mediaID)
+	}
+
+	return repo.FindOwnedByUserIncludingDeleted(ctx, mediaID, user.ID)
+}

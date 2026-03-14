@@ -22,12 +22,14 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 - environment config, JWT/password helpers, and cursor pagination helpers
 - PostgreSQL pool + repositories for users, visible media, albums, shares, and comments
 - PostgreSQL favorites persistence plus favorite-aware media list reads
+- PostgreSQL search-vector, metadata, invite-token, and timeline index migration
 - Redis client + refresh session store
 - Postgres comments repository plus media comment flows
 - HTTP router, auth middleware, request IDs, and structured request logging
-- auth endpoints plus `GET /users/me`, `GET /media`, media favorite routes, album/share routes, and media comment routes
+- auth endpoints plus `GET /users/me`, media list/detail/search/trash routes, presigned original reads, media favorite routes, album/share routes, and media comment routes
 - album creation/listing/detail/update/delete, album-specific media listing, album-media membership changes, and share list/create/revoke flows
-- direct multipart upload init/complete flows with MinIO wiring
+- direct multipart upload init/part-url/complete/abort flows with MinIO wiring
+- trash restore/permanent-delete/empty-trash flows with best-effort MinIO asset cleanup
 - `process_media` queueing plus worker-side staging, scanning, and promotion
 - initial migrations and local API/Postgres/Redis/MinIO compose setup
 

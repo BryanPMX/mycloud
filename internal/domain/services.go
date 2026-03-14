@@ -25,6 +25,17 @@ type StorageService interface {
 	PromoteUpload(ctx context.Context, key string) error
 }
 
+type MediaAssetReader interface {
+	PresignOriginalDownload(ctx context.Context, key string, ttl time.Duration) (string, error)
+	PresignThumbnail(ctx context.Context, key string, ttl time.Duration) (string, error)
+	OriginalExists(ctx context.Context, key string) (bool, error)
+	ThumbnailExists(ctx context.Context, key string) (bool, error)
+}
+
+type MediaAssetCleaner interface {
+	DeleteMediaAssets(ctx context.Context, media *Media) error
+}
+
 type UploadSessionStore interface {
 	SaveUploadSession(ctx context.Context, session UploadSession, ttl time.Duration) error
 	GetUploadSession(ctx context.Context, mediaID uuid.UUID) (*UploadSession, error)

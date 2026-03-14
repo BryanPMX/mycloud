@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
 Current implementation status on March 14, 2026:
-- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`
+- Implemented now: `GET /health`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/users/me`, `GET /api/v1/media`, `GET /api/v1/media/search`, `GET /api/v1/media/trash`, `DELETE /api/v1/media/trash`, `GET /api/v1/media/:id`, `GET /api/v1/media/:id/url`, `GET /api/v1/media/:id/thumb`, `DELETE /api/v1/media/:id`, `POST /api/v1/media/:id/restore`, `DELETE /api/v1/media/:id/permanent`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`, `DELETE /api/v1/media/upload/:id`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -51,7 +51,7 @@ Pass `?cursor=<next_cursor>` to get the next page. Empty `next_cursor` = last pa
 
 ### Media DTO
 All media endpoints return this shape (abbreviated fields omitted where noted).
-Current implementation note on March 14, 2026: `is_favorite` is populated from the favorites table, while `thumb_urls` still expose stored object keys today; presigned asset URLs are part of the next media read-management slice.
+Current implementation note on March 14, 2026: `is_favorite` is populated from the favorites table, `deleted_at` / `purges_at` are included for trashed items, and `thumb_urls` still expose stored object keys. Use `GET /media/:id/url` and `GET /media/:id/thumb` for presigned reads.
 ```json
 {
   "id":            "uuid",
@@ -66,10 +66,12 @@ Current implementation note on March 14, 2026: `is_favorite` is populated from t
   "is_favorite":   true,
   "taken_at":      "2024-05-20T14:30:00Z",
   "uploaded_at":   "2024-06-15T10:00:00Z",
+  "deleted_at":    null,
+  "purges_at":     null,
   "thumb_urls": {
-    "small":  "https://your-server.com/...",
-    "medium": "https://your-server.com/...",
-    "large":  "https://your-server.com/...",
+    "small":  "550e8400-e29b-41d4-a716-446655440000/small.webp",
+    "medium": "550e8400-e29b-41d4-a716-446655440000/medium.webp",
+    "large":  "550e8400-e29b-41d4-a716-446655440000/large.webp",
     "poster": null
   }
 }
@@ -259,6 +261,8 @@ Current implementation note on March 14, 2026: `cursor`, `limit`, and `favorites
 ### GET /media/search
 Full-text search across filenames and metadata.
 
+Current implementation note on March 14, 2026: `q`, `cursor`, and `limit` are live today. Search uses the new Postgres `search_vector` support and still paginates by `uploaded_at` / `id`; the broader sort/filter options below remain planned.
+
 **Query Parameters**
 
 | Param | Type | Description |
@@ -410,6 +414,7 @@ Get presigned thumbnail URL(s).
 ```
 
 All thumbnails are private. Every thumbnail URL is presigned and short-lived.
+Current implementation note on March 14, 2026: the endpoint is live, but the worker still only records thumbnail keys today. Until actual thumbnail files are generated into `fc-thumbs`, this endpoint will return `404`.
 
 ---
 
