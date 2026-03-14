@@ -14,4 +14,4 @@ Recommended production topology for Mynube on March 14, 2026:
 - `portainer-stack.npm.yml` is the Portainer stack variant for servers that already use Nginx Proxy Manager on a shared external Docker network.
 - `portainer.env.example` is the environment-variable template to load into Portainer.
 - `nginx/mycloud.host-nginx.example.conf` is an example host-level nginx config for a server that already runs nginx outside Docker.
-- The Portainer stack uses GHCR images for `api`, `worker`, and a one-shot `migrate` job so the database schema can initialize without bind-mounting repo files.
+- The Portainer stack uses GHCR images for `api`, `worker`, and a one-shot `migrate` job so the database schema can initialize without bind-mounting repo files. The migrate image must bundle the SQL files under its working directory so `scripts/migrate.sh` can find `./migrations` at runtime.
