@@ -309,13 +309,13 @@ class _MainPanel extends StatelessWidget {
   String _subtitleForSection(AppSection section) {
     switch (section) {
       case AppSection.media:
-        return 'Live media reads, favorites, comments, and presigned thumbnail fetches.';
+        return 'Live media reads, multipart uploads, worker progress, favorites, comments, and presigned thumbnail fetches.';
       case AppSection.albums:
         return 'Owned and shared album lists now read from the live backend.';
       case AppSection.profile:
-        return 'Deployment endpoints, storage posture, and the remaining Flutter gaps.';
+        return 'Deployment endpoints, storage posture, and the remaining write/native Flutter gaps.';
       case AppSection.admin:
-        return 'Recent backend delivery, live system stats, and the next client continuation order.';
+        return 'Recent backend delivery, live system stats, and the post-upload continuation order.';
     }
   }
 }

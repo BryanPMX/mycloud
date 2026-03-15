@@ -1,10 +1,11 @@
 # 07 — Flutter Client Architecture
 
 Current implementation note on March 15, 2026:
-- `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, media reads, albums, comments, and admin stats all hit the live Go API by default.
+- `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, media reads, albums, comments, admin stats, browser multipart uploads, and worker progress updates all hit the live Go API and WebSocket surfaces by default.
 - `AppConfig` still targets `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. `USE_DEMO_DATA` now defaults to `false`; enable it explicitly for smoke tests or offline UI work.
-- The Flutter network layer now uses `package:http`, sends browser credentials on web, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
-- Recent repo logs plus the current backend handlers confirm the biggest remaining client gap is no longer auth or reads; it is multipart upload + `/ws/progress`, followed by the remaining write flows and native token persistence.
+- The Flutter network layer now uses `package:http`, sends browser credentials on web for API calls, uses a second non-credentialed browser client for presigned MinIO part uploads, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
+- The current file-picker implementation is intentionally web-first: it uses `FileUploadInputElement`, `Blob.slice`, and `FileReader.readAsArrayBuffer` so the browser can stream multipart chunks without adding another package. Native/mobile file picking and secure token persistence are still pending.
+- Recent repo logs plus the current backend handlers now point to the next biggest gaps as the remaining write flows, native token persistence, and broader admin tooling rather than upload transport.
 - The backend now also implements the documented CORS path through `ALLOWED_ORIGINS`, which is required for the Flutter web app to call `api.mynube.live` with cookies/credentials.
 - `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice.
 - Confirmed production domain plan remains: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
@@ -14,6 +15,10 @@ Reference docs used for the current live integration slice:
 - `MaterialApp.router`: [api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html](https://api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html)
 - Flutter networking cookbook: [docs.flutter.dev/cookbook/networking/authenticated-requests](https://docs.flutter.dev/cookbook/networking/authenticated-requests)
 - `package:http` browser credentials support: [pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html](https://pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html)
+- `dart:io` `WebSocket.connect`: [api.dart.dev/dart-io/WebSocket/connect.html](https://api.dart.dev/dart-io/WebSocket/connect.html)
+- `FileUploadInputElement.accept`: [api.dart.dev/dart-html/FileUploadInputElement/accept.html](https://api.dart.dev/dart-html/FileUploadInputElement/accept.html)
+- `Blob.slice`: [api.dart.dev/dart-html/Blob/slice.html](https://api.dart.dev/dart-html/Blob/slice.html)
+- `FileReader.readAsArrayBuffer`: [api.dart.dev/dart-html/FileReader/readAsArrayBuffer.html](https://api.dart.dev/dart-html/FileReader/readAsArrayBuffer.html)
 
 ---
 
@@ -26,13 +31,14 @@ lib/
 ├── core/
 │   ├── config/app_config.dart       # APP_BASE_URL / API_BASE_URL / WS_BASE_URL
 │   ├── network/api_client.dart      # Endpoint builder for the live backend
-│   ├── network/api_transport.dart   # Shared JSON transport + error mapping
-│   ├── network/http_client_factory* # Browser credentials / non-web client selection
+│   ├── network/api_transport.dart   # Shared JSON transport + raw PUT support
+│   ├── network/http_client_factory* # Credentialed API client + direct-upload client selection
 │   ├── router/app_router.dart       # RouterDelegate + auth restore loading state
+│   ├── websocket/                   # Authenticated progress socket + message parsing
 │   └── theme/app_theme.dart         # Material 3 theme and shell styling
 ├── features/
 │   ├── auth/                        # Live login + refresh + current-user restore
-│   ├── media/                       # Live media list/search/favorite/thumb UI
+│   ├── media/                       # Live library reads, uploads, favorites, and thumbs
 │   ├── albums/                      # Live owned/shared album overview UI
 │   ├── profile/                     # Endpoint/status + rollout checklist UI
 │   ├── admin/                       # Live stats + repo-log summary UI
@@ -59,11 +65,11 @@ dev_dependencies:
 
 ## 3. Recommended Next Flutter Continuation
 
-1. Add the multipart upload manager around `POST /media/upload/init`, `POST /media/upload/:id/part-url`, `POST /media/upload/:id/complete`, and `DELETE /media/upload/:id`.
-2. Subscribe to `GET /ws/progress` so pending uploads transition into real worker-driven processing states.
-3. Finish write flows for `PATCH /users/me`, `PUT /users/me/avatar`, album CRUD/sharing, and comment creation/deletion.
-4. Add secure native token persistence so mobile can restore sessions across app restarts without relying on cookies.
-5. Expand admin beyond stats by wiring `GET /admin/users`, invites, and account updates into real operator screens.
+1. Finish write flows for `PATCH /users/me`, `PUT /users/me/avatar`, album CRUD/sharing, and comment creation/deletion.
+2. Add secure native token persistence so mobile can restore sessions across app restarts without relying on cookies.
+3. Expand admin beyond stats by wiring `GET /admin/users`, invites, and account updates into real operator screens.
+4. Replace the temporary web-first file picker with the longer-term cross-platform media-selection approach once the native/mobile slice begins.
+5. Add deeper widget and integration coverage around uploads, reconnect handling, and the remaining mutations.
 
 ## 4. Target Architecture Reference
 

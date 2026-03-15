@@ -3,33 +3,48 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/websocket/upload_progress_hub.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/utils/file_size_formatter.dart';
 import '../../comments/domain/comment.dart';
 import '../../comments/providers/comment_provider.dart';
 import '../domain/media.dart';
+import '../domain/upload_task.dart';
 import '../providers/media_list_provider.dart';
+import '../providers/media_upload_provider.dart';
 
 class PhotoGridScreen extends StatelessWidget {
   const PhotoGridScreen({
     super.key,
     required this.mediaProvider,
+    required this.mediaUploadProvider,
     required this.commentProvider,
     required this.apiClient,
+    required this.uploadProgressHub,
   });
 
   final MediaListProvider mediaProvider;
+  final MediaUploadProvider mediaUploadProvider;
   final CommentProvider commentProvider;
   final ApiClient apiClient;
+  final UploadProgressHub uploadProgressHub;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[mediaProvider, commentProvider]),
+      animation: Listenable.merge(<Listenable>[
+        mediaProvider,
+        mediaUploadProvider,
+        commentProvider,
+        uploadProgressHub,
+      ]),
       builder: (context, _) {
         final theme = Theme.of(context);
         final items = mediaProvider.visibleItems;
         final selectedMedia = mediaProvider.selectedMedia;
+        final activeUploads = mediaUploadProvider.tasks
+            .where((task) => !task.isTerminal)
+            .length;
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -60,7 +75,7 @@ class PhotoGridScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'This surface now reads the real /media and /media/search endpoints, keeps favorites in sync, and resolves presigned thumbnail URLs as items become visible.',
+                                  'This surface now reads the real /media and /media/search endpoints, keeps favorites in sync, uploads files through the multipart API, and reflects worker processing via /ws/progress.',
                                   style: theme.textTheme.bodyLarge?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
@@ -96,7 +111,14 @@ class PhotoGridScreen extends StatelessWidget {
                                     : Icons.cloud_done_rounded,
                                 label: mediaProvider.isLoading
                                     ? 'Refreshing'
-                                    : apiClient.mediaListUri().path,
+                                    : '$activeUploads uploads',
+                              ),
+                              _MetricChip(
+                                icon: uploadProgressHub.isConnected
+                                    ? Icons.wifi_tethering_rounded
+                                    : Icons.portable_wifi_off_rounded,
+                                label:
+                                    'Progress ${uploadProgressHub.statusLabel}',
                               ),
                             ],
                           ),
@@ -135,6 +157,12 @@ class PhotoGridScreen extends StatelessWidget {
                         label: const Text('Refresh'),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 20),
+                  _UploadPanel(
+                    mediaUploadProvider: mediaUploadProvider,
+                    uploadProgressHub: uploadProgressHub,
+                    apiClient: apiClient,
                   ),
                   const SizedBox(height: 20),
                   if (mediaProvider.isLoading && items.isEmpty)
@@ -211,6 +239,266 @@ class PhotoGridScreen extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _UploadPanel extends StatelessWidget {
+  const _UploadPanel({
+    required this.mediaUploadProvider,
+    required this.uploadProgressHub,
+    required this.apiClient,
+  });
+
+  final MediaUploadProvider mediaUploadProvider;
+  final UploadProgressHub uploadProgressHub;
+  final ApiClient apiClient;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tasks = mediaUploadProvider.tasks.take(4).toList(growable: false);
+    final activeCount = mediaUploadProvider.tasks
+        .where((task) => !task.isTerminal)
+        .length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Multipart uploads',
+                        style: theme.textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Choose files from the browser, stream them directly to storage with presigned part URLs, then wait for the worker to scan and generate thumbnails before the items settle into the library.',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (mediaUploadProvider.errorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          mediaUploadProvider.errorMessage!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      if (uploadProgressHub.errorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          uploadProgressHub.errorMessage!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _MetricChip(
+                      icon: Icons.upload_file_rounded,
+                      label: '$activeCount active',
+                    ),
+                    _MetricChip(
+                      icon: uploadProgressHub.isConnected
+                          ? Icons.wifi_tethering_rounded
+                          : Icons.portable_wifi_off_rounded,
+                      label: '/ws/progress ${uploadProgressHub.statusLabel}',
+                    ),
+                    _MetricChip(
+                      icon: Icons.route_rounded,
+                      label: apiClient.uploadInitUri().path,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.icon(
+                  onPressed: mediaUploadProvider.isPickingFiles ||
+                          !mediaUploadProvider.canPickFiles
+                      ? null
+                      : () {
+                          mediaUploadProvider.pickAndUpload();
+                        },
+                  icon: mediaUploadProvider.isPickingFiles
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.upload_rounded),
+                  label: Text(
+                    mediaUploadProvider.isPickingFiles
+                        ? 'Choosing files...'
+                        : 'Upload from device',
+                  ),
+                ),
+                if (!uploadProgressHub.isConnected &&
+                    mediaUploadProvider.tasks.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: uploadProgressHub.retryNow,
+                    icon: const Icon(Icons.sync_rounded),
+                    label: const Text('Reconnect progress'),
+                  ),
+                Text(
+                  mediaUploadProvider.pickerHint,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (tasks.isEmpty)
+              Text(
+                'No uploads started yet.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              )
+            else
+              ...tasks.map(
+                (task) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _UploadTaskRow(
+                    task: task,
+                    onCancel: () {
+                      mediaUploadProvider.cancelUpload(task.localId);
+                    },
+                    onDismiss: () {
+                      mediaUploadProvider.dismissUpload(task.localId);
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadTaskRow extends StatelessWidget {
+  const _UploadTaskRow({
+    required this.task,
+    required this.onCancel,
+    required this.onDismiss,
+  });
+
+  final MediaUploadTask task;
+  final VoidCallback onCancel;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(task.filename, style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${FileSizeFormatter.compact(task.sizeBytes)} • ${DateFormatter.relative(task.createdAt)}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _TinyBadge(label: task.stage.label),
+              if (task.canCancel)
+                IconButton(
+                  onPressed: onCancel,
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Cancel upload',
+                )
+              else if (task.canDismiss)
+                IconButton(
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.check_rounded),
+                  tooltip: 'Dismiss upload',
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (task.stage == MediaUploadStage.processing)
+            const LinearProgressIndicator()
+          else
+            LinearProgressIndicator(value: task.progress.clamp(0, 1)),
+          const SizedBox(height: 10),
+          Text(
+            task.message ?? _defaultUploadMessage(task),
+            style: theme.textTheme.bodyMedium,
+          ),
+          if (task.totalParts > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              '${task.completedParts} of ${task.totalParts} parts uploaded',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _defaultUploadMessage(MediaUploadTask task) {
+    switch (task.stage) {
+      case MediaUploadStage.queued:
+        return 'Waiting to start.';
+      case MediaUploadStage.initializing:
+        return 'Creating the multipart upload session.';
+      case MediaUploadStage.uploading:
+        return 'Uploading file parts directly to storage.';
+      case MediaUploadStage.processing:
+        return 'Waiting for virus scan, metadata extraction, and thumbnails.';
+      case MediaUploadStage.complete:
+        return 'Upload finished and processing is complete.';
+      case MediaUploadStage.failed:
+        return 'Upload failed.';
+      case MediaUploadStage.cancelled:
+        return 'Upload cancelled.';
+    }
   }
 }
 

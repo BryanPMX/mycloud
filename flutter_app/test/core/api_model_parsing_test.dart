@@ -2,6 +2,7 @@ import 'package:familycloud/features/admin/domain/admin_stats.dart';
 import 'package:familycloud/features/auth/domain/user.dart';
 import 'package:familycloud/features/comments/domain/comment.dart';
 import 'package:familycloud/features/media/domain/media.dart';
+import 'package:familycloud/core/websocket/upload_progress_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -83,5 +84,24 @@ void main() {
     expect(stats.totalUsers, 52);
     expect(stats.pendingJobs, 3);
     expect(stats.pctUsed, 0.25);
+  });
+
+  test('UploadProgressEvent.fromJson maps worker websocket payloads', () {
+    final event = UploadProgressEvent.fromJson(<String, dynamic>{
+      'type': 'processing_complete',
+      'media_id': 'media-1',
+      'status': 'ready',
+      'thumb_urls': <String, dynamic>{
+        'small': 'media-1/small.webp',
+        'medium': 'media-1/medium.webp',
+        'poster': 'media-1/poster.webp',
+      },
+    });
+
+    expect(event.type, UploadProgressEventType.processingComplete);
+    expect(event.mediaId, 'media-1');
+    expect(event.status, 'ready');
+    expect(event.thumbKeys?.medium, 'media-1/medium.webp');
+    expect(event.thumbKeys?.poster, 'media-1/poster.webp');
   });
 }

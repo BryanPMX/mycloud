@@ -56,25 +56,33 @@ class ApiTransport {
     );
   }
 
+  Future<ApiPayload> putBytes(
+    Uri uri, {
+    required List<int> body,
+    Map<String, String>? headers,
+  }) {
+    final request = http.Request('PUT', uri)
+      ..headers.addAll(<String, String>{
+        'Content-Type': 'application/octet-stream',
+        ...?headers,
+      })
+      ..bodyBytes = body;
+
+    return send(request);
+  }
+
+  Future<ApiPayload> send(http.BaseRequest request) {
+    return _sendStreamed(
+      () => _client.send(request),
+    );
+  }
+
   Future<ApiPayload> _send(
     Future<http.Response> Function() request,
   ) async {
     try {
       final response = await request();
-      final payload = _decodeBody(response.body);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException(
-          statusCode: response.statusCode,
-          message: _messageFromPayload(payload),
-          code: _codeFromPayload(payload),
-        );
-      }
-
-      return ApiPayload(
-        statusCode: response.statusCode,
-        headers: response.headers,
-        body: payload,
-      );
+      return _parseResponse(response);
     } on ApiException {
       rethrow;
     } on Exception {
@@ -83,6 +91,39 @@ class ApiTransport {
         message: 'Unable to reach the API.',
       );
     }
+  }
+
+  Future<ApiPayload> _sendStreamed(
+    Future<http.StreamedResponse> Function() request,
+  ) async {
+    try {
+      final response = await request();
+      return _parseResponse(await http.Response.fromStream(response));
+    } on ApiException {
+      rethrow;
+    } on Exception {
+      throw const ApiException(
+        statusCode: 0,
+        message: 'Unable to reach the API.',
+      );
+    }
+  }
+
+  ApiPayload _parseResponse(http.Response response) {
+    final payload = _decodeBody(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(
+        statusCode: response.statusCode,
+        message: _messageFromPayload(payload),
+        code: _codeFromPayload(payload),
+      );
+    }
+
+    return ApiPayload(
+      statusCode: response.statusCode,
+      headers: response.headers,
+      body: payload,
+    );
   }
 
   Map<String, String> _jsonHeaders(Map<String, String>? headers) {

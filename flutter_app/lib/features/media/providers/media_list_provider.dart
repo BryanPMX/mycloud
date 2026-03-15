@@ -368,6 +368,89 @@ class MediaListProvider extends ChangeNotifier {
     }
   }
 
+  void insertPendingUpload({
+    required String mediaId,
+    required String ownerId,
+    required String filename,
+    required String mimeType,
+    required int sizeBytes,
+  }) {
+    final placeholder = Media(
+      id: mediaId,
+      ownerId: ownerId,
+      filename: filename,
+      mimeType: mimeType,
+      sizeBytes: sizeBytes,
+      width: 0,
+      height: 0,
+      durationSecs: 0,
+      status: MediaStatus.pending,
+      isFavorite: false,
+      uploadedAt: DateTime.now().toUtc(),
+      thumbUrls: const ThumbUrls(),
+    );
+
+    _upsertMedia(placeholder, insertAtTop: true);
+    notifyListeners();
+  }
+
+  void updateProcessingStatus(
+    String mediaId, {
+    required MediaStatus status,
+    String? smallThumbKey,
+    String? mediumThumbKey,
+    String? largeThumbKey,
+    String? posterThumbKey,
+  }) {
+    final index = _items.indexWhere((media) => media.id == mediaId);
+    if (index == -1) {
+      return;
+    }
+
+    final current = _items[index];
+    final updated = current.copyWith(
+      status: status,
+      thumbUrls: ThumbUrls(
+        small: smallThumbKey ?? current.thumbUrls.small,
+        medium: mediumThumbKey ?? current.thumbUrls.medium,
+        large: largeThumbKey ?? current.thumbUrls.large,
+        poster: posterThumbKey ?? current.thumbUrls.poster,
+      ),
+    );
+    _items[index] = updated;
+
+    if (status != MediaStatus.ready) {
+      _thumbnailUrls.remove(mediaId);
+    } else {
+      unawaited(ensureThumbnailLoaded(updated));
+    }
+
+    _syncSelectedMedia();
+    notifyListeners();
+  }
+
+  Future<void> refreshMediaItem(String mediaId) async {
+    if (_config.useDemoData) {
+      return;
+    }
+
+    try {
+      final response = await _authProvider.withAuthorization(
+        (headers) => _transport.get(
+          _apiClient.mediaDetailUri(mediaId),
+          headers: headers,
+        ),
+      );
+      final media = Media.fromJson(response.asMap());
+      if (_upsertMedia(media, insertAtTop: true) && media.status == MediaStatus.ready) {
+        unawaited(ensureThumbnailLoaded(media));
+      }
+      notifyListeners();
+    } catch (_) {
+      // Keep the optimistic placeholder if the detail refresh fails.
+    }
+  }
+
   void reset() {
     _searchDebounce?.cancel();
     _query = '';
@@ -383,6 +466,40 @@ class MediaListProvider extends ChangeNotifier {
       ..addAll(_config.useDemoData ? _seedItems : const <Media>[]);
     _selectedMediaId = _items.isEmpty ? null : _items.first.id;
     notifyListeners();
+  }
+
+  bool _upsertMedia(Media media, {required bool insertAtTop}) {
+    final index = _items.indexWhere((item) => item.id == media.id);
+    if (index == -1) {
+      if (!_shouldInsertMedia(media)) {
+        return false;
+      }
+
+      if (insertAtTop) {
+        _items.insert(0, media);
+      } else {
+        _items.add(media);
+      }
+    } else {
+      _items[index] = media;
+    }
+
+    _syncSelectedMedia();
+    return true;
+  }
+
+  bool _shouldInsertMedia(Media media) {
+    if (_favoritesOnly && !media.isFavorite) {
+      return false;
+    }
+
+    final normalizedQuery = _query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) {
+      return true;
+    }
+
+    return media.filename.toLowerCase().contains(normalizedQuery) ||
+        media.mimeType.toLowerCase().contains(normalizedQuery);
   }
 
   void _syncSelectedMedia() {

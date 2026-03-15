@@ -68,24 +68,18 @@ class AdminDashboardProvider extends ChangeNotifier {
     ),
     DeliveryLogEntry(
       dateLabel: 'Mar 15, 2026',
-      title: 'Flutter live-read integration in progress',
+      title: 'Flutter multipart uploads and worker progress landed',
       description:
-          'The client now prioritizes real auth, media, albums, comments, and admin stats instead of seeded placeholders.',
+          'The client now uploads through the real multipart API, watches /ws/progress, and reconciles pending uploads back into the live media library.',
     ),
   ];
 
   final List<FlutterContinuation> nextFlutterContinuations =
       const <FlutterContinuation>[
     FlutterContinuation(
-      title: 'Finish multipart uploads and /ws/progress',
-      description:
-          'That is now the biggest missing feature gap between the live backend and the Flutter client.',
-      isHighestPriority: true,
-    ),
-    FlutterContinuation(
       title: 'Land write flows for profile, comments, and album management',
       description:
-          'The read surfaces are in place, so the next step is mutation UX, validation, and optimistic updates.',
+          'The upload path is live now, so the next highest-value work is mutation UX, validation, and optimistic updates for the remaining user-facing writes.',
       isHighestPriority: true,
     ),
     FlutterContinuation(
@@ -98,6 +92,12 @@ class AdminDashboardProvider extends ChangeNotifier {
       title: 'Expand admin beyond stats',
       description:
           'GET /admin/users, invite delivery, and account updates are ready to be surfaced in operator screens next.',
+      isHighestPriority: false,
+    ),
+    FlutterContinuation(
+      title: 'Deepen automated coverage around live flows',
+      description:
+          'The next confidence win is widget and integration coverage for upload happy paths, reconnect handling, and the remaining live mutations.',
       isHighestPriority: false,
     ),
   ];

@@ -178,6 +178,28 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, String>> websocketHeaders() async {
+    if (_config.useDemoData || !_currentUserIsActive) {
+      return const <String, String>{};
+    }
+
+    if (kIsWeb) {
+      return const <String, String>{};
+    }
+
+    if (_accessToken == null || _accessToken!.trim().isEmpty) {
+      final refreshed = await _refreshSession();
+      if (!refreshed) {
+        _clearSession();
+        _status = AuthStatus.signedOut;
+        notifyListeners();
+        return const <String, String>{};
+      }
+    }
+
+    return _authorizationHeaders();
+  }
+
   Future<User> _restoreCurrentUser() async {
     try {
       return await _fetchCurrentUser();
@@ -258,6 +280,8 @@ class AuthProvider extends ChangeNotifier {
       'Authorization': 'Bearer $_accessToken',
     };
   }
+
+  bool get _currentUserIsActive => _currentUser != null;
 
   void _clearSession() {
     _currentUser = null;

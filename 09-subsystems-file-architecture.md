@@ -16,7 +16,7 @@ The goal is to keep the first implementation pass clear and lightweight without 
 
 ## Current Status
 
-As of March 14, 2026, the following starter work is now implemented for MyCloud:
+As of March 15, 2026, the following starter work is now implemented for MyCloud:
 
 - backend core domain models and repository contracts
 - environment config, JWT/password helpers, and cursor pagination helpers
@@ -33,11 +33,11 @@ As of March 14, 2026, the following starter work is now implemented for MyCloud:
 - trash restore/permanent-delete/empty-trash flows with best-effort MinIO asset cleanup
 - `process_media` queueing plus worker-side staging, scanning, and promotion
 - initial migrations and local API/Postgres/Redis/MinIO compose setup
-- Flutter app runtime wiring via `MaterialApp.router`, environment-backed config, adaptive shell navigation, seeded contract-aligned feature models, and an initial widget smoke test
+- Flutter app runtime wiring via `MaterialApp.router`, environment-backed config, adaptive shell navigation, live read providers, browser multipart upload orchestration, worker-progress WebSocket reconciliation, and focused widget/unit test coverage
 
 Still intentionally pending:
 
-- live Flutter auth/media/upload API integration, secure token storage, invite acceptance, and the richer mobile/offline slices
+- the remaining Flutter write flows, secure native token storage, richer admin/operator screens, and the broader mobile/offline slices
 
 ---
 

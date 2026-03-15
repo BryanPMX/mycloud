@@ -28,8 +28,10 @@ class ProfileProvider extends ChangeNotifier {
         ProfileEndpoint(label: 'Login', uri: apiClient.loginUri()),
         ProfileEndpoint(label: 'Current user', uri: apiClient.currentUserUri()),
         ProfileEndpoint(label: 'Media list', uri: apiClient.mediaListUri()),
+        ProfileEndpoint(label: 'Upload init', uri: apiClient.uploadInitUri()),
         ProfileEndpoint(label: 'Albums', uri: apiClient.albumsUri()),
         ProfileEndpoint(label: 'Admin stats', uri: apiClient.adminStatsUri()),
+        ProfileEndpoint(label: 'Progress socket', uri: config.websocketUri),
       ];
 
   List<RolloutStep> get rolloutSteps => const [
@@ -54,13 +56,13 @@ class ProfileProvider extends ChangeNotifier {
         RolloutStep(
           title: 'Multipart upload and processing events',
           description:
-              'Implement the /media/upload lifecycle and consume /ws/progress for worker-side processing status.',
-          done: false,
+              'Flutter web now creates multipart upload sessions, streams parts directly to storage, inserts pending library items, and listens to /ws/progress for worker-side processing changes.',
+          done: true,
         ),
         RolloutStep(
-          title: 'Write flows and native session persistence',
+          title: 'Write flows, native persistence, and admin controls',
           description:
-              'Profile edits, album management, comment creation, and secure mobile token storage are the next production-grade client gaps.',
+              'Profile edits, avatar updates, album mutations, comment writes, secure mobile token storage, and admin user-management screens are the next production-grade client gaps.',
           done: false,
         ),
       ];

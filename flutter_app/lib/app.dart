@@ -7,11 +7,13 @@ import 'core/network/api_client.dart';
 import 'core/network/api_transport.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/websocket/upload_progress_hub.dart';
 import 'features/admin/providers/admin_dashboard_provider.dart';
 import 'features/albums/providers/album_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/comments/providers/comment_provider.dart';
 import 'features/media/providers/media_list_provider.dart';
+import 'features/media/providers/media_upload_provider.dart';
 import 'features/profile/providers/profile_provider.dart';
 
 class App extends StatefulWidget {
@@ -28,10 +30,12 @@ class _AppState extends State<App> {
   late final ApiClient _apiClient;
   late final AuthProvider _authProvider;
   late final MediaListProvider _mediaProvider;
+  late final MediaUploadProvider _mediaUploadProvider;
   late final AlbumProvider _albumProvider;
   late final CommentProvider _commentProvider;
   late final AdminDashboardProvider _adminProvider;
   late final ProfileProvider _profileProvider;
+  late final UploadProgressHub _uploadProgressHub;
   late final AppRouter _router;
 
   String? _bootstrappedUserId;
@@ -52,6 +56,13 @@ class _AppState extends State<App> {
       apiClient: _apiClient,
       transport: _transport,
       authProvider: _authProvider,
+    );
+    _mediaUploadProvider = MediaUploadProvider(
+      config: widget.config,
+      apiClient: _apiClient,
+      transport: _transport,
+      authProvider: _authProvider,
+      mediaProvider: _mediaProvider,
     );
     _albumProvider = AlbumProvider(
       config: widget.config,
@@ -77,15 +88,23 @@ class _AppState extends State<App> {
       authProvider: _authProvider,
       adminProvider: _adminProvider,
     );
+    _uploadProgressHub = UploadProgressHub(
+      config: widget.config,
+      authProvider: _authProvider,
+      mediaProvider: _mediaProvider,
+      uploadProvider: _mediaUploadProvider,
+    );
     _router = AppRouter(
       appConfig: widget.config,
       apiClient: _apiClient,
       authProvider: _authProvider,
       mediaProvider: _mediaProvider,
+      mediaUploadProvider: _mediaUploadProvider,
       albumProvider: _albumProvider,
       commentProvider: _commentProvider,
       profileProvider: _profileProvider,
       adminProvider: _adminProvider,
+      uploadProgressHub: _uploadProgressHub,
     );
     _authProvider.addListener(_handleAuthChanged);
     _mediaProvider.addListener(_handleSelectedMediaChanged);
@@ -97,10 +116,12 @@ class _AppState extends State<App> {
     _mediaProvider.removeListener(_handleSelectedMediaChanged);
     _authProvider.removeListener(_handleAuthChanged);
     _router.dispose();
+    _uploadProgressHub.dispose();
     _profileProvider.dispose();
     _adminProvider.dispose();
     _commentProvider.dispose();
     _albumProvider.dispose();
+    _mediaUploadProvider.dispose();
     _mediaProvider.dispose();
     _authProvider.dispose();
     _transport.dispose();
@@ -125,6 +146,7 @@ class _AppState extends State<App> {
     if (user == null) {
       _bootstrappedUserId = null;
       _observedMediaId = null;
+      _mediaUploadProvider.reset();
       _mediaProvider.reset();
       _albumProvider.reset();
       _commentProvider.clear();

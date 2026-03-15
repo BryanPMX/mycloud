@@ -2,4 +2,4 @@
 
 Media state providers live here.
 
-Use this directory for list state, item state, upload state, trash state, and download state.
+Use this directory for list state, item state, upload queue state, trash state, and download state.

@@ -247,7 +247,7 @@ class _IntroPanel extends StatelessWidget {
             Text(
               config.useDemoData
                   ? 'Demo mode mirrors the live contracts while keeping the app deterministic for local walkthroughs and tests.'
-                  : 'Recent repository logs show the backend is ready for client auth, media reads, albums, comments, admin stats, uploads, and worker progress. The current client now starts that live integration path.',
+                  : 'Recent repository logs show the backend is ready for client auth, media reads, albums, comments, admin stats, uploads, and worker progress. This client now exercises those live reads plus the browser multipart upload path.',
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.5,
@@ -265,9 +265,9 @@ class _IntroPanel extends StatelessWidget {
                   'The UI switches between NavigationBar and NavigationRail based on available width.',
             ),
             const _CheckItem(
-              title: 'Next recommended work',
+              title: 'Latest delivery',
               detail:
-                  'Finish uploads, worker progress, and the remaining write flows now that live auth and reads are landing.',
+                  'Browser multipart uploads and worker progress are now wired; the next step is finishing profile, album, comment, and admin write flows.',
             ),
           ],
         ),

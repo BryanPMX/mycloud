@@ -2,4 +2,4 @@
 
 HTTP client infrastructure lives here.
 
-Use this directory for endpoint builders, transport error mapping, browser credential handling, and auth-aware retry behavior.
+Use this directory for endpoint builders, transport error mapping, credential-aware browser clients, direct-upload transports, and auth-aware retry behavior.

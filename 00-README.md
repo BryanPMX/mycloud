@@ -28,7 +28,7 @@ MyCloud is a **private, high-quality media cloud** for up to 50+ family members,
 
 ## Current Implementation Status
 
-As of March 14, 2026, the repository includes the current working backend and Flutter foundation slices:
+As of March 15, 2026, the repository includes the current working backend and Flutter integration slices:
 
 - runtime config loading from environment variables
 - PostgreSQL, Redis, and MinIO wiring in the API composition root
@@ -52,10 +52,10 @@ As of March 14, 2026, the repository includes the current working backend and Fl
 - worker-side staged upload scanning, promotion to originals, real WebP thumbnail generation, richer metadata extraction, and media row finalization
 - SMTP invite delivery when SMTP transport is configured, with Mailpit-friendly local defaults in `.env.example`
 - focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, invite acceptance, admin mutations, media upload commands, favorites, albums, and shares
-- Flutter `MaterialApp.router` foundation shell with SDK-only routing, adaptive `NavigationBar`/`NavigationRail` layout, seeded auth/media/album/profile/admin screens, and environment-backed endpoint config
-- Flutter smoke coverage for boot, demo sign-in, and route navigation in `flutter_app/test/core/smoke_test.dart`
+- Flutter `MaterialApp.router` shell with SDK-only routing, adaptive `NavigationBar`/`NavigationRail` layout, live auth restore, live media/albums/comments/admin-stats reads, browser multipart upload orchestration, `/ws/progress` reconciliation, and environment-backed endpoint config
+- Flutter smoke coverage for boot, demo sign-in, and route navigation plus DTO parsing coverage for API and worker progress payloads in `flutter_app/test/core/`
 
-The Flutter client now has a validated shell and screen structure. Live API wiring, uploads, secure storage, offline behavior, and the remaining infrastructure extras are still planned work unless a section explicitly says otherwise.
+The Flutter client now has validated live reads plus the browser upload/progress path. The biggest remaining client work is the remaining write flows, secure native token persistence, richer admin screens, and the longer-term mobile/offline slices unless a section explicitly says otherwise.
 
 ### Design Goals
 

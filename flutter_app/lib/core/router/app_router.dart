@@ -8,12 +8,14 @@ import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/ui/login_screen.dart';
 import '../../features/comments/providers/comment_provider.dart';
 import '../../features/media/providers/media_list_provider.dart';
+import '../../features/media/providers/media_upload_provider.dart';
 import '../../features/media/ui/photo_grid_screen.dart';
 import '../../features/profile/providers/profile_provider.dart';
 import '../../features/profile/ui/profile_screen.dart';
 import '../../shared/widgets/main_scaffold.dart';
 import '../config/app_config.dart';
 import '../network/api_client.dart';
+import '../websocket/upload_progress_hub.dart';
 
 enum AppSection { media, albums, profile, admin }
 
@@ -87,10 +89,12 @@ class AppRouter extends RouterDelegate<AppRoutePath>
     required this.apiClient,
     required this.authProvider,
     required this.mediaProvider,
+    required this.mediaUploadProvider,
     required this.albumProvider,
     required this.commentProvider,
     required this.profileProvider,
     required this.adminProvider,
+    required this.uploadProgressHub,
   }) {
     authProvider.addListener(_handleAuthChanged);
   }
@@ -99,10 +103,12 @@ class AppRouter extends RouterDelegate<AppRoutePath>
   final ApiClient apiClient;
   final AuthProvider authProvider;
   final MediaListProvider mediaProvider;
+  final MediaUploadProvider mediaUploadProvider;
   final AlbumProvider albumProvider;
   final CommentProvider commentProvider;
   final ProfileProvider profileProvider;
   final AdminDashboardProvider adminProvider;
+  final UploadProgressHub uploadProgressHub;
 
   @override
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -210,8 +216,10 @@ class AppRouter extends RouterDelegate<AppRoutePath>
       case AppSection.media:
         return PhotoGridScreen(
           mediaProvider: mediaProvider,
+          mediaUploadProvider: mediaUploadProvider,
           commentProvider: commentProvider,
           apiClient: apiClient,
+          uploadProgressHub: uploadProgressHub,
         );
       case AppSection.albums:
         return AlbumListScreen(albumProvider: albumProvider);

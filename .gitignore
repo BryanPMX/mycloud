@@ -20,6 +20,13 @@ certs/
 tmp/
 .tmp/
 data/
+!flutter_app/lib/features/media/data/
+flutter_app/lib/features/media/data/*
+!flutter_app/lib/features/media/data/README.md
+!flutter_app/lib/features/media/data/selected_upload_file.dart
+!flutter_app/lib/features/media/data/upload_picker.dart
+!flutter_app/lib/features/media/data/upload_picker_io.dart
+!flutter_app/lib/features/media/data/upload_picker_web.dart
 storage/
 uploads/
 originals/

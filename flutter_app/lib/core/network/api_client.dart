@@ -15,7 +15,11 @@ class ApiClient {
 
   Uri currentUserUri() => endpoint('/users/me');
 
+  Uri currentUserAvatarUri() => endpoint('/users/me/avatar');
+
   Uri mediaListUri() => endpoint('/media');
+
+  Uri mediaDetailUri(String mediaId) => endpoint('/media/$mediaId');
 
   Uri mediaSearchUri(String query) =>
       endpoint('/media/search', queryParameters: {'q': query});
@@ -53,6 +57,13 @@ class ApiClient {
   Uri favoriteMediaUri(String mediaId) => endpoint('/media/$mediaId/favorite');
 
   Uri uploadInitUri() => endpoint('/media/upload/init');
+
+  Uri uploadPartUri(String mediaId) => endpoint('/media/upload/$mediaId/part-url');
+
+  Uri uploadCompleteUri(String mediaId) =>
+      endpoint('/media/upload/$mediaId/complete');
+
+  Uri abortUploadUri(String mediaId) => endpoint('/media/upload/$mediaId');
 
   Uri endpoint(String path, {Map<String, String>? queryParameters}) {
     final cleanedPath = path.startsWith('/') ? path.substring(1) : path;
