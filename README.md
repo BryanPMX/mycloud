@@ -1,6 +1,6 @@
 # MyCloud
 
-This repository now contains both the design set and the current implemented backend plus Flutter foundation slices for MyCloud.
+This repository now contains both the design set and the current implemented backend plus the first live Flutter integration slices for MyCloud.
 
 Current deployment domain plan:
 - `https://mynube.live` for the future Flutter web app
@@ -16,6 +16,7 @@ Current implemented slices:
 - Redis-backed `process_media` and scheduled `cleanup` jobs, with worker-side scan, thumbnail generation, metadata extraction, and promotion flow
 - self-service profile writes via `PATCH /api/v1/users/me` and avatar uploads via `PUT /api/v1/users/me/avatar`
 - fixed-window API rate limiting plus response security headers in the Go middleware stack
+- configurable API CORS handling for `mynube.live`-style web clients via `ALLOWED_ORIGINS`
 - Redis-backed worker progress events plus authenticated `GET /ws/progress`
 - SMTP-backed admin invite delivery when SMTP is configured, while still returning `invite_url` in the response
 - admin user list/invite/update/deactivate endpoints and admin system stats
@@ -55,8 +56,9 @@ Current implemented slices:
 - `POST /api/v1/media/upload/:id/part-url`
 - `POST /api/v1/media/upload/:id/complete`
 - `GET /health`
-- Flutter `MaterialApp.router` foundation shell with adaptive navigation, themed login/media/albums/profile/admin surfaces, seeded contract-aligned models/providers, and environment-aware endpoint config
-- validated Flutter tooling pass with `flutter analyze` and `flutter test test/core/smoke_test.dart`
+- Flutter `MaterialApp.router` shell with live auth/session restore, live media/albums/comments/admin-stats reads, presigned thumbnail resolution, demo fallback mode, and environment-aware endpoint config
+- validated Flutter tooling pass with `flutter analyze` and `flutter test`
+- validated backend tooling pass with `go test ./...`
 
 Use the numbered design docs for architecture and implementation status:
 - [00-README.md](/Users/bryanpmx/Documents/Projects/mycloud/00-README.md) for the document index and status summary

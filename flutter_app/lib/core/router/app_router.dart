@@ -122,6 +122,10 @@ class AppRouter extends RouterDelegate<AppRoutePath>
 
   @override
   AppRoutePath get currentConfiguration {
+    if (authProvider.status == AuthStatus.restoring) {
+      return _requestedPath;
+    }
+
     if (!authProvider.isAuthenticated) {
       return const AppRoutePath.login();
     }
@@ -169,25 +173,30 @@ class AppRouter extends RouterDelegate<AppRoutePath>
 
   @override
   Widget build(BuildContext context) {
-    final page = authProvider.isAuthenticated
-        ? MaterialPage<void>(
-            key: ValueKey<String>('shell-${_selectedSection.name}'),
-            child: MainScaffold(
-              config: appConfig,
-              authProvider: authProvider,
-              selectedSection: _selectedSection,
-              onDestinationSelected: goToSection,
-              child: _buildSectionBody(),
-            ),
+    final page = authProvider.status == AuthStatus.restoring
+        ? const MaterialPage<void>(
+            key: ValueKey<String>('restoring'),
+            child: _RestoringScreen(),
           )
-        : MaterialPage<void>(
-            key: const ValueKey<String>('login'),
-            child: LoginScreen(
-              authProvider: authProvider,
-              apiClient: apiClient,
-              config: appConfig,
-            ),
-          );
+        : authProvider.isAuthenticated
+            ? MaterialPage<void>(
+                key: ValueKey<String>('shell-${_selectedSection.name}'),
+                child: MainScaffold(
+                  config: appConfig,
+                  authProvider: authProvider,
+                  selectedSection: _selectedSection,
+                  onDestinationSelected: goToSection,
+                  child: _buildSectionBody(),
+                ),
+              )
+            : MaterialPage<void>(
+                key: const ValueKey<String>('login'),
+                child: LoginScreen(
+                  authProvider: authProvider,
+                  apiClient: apiClient,
+                  config: appConfig,
+                ),
+              );
 
     return Navigator(
       key: navigatorKey,
@@ -217,5 +226,44 @@ class AppRouter extends RouterDelegate<AppRoutePath>
   void dispose() {
     authProvider.removeListener(_handleAuthChanged);
     super.dispose();
+  }
+}
+
+class _RestoringScreen extends StatelessWidget {
+  const _RestoringScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: <Color>[
+              theme.colorScheme.primary.withValues(alpha: 0.2),
+              theme.scaffoldBackgroundColor,
+              theme.colorScheme.secondary.withValues(alpha: 0.18),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              SizedBox(height: 16),
+              Text('Restoring your session...'),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

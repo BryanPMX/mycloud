@@ -35,7 +35,7 @@ class AppConfig {
     );
     const useDemoData = bool.fromEnvironment(
       'USE_DEMO_DATA',
-      defaultValue: true,
+      defaultValue: false,
     );
 
     return AppConfig(

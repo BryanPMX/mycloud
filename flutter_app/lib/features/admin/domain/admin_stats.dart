@@ -22,4 +22,29 @@ class AdminStats {
   int get freeBytes => totalBytes - usedBytes;
 
   double get pctUsed => totalBytes == 0 ? 0 : usedBytes / totalBytes;
+
+  factory AdminStats.fromJson(Map<String, dynamic> json) {
+    final users = json['users'] as Map<String, dynamic>? ?? const {};
+    final storage = json['storage'] as Map<String, dynamic>? ?? const {};
+    final media = json['media'] as Map<String, dynamic>? ?? const {};
+
+    return AdminStats(
+      totalUsers: _asInt(users['total']),
+      activeUsers: _asInt(users['active']),
+      totalBytes: _asInt(storage['total_bytes']),
+      usedBytes: _asInt(storage['used_bytes']),
+      totalItems: _asInt(media['total_items']),
+      totalImages: _asInt(media['total_images']),
+      totalVideos: _asInt(media['total_videos']),
+      pendingJobs: _asInt(media['pending_jobs']),
+    );
+  }
+
+  static int _asInt(Object? value) {
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return 0;
+  }
 }

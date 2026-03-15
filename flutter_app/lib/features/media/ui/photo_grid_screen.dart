@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
@@ -23,7 +25,7 @@ class PhotoGridScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: mediaProvider,
+      animation: Listenable.merge(<Listenable>[mediaProvider, commentProvider]),
       builder: (context, _) {
         final theme = Theme.of(context);
         final items = mediaProvider.visibleItems;
@@ -48,21 +50,30 @@ class PhotoGridScreen extends StatelessWidget {
                         alignment: WrapAlignment.spaceBetween,
                         children: [
                           ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 520),
+                            constraints: const BoxConstraints(maxWidth: 620),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Library ready for /media, /media/search, and presigned thumbnail reads.',
+                                  'Live media library',
                                   style: theme.textTheme.titleLarge,
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'The cards below are seeded to match the live API contracts. The next step is swapping them to real GET /media data and GET /media/:id/thumb reads.',
+                                  'This surface now reads the real /media and /media/search endpoints, keeps favorites in sync, and resolves presigned thumbnail URLs as items become visible.',
                                   style: theme.textTheme.bodyLarge?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
                                 ),
+                                if (mediaProvider.errorMessage != null) ...[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    mediaProvider.errorMessage!,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.error,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -80,8 +91,12 @@ class PhotoGridScreen extends StatelessWidget {
                                     '${mediaProvider.pendingItems.length} processing',
                               ),
                               _MetricChip(
-                                icon: Icons.cloud_download_outlined,
-                                label: apiClient.mediaListUri().path,
+                                icon: mediaProvider.isLoading
+                                    ? Icons.sync_rounded
+                                    : Icons.cloud_done_rounded,
+                                label: mediaProvider.isLoading
+                                    ? 'Refreshing'
+                                    : apiClient.mediaListUri().path,
                               ),
                             ],
                           ),
@@ -100,7 +115,7 @@ class PhotoGridScreen extends StatelessWidget {
                         child: TextField(
                           onChanged: mediaProvider.updateQuery,
                           decoration: const InputDecoration(
-                            hintText: 'Search filenames or mime types',
+                            hintText: 'Search filenames or metadata',
                             prefixIcon: Icon(Icons.search_rounded),
                           ),
                         ),
@@ -110,10 +125,23 @@ class PhotoGridScreen extends StatelessWidget {
                         onSelected: (_) => mediaProvider.toggleFavoritesOnly(),
                         label: const Text('Favorites only'),
                       ),
+                      OutlinedButton.icon(
+                        onPressed: mediaProvider.isLoading
+                            ? null
+                            : () {
+                                mediaProvider.load();
+                              },
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Refresh'),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
-                  if (showDetailPanel)
+                  if (mediaProvider.isLoading && items.isEmpty)
+                    const _LoadingState()
+                  else if (items.isEmpty)
+                    _EmptyState(errorMessage: mediaProvider.errorMessage)
+                  else if (showDetailPanel)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -121,6 +149,7 @@ class PhotoGridScreen extends StatelessWidget {
                           flex: 5,
                           child: _MediaGrid(
                             items: items,
+                            mediaProvider: mediaProvider,
                             onSelect: mediaProvider.selectMedia,
                             onFavoriteToggle: mediaProvider.toggleFavorite,
                             selectedMediaId: selectedMedia.id,
@@ -134,7 +163,17 @@ class PhotoGridScreen extends StatelessWidget {
                             comments: commentProvider.commentsFor(
                               selectedMedia.id,
                             ),
+                            commentsLoading: commentProvider.isLoading &&
+                                commentProvider.activeMediaId ==
+                                    selectedMedia.id,
+                            commentsError: commentProvider.activeMediaId ==
+                                    selectedMedia.id
+                                ? commentProvider.errorMessage
+                                : null,
                             apiClient: apiClient,
+                            thumbUrl: mediaProvider.thumbnailUrlFor(
+                              selectedMedia.id,
+                            ),
                           ),
                         ),
                       ],
@@ -142,6 +181,7 @@ class PhotoGridScreen extends StatelessWidget {
                   else ...[
                     _MediaGrid(
                       items: items,
+                      mediaProvider: mediaProvider,
                       onSelect: mediaProvider.selectMedia,
                       onFavoriteToggle: mediaProvider.toggleFavorite,
                       selectedMediaId: selectedMedia?.id,
@@ -151,7 +191,16 @@ class PhotoGridScreen extends StatelessWidget {
                       _DetailPanel(
                         media: selectedMedia,
                         comments: commentProvider.commentsFor(selectedMedia.id),
+                        commentsLoading: commentProvider.isLoading &&
+                            commentProvider.activeMediaId == selectedMedia.id,
+                        commentsError:
+                            commentProvider.activeMediaId == selectedMedia.id
+                                ? commentProvider.errorMessage
+                                : null,
                         apiClient: apiClient,
+                        thumbUrl: mediaProvider.thumbnailUrlFor(
+                          selectedMedia.id,
+                        ),
                       ),
                     ],
                   ],
@@ -168,14 +217,16 @@ class PhotoGridScreen extends StatelessWidget {
 class _MediaGrid extends StatelessWidget {
   const _MediaGrid({
     required this.items,
+    required this.mediaProvider,
     required this.onSelect,
     required this.onFavoriteToggle,
     required this.selectedMediaId,
   });
 
   final List<Media> items;
+  final MediaListProvider mediaProvider;
   final ValueChanged<String> onSelect;
-  final ValueChanged<String> onFavoriteToggle;
+  final Future<void> Function(String mediaId) onFavoriteToggle;
   final String? selectedMediaId;
 
   @override
@@ -197,9 +248,13 @@ class _MediaGrid extends StatelessWidget {
         final isSelected = selectedMediaId == media.id;
         return _MediaCard(
           media: media,
+          mediaProvider: mediaProvider,
+          thumbnailUrl: mediaProvider.thumbnailUrlFor(media.id),
           selected: isSelected,
           onSelect: () => onSelect(media.id),
-          onFavoriteToggle: () => onFavoriteToggle(media.id),
+          onFavoriteToggle: () {
+            unawaited(onFavoriteToggle(media.id));
+          },
         );
       },
     );
@@ -222,12 +277,16 @@ class _MediaGrid extends StatelessWidget {
 class _MediaCard extends StatelessWidget {
   const _MediaCard({
     required this.media,
+    required this.mediaProvider,
+    required this.thumbnailUrl,
     required this.selected,
     required this.onSelect,
     required this.onFavoriteToggle,
   });
 
   final Media media;
+  final MediaListProvider mediaProvider;
+  final String? thumbnailUrl;
   final bool selected;
   final VoidCallback onSelect;
   final VoidCallback onFavoriteToggle;
@@ -257,66 +316,11 @@ class _MediaCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [
-                        theme.colorScheme.primaryContainer,
-                        theme.colorScheme.secondaryContainer,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              media.isVideo
-                                  ? Icons.videocam_rounded
-                                  : Icons.photo_camera_back_rounded,
-                              size: 22,
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: statusColor.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                media.status.name,
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        Text(
-                          media.isVideo ? 'Video' : 'Photo',
-                          style: theme.textTheme.labelLarge,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          media.filename,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleLarge,
-                        ),
-                      ],
-                    ),
-                  ),
+                child: _MediaPreview(
+                  media: media,
+                  mediaProvider: mediaProvider,
+                  thumbnailUrl: thumbnailUrl,
+                  statusColor: statusColor,
                 ),
               ),
               const SizedBox(height: 14),
@@ -327,7 +331,7 @@ class _MediaCard extends StatelessWidget {
                   _TinyBadge(label: FileSizeFormatter.compact(media.sizeBytes)),
                   _TinyBadge(label: '${media.width}×${media.height}'),
                   if (media.isVideo)
-                    _TinyBadge(label: '${media.durationSecs}s'),
+                    _TinyBadge(label: '${media.durationSecs.ceil()}s'),
                 ],
               ),
               const SizedBox(height: 14),
@@ -359,16 +363,205 @@ class _MediaCard extends StatelessWidget {
   }
 }
 
+class _MediaPreview extends StatefulWidget {
+  const _MediaPreview({
+    required this.media,
+    required this.mediaProvider,
+    required this.thumbnailUrl,
+    required this.statusColor,
+  });
+
+  final Media media;
+  final MediaListProvider mediaProvider;
+  final String? thumbnailUrl;
+  final Color statusColor;
+
+  @override
+  State<_MediaPreview> createState() => _MediaPreviewState();
+}
+
+class _MediaPreviewState extends State<_MediaPreview> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.mediaProvider.ensureThumbnailLoaded(widget.media));
+  }
+
+  @override
+  void didUpdateWidget(covariant _MediaPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.media.id != widget.media.id ||
+        oldWidget.thumbnailUrl != widget.thumbnailUrl) {
+      unawaited(widget.mediaProvider.ensureThumbnailLoaded(widget.media));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: widget.thumbnailUrl == null
+            ? LinearGradient(
+                colors: <Color>[
+                  theme.colorScheme.primaryContainer,
+                  theme.colorScheme.secondaryContainer,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
+        color: widget.thumbnailUrl == null
+            ? null
+            : theme.colorScheme.surfaceContainerHighest,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (widget.thumbnailUrl != null)
+              Image.network(
+                widget.thumbnailUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _PreviewFallback(
+                  media: widget.media,
+                  statusColor: widget.statusColor,
+                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) {
+                    return child;
+                  }
+
+                  return _PreviewFallback(
+                    media: widget.media,
+                    statusColor: widget.statusColor,
+                  );
+                },
+              )
+            else
+              _PreviewFallback(
+                media: widget.media,
+                statusColor: widget.statusColor,
+              ),
+            Positioned(
+              left: 12,
+              right: 12,
+              top: 12,
+              child: Row(
+                children: [
+                  Icon(
+                    widget.media.isVideo
+                        ? Icons.videocam_rounded
+                        : Icons.photo_camera_back_rounded,
+                    size: 22,
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.statusColor.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      widget.media.status.name,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: widget.statusColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.media.isVideo ? 'Video' : 'Photo',
+                    style: theme.textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    widget.media.filename,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewFallback extends StatelessWidget {
+  const _PreviewFallback({required this.media, required this.statusColor});
+
+  final Media media;
+  final Color statusColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      padding: const EdgeInsets.all(18),
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: Row(
+          children: [
+            Icon(
+              media.isVideo
+                  ? Icons.videocam_rounded
+                  : Icons.photo_camera_back_rounded,
+              color: statusColor,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                media.status == MediaStatus.ready
+                    ? 'Resolving thumbnail...'
+                    : 'Waiting for processing...',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DetailPanel extends StatelessWidget {
   const _DetailPanel({
     required this.media,
     required this.comments,
+    required this.commentsLoading,
+    required this.commentsError,
     required this.apiClient,
+    required this.thumbUrl,
   });
 
   final Media media;
   final List<Comment> comments;
+  final bool commentsLoading;
+  final String? commentsError;
   final ApiClient apiClient;
+  final String? thumbUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -380,10 +573,24 @@ class _DetailPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (thumbUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: AspectRatio(
+                  aspectRatio: media.aspectRatio,
+                  child: Image.network(
+                    thumbUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             Text(media.filename, style: theme.textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              'Mapped to the current API contract including status, favorites, timestamps, and presigned-read endpoints.',
+              'Mapped directly to the current API contract, including status, favorites, timestamps, comments, and presigned-read endpoints.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -409,11 +616,30 @@ class _DetailPanel extends StatelessWidget {
               value: apiClient.mediaDownloadUri(media.id).path,
             ),
             const SizedBox(height: 20),
-            Text(
-              'Recent implementation notes',
-              style: theme.textTheme.titleMedium,
-            ),
+            Text('Comments', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
+            if (commentsLoading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: LinearProgressIndicator(),
+              ),
+            if (commentsError != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  commentsError!,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            if (!commentsLoading && comments.isEmpty)
+              Text(
+                'No comments yet.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             ...comments.map(
               (comment) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -437,6 +663,54 @@ class _DetailPanel extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Loading media from the API...'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.errorMessage});
+
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const Icon(Icons.photo_library_outlined, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              errorMessage ?? 'No media matched the current filters.',
+              style: theme.textTheme.bodyLarge,
+              textAlign: TextAlign.center,
             ),
           ],
         ),

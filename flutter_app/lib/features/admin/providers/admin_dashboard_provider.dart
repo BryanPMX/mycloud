@@ -1,9 +1,29 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/config/app_config.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../core/network/api_transport.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../domain/admin_stats.dart';
 
 class AdminDashboardProvider extends ChangeNotifier {
-  final AdminStats stats = const AdminStats(
+  AdminDashboardProvider({
+    required AppConfig config,
+    required ApiClient apiClient,
+    required ApiTransport transport,
+    required AuthProvider authProvider,
+  })  : _config = config,
+        _apiClient = apiClient,
+        _transport = transport,
+        _authProvider = authProvider;
+
+  final AppConfig _config;
+  final ApiClient _apiClient;
+  final ApiTransport _transport;
+  final AuthProvider _authProvider;
+
+  static const AdminStats _seedStats = AdminStats(
     totalUsers: 52,
     activeUsers: 48,
     totalBytes: 1099511627776,
@@ -14,7 +34,20 @@ class AdminDashboardProvider extends ChangeNotifier {
     pendingJobs: 3,
   );
 
-  final List<DeliveryLogEntry> recentBackendLogs = const [
+  AdminStats _stats = _seedStats;
+  bool _isLoading = false;
+  bool _hasLoaded = false;
+  String? _errorMessage;
+
+  AdminStats get stats => _stats;
+
+  bool get isLoading => _isLoading;
+
+  bool get hasLoaded => _hasLoaded;
+
+  String? get errorMessage => _errorMessage;
+
+  final List<DeliveryLogEntry> recentBackendLogs = const <DeliveryLogEntry>[
     DeliveryLogEntry(
       dateLabel: 'Mar 14, 2026',
       title: 'MinIO public/internal endpoint split',
@@ -34,39 +67,77 @@ class AdminDashboardProvider extends ChangeNotifier {
           'PATCH /users/me, PUT /users/me/avatar, rate limiting, security headers, and /ws/progress are all live.',
     ),
     DeliveryLogEntry(
-      dateLabel: 'Mar 14, 2026',
-      title: 'Admin invite onboarding and audit logs',
+      dateLabel: 'Mar 15, 2026',
+      title: 'Flutter live-read integration in progress',
       description:
-          'Invite acceptance, admin user management, and audit persistence are now in place.',
+          'The client now prioritizes real auth, media, albums, comments, and admin stats instead of seeded placeholders.',
     ),
   ];
 
-  final List<FlutterContinuation> nextFlutterContinuations = const [
+  final List<FlutterContinuation> nextFlutterContinuations =
+      const <FlutterContinuation>[
     FlutterContinuation(
-      title: 'Wire auth + session restore first',
+      title: 'Finish multipart uploads and /ws/progress',
       description:
-          'POST /auth/login, POST /auth/refresh, and GET /users/me unlock every protected client route.',
+          'That is now the biggest missing feature gap between the live backend and the Flutter client.',
       isHighestPriority: true,
     ),
     FlutterContinuation(
-      title: 'Replace seeded media cards with live media reads',
+      title: 'Land write flows for profile, comments, and album management',
       description:
-          'GET /media, GET /media/search, and GET /media/:id/thumb should back the library immediately after auth.',
+          'The read surfaces are in place, so the next step is mutation UX, validation, and optimistic updates.',
       isHighestPriority: true,
     ),
     FlutterContinuation(
-      title: 'Land direct upload and processing status',
+      title: 'Add native token persistence',
       description:
-          'The multipart upload endpoints and /ws/progress are ready for a client-side upload manager.',
+          'Web can restore sessions with cookies, but mobile still needs secure storage for refresh-token persistence across app restarts.',
       isHighestPriority: false,
     ),
     FlutterContinuation(
-      title: 'Finish profile, albums, comments, and admin CRUD',
+      title: 'Expand admin beyond stats',
       description:
-          'Those APIs already exist, so the rest of the work is mostly integration, optimistic UX, and validation.',
+          'GET /admin/users, invite delivery, and account updates are ready to be surfaced in operator screens next.',
       isHighestPriority: false,
     ),
   ];
+
+  Future<void> load() async {
+    if (_config.useDemoData) {
+      _stats = _seedStats;
+      _hasLoaded = true;
+      notifyListeners();
+      return;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _authProvider.withAuthorization(
+        (headers) =>
+            _transport.get(_apiClient.adminStatsUri(), headers: headers),
+      );
+      _stats = AdminStats.fromJson(response.asMap());
+      _hasLoaded = true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+    } catch (_) {
+      _errorMessage = 'Unable to load admin stats right now.';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void reset() {
+    _stats = _seedStats;
+    _isLoading = false;
+    _hasLoaded = _config.useDemoData;
+    _errorMessage = null;
+    notifyListeners();
+  }
 }
 
 class DeliveryLogEntry {

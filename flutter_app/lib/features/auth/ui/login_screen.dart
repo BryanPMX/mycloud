@@ -27,8 +27,12 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _emailController = TextEditingController(text: 'member@mynube.live');
-    _passwordController = TextEditingController(text: 'demo-password');
+    _emailController = TextEditingController(
+      text: widget.config.useDemoData ? 'member@mynube.live' : '',
+    );
+    _passwordController = TextEditingController(
+      text: widget.config.useDemoData ? 'demo-password' : '',
+    );
   }
 
   @override
@@ -87,7 +91,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'This slice wires the app shell, Router, theme, and demo state while the live auth transport is the next step.',
+                                    widget.config.useDemoData
+                                        ? 'Demo mode keeps the seeded app shell available for smoke tests and offline UI work.'
+                                        : 'This client now targets the live auth endpoints and restores browser sessions before showing protected routes.',
                                     style: theme.textTheme.bodyLarge?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
@@ -147,31 +153,33 @@ class _LoginScreenState extends State<LoginScreen> {
                                         : const Icon(Icons.login_rounded),
                                     label: const Text('Enter workspace'),
                                   ),
-                                  const SizedBox(height: 12),
-                                  Wrap(
-                                    spacing: 12,
-                                    runSpacing: 12,
-                                    children: [
-                                      OutlinedButton(
-                                        onPressed: widget.authProvider.isBusy
-                                            ? null
-                                            : () {
-                                                widget.authProvider
-                                                    .signInAsDemoMember();
-                                              },
-                                        child: const Text('Use demo member'),
-                                      ),
-                                      OutlinedButton(
-                                        onPressed: widget.authProvider.isBusy
-                                            ? null
-                                            : () {
-                                                widget.authProvider
-                                                    .signInAsDemoAdmin();
-                                              },
-                                        child: const Text('Use demo admin'),
-                                      ),
-                                    ],
-                                  ),
+                                  if (widget.config.useDemoData) ...[
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: [
+                                        OutlinedButton(
+                                          onPressed: widget.authProvider.isBusy
+                                              ? null
+                                              : () {
+                                                  widget.authProvider
+                                                      .signInAsDemoMember();
+                                                },
+                                          child: const Text('Use demo member'),
+                                        ),
+                                        OutlinedButton(
+                                          onPressed: widget.authProvider.isBusy
+                                              ? null
+                                              : () {
+                                                  widget.authProvider
+                                                      .signInAsDemoAdmin();
+                                                },
+                                          child: const Text('Use demo admin'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                   const SizedBox(height: 20),
                                   const Divider(),
                                   const SizedBox(height: 12),
@@ -237,7 +245,9 @@ class _IntroPanel extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Recent repository logs show the backend is ready for client auth, media reads, albums, comments, admin stats, uploads, and worker progress. The remaining work is mostly Flutter integration and UX.',
+              config.useDemoData
+                  ? 'Demo mode mirrors the live contracts while keeping the app deterministic for local walkthroughs and tests.'
+                  : 'Recent repository logs show the backend is ready for client auth, media reads, albums, comments, admin stats, uploads, and worker progress. The current client now starts that live integration path.',
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.5,
@@ -257,7 +267,7 @@ class _IntroPanel extends StatelessWidget {
             const _CheckItem(
               title: 'Next recommended work',
               detail:
-                  'Replace seeded demo state with real /auth, /users/me, /media, and upload wiring.',
+                  'Finish uploads, worker progress, and the remaining write flows now that live auth and reads are landing.',
             ),
           ],
         ),

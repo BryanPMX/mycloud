@@ -159,9 +159,10 @@ func main() {
 	updateUserHandler := admincmd.NewUpdateUserHandler(userRepo, adminRepo, sessionStore)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		AppName:      cfg.AppName,
-		AppEnv:       cfg.AppEnv,
-		TokenService: tokenService,
+		AppName:        cfg.AppName,
+		AppEnv:         cfg.AppEnv,
+		AllowedOrigins: cfg.AllowedOrigins,
+		TokenService:   tokenService,
 		AuthHandler: handlers.NewAuthHandler(
 			loginHandler,
 			refreshHandler,

@@ -15,6 +15,7 @@ import (
 type Dependencies struct {
 	AppName        string
 	AppEnv         string
+	AllowedOrigins []string
 	TokenService   pkgauth.Service
 	AuthHandler    *handlers.AuthHandler
 	UserHandler    *handlers.UserHandler
@@ -34,6 +35,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestID())
+	router.Use(middleware.CORS(deps.AllowedOrigins))
 	router.Use(middleware.SecurityHeaders(deps.AppEnv == "production"))
 	router.Use(middleware.StructuredLogger())
 

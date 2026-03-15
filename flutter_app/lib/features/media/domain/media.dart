@@ -1,4 +1,19 @@
-enum MediaStatus { pending, ready, failed }
+enum MediaStatus {
+  pending,
+  ready,
+  failed;
+
+  static MediaStatus fromApi(Object? value) {
+    switch (value) {
+      case 'ready':
+        return MediaStatus.ready;
+      case 'failed':
+        return MediaStatus.failed;
+      default:
+        return MediaStatus.pending;
+    }
+  }
+}
 
 class ThumbUrls {
   const ThumbUrls({this.small, this.medium, this.large, this.poster});
@@ -7,6 +22,19 @@ class ThumbUrls {
   final String? medium;
   final String? large;
   final String? poster;
+
+  factory ThumbUrls.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return const ThumbUrls();
+    }
+
+    return ThumbUrls(
+      small: json['small'] as String?,
+      medium: json['medium'] as String?,
+      large: json['large'] as String?,
+      poster: json['poster'] as String?,
+    );
+  }
 }
 
 class Media {
@@ -35,7 +63,7 @@ class Media {
   final int sizeBytes;
   final int width;
   final int height;
-  final int durationSecs;
+  final double durationSecs;
   final MediaStatus status;
   final bool isFavorite;
   final DateTime? takenAt;
@@ -77,5 +105,51 @@ class Media {
       purgesAt: purgesAt,
       thumbUrls: thumbUrls ?? this.thumbUrls,
     );
+  }
+
+  factory Media.fromJson(Map<String, dynamic> json) {
+    return Media(
+      id: json['id'] as String? ?? '',
+      ownerId: json['owner_id'] as String? ?? '',
+      filename: json['filename'] as String? ?? '',
+      mimeType: json['mime_type'] as String? ?? '',
+      sizeBytes: _asInt(json['size_bytes']),
+      width: _asInt(json['width']),
+      height: _asInt(json['height']),
+      durationSecs: _asDouble(json['duration_secs']),
+      status: MediaStatus.fromApi(json['status']),
+      isFavorite: json['is_favorite'] as bool? ?? false,
+      takenAt: _parseDateTime(json['taken_at']),
+      uploadedAt: _parseDateTime(json['uploaded_at']) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      deletedAt: _parseDateTime(json['deleted_at']),
+      purgesAt: _parseDateTime(json['purges_at']),
+      thumbUrls:
+          ThumbUrls.fromJson(json['thumb_urls'] as Map<String, dynamic>?),
+    );
+  }
+
+  static int _asInt(Object? value) {
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return 0;
+  }
+
+  static double _asDouble(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return 0;
+  }
+
+  static DateTime? _parseDateTime(Object? value) {
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+
+    return null;
   }
 }

@@ -2,4 +2,4 @@
 
 HTTP client infrastructure lives here.
 
-Use this directory for API clients, interceptors, transport error mapping, and retry behavior.
+Use this directory for endpoint builders, transport error mapping, browser credential handling, and auth-aware retry behavior.

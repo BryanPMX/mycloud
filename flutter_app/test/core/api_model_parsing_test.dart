@@ -1,0 +1,87 @@
+import 'package:familycloud/features/admin/domain/admin_stats.dart';
+import 'package:familycloud/features/auth/domain/user.dart';
+import 'package:familycloud/features/comments/domain/comment.dart';
+import 'package:familycloud/features/media/domain/media.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('User.fromJson maps the live DTO shape', () {
+    final user = User.fromJson(<String, dynamic>{
+      'id': 'user-1',
+      'email': 'member@mynube.live',
+      'display_name': 'Family Member',
+      'avatar_url': 'users/user-1/avatar.png',
+      'role': 'member',
+      'storage_used': 1024,
+      'quota_bytes': 2048,
+      'created_at': '2026-03-14T16:00:00Z',
+      'last_login_at': '2026-03-15T08:30:00Z',
+    });
+
+    expect(user.id, 'user-1');
+    expect(user.role, UserRole.member);
+    expect(user.storagePct, 0.5);
+    expect(user.lastLoginAt, DateTime.parse('2026-03-15T08:30:00Z'));
+  });
+
+  test('Media.fromJson keeps duration precision and thumb keys', () {
+    final media = Media.fromJson(<String, dynamic>{
+      'id': 'media-1',
+      'owner_id': 'user-1',
+      'filename': 'lake-walk.mov',
+      'mime_type': 'video/quicktime',
+      'size_bytes': 248034123,
+      'width': 1920,
+      'height': 1080,
+      'duration_secs': 48.4,
+      'status': 'pending',
+      'is_favorite': false,
+      'taken_at': '2026-03-14T16:00:00Z',
+      'uploaded_at': '2026-03-14T16:05:00Z',
+      'thumb_urls': <String, dynamic>{'poster': 'media-1/poster.webp'},
+    });
+
+    expect(media.durationSecs, 48.4);
+    expect(media.status, MediaStatus.pending);
+    expect(media.thumbUrls.poster, 'media-1/poster.webp');
+  });
+
+  test('Comment.fromJson uses the dedicated author shape', () {
+    final comment = Comment.fromJson(<String, dynamic>{
+      'id': 'comment-1',
+      'author': <String, dynamic>{
+        'id': 'user-1',
+        'display_name': 'Family Member',
+        'avatar_url': null,
+      },
+      'body': 'Great shot!',
+      'created_at': '2026-03-15T09:00:00Z',
+    });
+
+    expect(comment.author.id, 'user-1');
+    expect(comment.author.displayName, 'Family Member');
+    expect(comment.body, 'Great shot!');
+  });
+
+  test('AdminStats.fromJson maps nested DTO sections', () {
+    final stats = AdminStats.fromJson(<String, dynamic>{
+      'users': <String, dynamic>{'total': 52, 'active': 48},
+      'storage': <String, dynamic>{
+        'total_bytes': 1000,
+        'used_bytes': 250,
+        'free_bytes': 750,
+        'pct_used': 25.0,
+      },
+      'media': <String, dynamic>{
+        'total_items': 32,
+        'total_images': 20,
+        'total_videos': 12,
+        'pending_jobs': 3,
+      },
+    });
+
+    expect(stats.totalUsers, 52);
+    expect(stats.pendingJobs, 3);
+    expect(stats.pctUsed, 0.25);
+  });
+}

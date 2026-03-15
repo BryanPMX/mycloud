@@ -40,21 +40,27 @@ class ProfileProvider extends ChangeNotifier {
           done: true,
         ),
         RolloutStep(
-          title: 'Auth API wiring',
+          title: 'Auth API wiring and session restore',
           description:
-              'Connect the login form and session restore flow to /auth/login, /auth/refresh, and /users/me.',
-          done: false,
+              'The app now signs in against /auth/login and restores browser sessions through /auth/refresh plus /users/me.',
+          done: true,
         ),
         RolloutStep(
-          title: 'Media reads and presigned thumbnails',
+          title: 'Media, albums, comments, and admin stats reads',
           description:
-              'Swap seeded cards for GET /media and GET /media/:id/thumb so the library reflects real storage state.',
-          done: false,
+              'Read surfaces now come from the live backend, including /media, /media/search, /media/:id/thumb, /albums, /media/:id/comments, and /admin/stats.',
+          done: true,
         ),
         RolloutStep(
           title: 'Multipart upload and processing events',
           description:
               'Implement the /media/upload lifecycle and consume /ws/progress for worker-side processing status.',
+          done: false,
+        ),
+        RolloutStep(
+          title: 'Write flows and native session persistence',
+          description:
+              'Profile edits, album management, comment creation, and secure mobile token storage are the next production-grade client gaps.',
           done: false,
         ),
       ];

@@ -145,7 +145,9 @@ class MainScaffold extends StatelessWidget {
                                         _UserBadge(user: user.displayName),
                                         const SizedBox(height: 12),
                                         IconButton.filledTonal(
-                                          onPressed: authProvider.signOut,
+                                          onPressed: () {
+                                            authProvider.signOut();
+                                          },
                                           icon: const Icon(
                                             Icons.logout_rounded,
                                           ),
@@ -270,7 +272,9 @@ class _MainPanel extends StatelessWidget {
                   ),
                 if (user != null)
                   FilledButton.tonalIcon(
-                    onPressed: authProvider.signOut,
+                    onPressed: () {
+                      authProvider.signOut();
+                    },
                     icon: const Icon(Icons.logout_rounded),
                     label: const Text('Sign out'),
                   ),
@@ -305,13 +309,13 @@ class _MainPanel extends StatelessWidget {
   String _subtitleForSection(AppSection section) {
     switch (section) {
       case AppSection.media:
-        return 'Foundation shell aligned to the live media and thumbnail APIs.';
+        return 'Live media reads, favorites, comments, and presigned thumbnail fetches.';
       case AppSection.albums:
-        return 'Owned and shared album surfaces ready for live API wiring next.';
+        return 'Owned and shared album lists now read from the live backend.';
       case AppSection.profile:
-        return 'Deployment endpoints, storage posture, and the next Flutter tasks.';
+        return 'Deployment endpoints, storage posture, and the remaining Flutter gaps.';
       case AppSection.admin:
-        return 'Recent backend delivery and the next client continuation order.';
+        return 'Recent backend delivery, live system stats, and the next client continuation order.';
     }
   }
 }

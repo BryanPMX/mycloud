@@ -1,18 +1,19 @@
 # 07 — Flutter Client Architecture
 
-Current implementation note on March 14, 2026:
-- `flutter_app/` now boots a real `MaterialApp.router` foundation shell with `main.dart`, `app.dart`, a custom Router, a non-placeholder theme, seeded auth/media/album/profile/admin screens, and shared layout/widgets.
-- The current slice is intentionally SDK-only: it uses `ChangeNotifier`, a custom `RouterDelegate`, and seeded contract-aligned models/providers so the shell stays package-light until the live API transport lands.
-- `AppConfig` now defaults to the confirmed deployment plan: `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. These values can be overridden with `--dart-define`.
-- `flutter analyze` and `flutter test test/core/smoke_test.dart` both pass for the new foundation slice.
-- Recent repo logs show the backend is already ready for the next Flutter continuations: auth/session restore, media reads + presigned thumbs, multipart uploads + `/ws/progress`, then profile/albums/comments/admin CRUD integration.
-- Confirmed deployment domain plan for the eventual Flutter rollout: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
-- Flutter should treat `https://api.mynube.live` as the API base URL and `wss://api.mynube.live/ws/progress` as the WebSocket origin. Backend `APP_BASE_URL` should remain `https://mynube.live` because admin invite emails currently build browser-facing invite links from that value.
+Current implementation note on March 15, 2026:
+- `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, media reads, albums, comments, and admin stats all hit the live Go API by default.
+- `AppConfig` still targets `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. `USE_DEMO_DATA` now defaults to `false`; enable it explicitly for smoke tests or offline UI work.
+- The Flutter network layer now uses `package:http`, sends browser credentials on web, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
+- Recent repo logs plus the current backend handlers confirm the biggest remaining client gap is no longer auth or reads; it is multipart upload + `/ws/progress`, followed by the remaining write flows and native token persistence.
+- The backend now also implements the documented CORS path through `ALLOWED_ORIGINS`, which is required for the Flutter web app to call `api.mynube.live` with cookies/credentials.
+- `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice.
+- Confirmed production domain plan remains: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
 
-Reference docs used for the current shell:
+Reference docs used for the current live integration slice:
 - Flutter navigation overview: [docs.flutter.dev/ui/navigation](https://docs.flutter.dev/ui/navigation)
 - `MaterialApp.router`: [api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html](https://api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html)
-- `NavigationRail` for wider layouts: [api.flutter.dev/flutter/material/NavigationRail-class.html](https://api.flutter.dev/flutter/material/NavigationRail-class.html)
+- Flutter networking cookbook: [docs.flutter.dev/cookbook/networking/authenticated-requests](https://docs.flutter.dev/cookbook/networking/authenticated-requests)
+- `package:http` browser credentials support: [pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html](https://pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html)
 
 ---
 
@@ -25,19 +26,21 @@ lib/
 ├── core/
 │   ├── config/app_config.dart       # APP_BASE_URL / API_BASE_URL / WS_BASE_URL
 │   ├── network/api_client.dart      # Endpoint builder for the live backend
-│   ├── router/app_router.dart       # RouterDelegate + route parsing
+│   ├── network/api_transport.dart   # Shared JSON transport + error mapping
+│   ├── network/http_client_factory* # Browser credentials / non-web client selection
+│   ├── router/app_router.dart       # RouterDelegate + auth restore loading state
 │   └── theme/app_theme.dart         # Material 3 theme and shell styling
 ├── features/
-│   ├── auth/                        # Demo sign-in + seeded session state
-│   ├── media/                       # Contract-aligned media models + grid/detail UI
-│   ├── albums/                      # Owned/shared album overview UI
+│   ├── auth/                        # Live login + refresh + current-user restore
+│   ├── media/                       # Live media list/search/favorite/thumb UI
+│   ├── albums/                      # Live owned/shared album overview UI
 │   ├── profile/                     # Endpoint/status + rollout checklist UI
-│   ├── admin/                       # Repo-log summary + next-step planning UI
-│   └── comments/                    # Seeded comment data for media detail
+│   ├── admin/                       # Live stats + repo-log summary UI
+│   └── comments/                    # Live media comment reads for detail panels
 ├── shared/
 │   ├── widgets/main_scaffold.dart   # Adaptive rail/bottom-nav shell
 │   └── utils/                       # Date + file-size formatters
-└── test/core/smoke_test.dart        # Boot, sign-in, and navigation widget smoke test
+└── test/core/*.dart                 # Smoke + DTO parsing tests
 ```
 
 ## 2. Current Dependency Set
@@ -46,6 +49,7 @@ lib/
 dependencies:
   flutter:
     sdk: flutter
+  http: ^1.2.1
 
 dev_dependencies:
   flutter_test:
@@ -55,11 +59,11 @@ dev_dependencies:
 
 ## 3. Recommended Next Flutter Continuation
 
-1. Wire `POST /auth/login`, `POST /auth/refresh`, and `GET /users/me` into the current auth shell.
-2. Replace seeded media data with `GET /media`, `GET /media/search`, `GET /media/:id/thumb`, and `GET /media/:id/url`.
-3. Add the multipart upload manager around `POST /media/upload/init`, `POST /media/upload/:id/part-url`, `POST /media/upload/:id/complete`, and `DELETE /media/upload/:id`.
-4. Subscribe to `GET /ws/progress` so pending uploads transition into real worker-driven processing states.
-5. Finish profile/avatar, albums, comments, and admin list/stats flows against the already-live backend endpoints.
+1. Add the multipart upload manager around `POST /media/upload/init`, `POST /media/upload/:id/part-url`, `POST /media/upload/:id/complete`, and `DELETE /media/upload/:id`.
+2. Subscribe to `GET /ws/progress` so pending uploads transition into real worker-driven processing states.
+3. Finish write flows for `PATCH /users/me`, `PUT /users/me/avatar`, album CRUD/sharing, and comment creation/deletion.
+4. Add secure native token persistence so mobile can restore sessions across app restarts without relying on cookies.
+5. Expand admin beyond stats by wiring `GET /admin/users`, invites, and account updates into real operator screens.
 
 ## 4. Target Architecture Reference
 

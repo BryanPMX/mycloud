@@ -5,6 +5,10 @@ enum UserRole {
   const UserRole(this.label);
 
   final String label;
+
+  static UserRole fromApi(Object? value) {
+    return value == 'admin' ? UserRole.admin : UserRole.member;
+  }
 }
 
 class User {
@@ -52,5 +56,28 @@ class User {
       createdAt: createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
     );
+  }
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      id: json['id'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      displayName: json['display_name'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+      role: UserRole.fromApi(json['role']),
+      storageUsed: _asInt(json['storage_used']),
+      quotaBytes: _asInt(json['quota_bytes']),
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      lastLoginAt: DateTime.tryParse(json['last_login_at'] as String? ?? ''),
+    );
+  }
+
+  static int _asInt(Object? value) {
+    if (value is num) {
+      return value.toInt();
+    }
+
+    return 0;
   }
 }

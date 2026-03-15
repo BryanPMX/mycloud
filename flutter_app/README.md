@@ -2,9 +2,10 @@
 
 This directory contains the Flutter client.
 
-Current state on March 14, 2026:
+Current state on March 15, 2026:
 - the app now boots a real `MaterialApp.router` shell
-- the current implementation is SDK-only and uses seeded state to mirror the live backend contracts
-- `flutter analyze` and `flutter test test/core/smoke_test.dart` both pass
+- the default path now uses the live backend for auth/session restore, media reads, albums, comments, and admin stats
+- demo mode remains available through `--dart-define=USE_DEMO_DATA=true`
+- `flutter analyze` and `flutter test` both pass
 
-Keep cross-platform app code here, with platform-specific shells under `android/`, `ios/`, and `web/`. The next work is wiring the current shell to `/auth`, `/users/me`, `/media`, `/albums`, and the upload/WebSocket endpoints.
+Keep cross-platform app code here, with platform-specific shells under `android/`, `ios/`, and `web/`. The next work is multipart uploads, `/ws/progress`, the remaining write flows, and secure native token persistence.

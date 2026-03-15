@@ -13,6 +13,7 @@ type Config struct {
 	AppName             string
 	AppEnv              string
 	AppBaseURL          string
+	AllowedOrigins      []string
 	Port                string
 	DatabaseURL         string
 	RedisURL            string
@@ -47,6 +48,7 @@ func Load() (Config, error) {
 		AppName:             getEnv("APP_NAME", "MyCloud"),
 		AppEnv:              getEnv("APP_ENV", "development"),
 		AppBaseURL:          getEnv("APP_BASE_URL", "http://localhost:8080"),
+		AllowedOrigins:      parseCSVEnv("ALLOWED_ORIGINS"),
 		Port:                getEnv("PORT", "8080"),
 		DatabaseURL:         strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		RedisURL:            strings.TrimSpace(os.Getenv("REDIS_URL")),
@@ -68,6 +70,9 @@ func Load() (Config, error) {
 		ReadTimeout:         10 * time.Second,
 		WriteTimeout:        15 * time.Second,
 		IdleTimeout:         60 * time.Second,
+	}
+	if len(cfg.AllowedOrigins) == 0 && strings.TrimSpace(cfg.AppBaseURL) != "" {
+		cfg.AllowedOrigins = []string{strings.TrimRight(cfg.AppBaseURL, "/")}
 	}
 	minioSecure, err := parseBool("MINIO_SECURE", false)
 	if err != nil {
@@ -158,4 +163,23 @@ func parseBool(key string, fallback bool) (bool, error) {
 	}
 
 	return value, nil
+}
+
+func parseCSVEnv(key string) []string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimRight(strings.TrimSpace(part), "/")
+		if value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+
+	return values
 }

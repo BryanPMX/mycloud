@@ -12,7 +12,26 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    await tester.pumpWidget(App(config: AppConfig.fromEnvironment()));
+    await tester.pumpWidget(
+      App(
+        config: AppConfig(
+          appName: 'Mynube',
+          appBaseUri: Uri(scheme: 'https', host: 'mynube.live'),
+          apiBaseUri: Uri(
+            scheme: 'https',
+            host: 'api.mynube.live',
+            path: '/api/v1',
+          ),
+          websocketUri: Uri(
+            scheme: 'wss',
+            host: 'api.mynube.live',
+            path: '/ws/progress',
+          ),
+          environmentLabel: 'test',
+          useDemoData: true,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Sign in to Mynube'), findsOneWidget);
@@ -33,6 +52,6 @@ void main() {
     await tester.tap(find.text('Albums'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Albums ready for the next API slice'), findsOneWidget);
+    expect(find.text('Live album lists'), findsOneWidget);
   });
 }

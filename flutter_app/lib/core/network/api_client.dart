@@ -40,9 +40,17 @@ class ApiClient {
 
   Uri albumsUri() => endpoint('/albums');
 
+  Uri albumDetailUri(String albumId) => endpoint('/albums/$albumId');
+
+  Uri albumMediaUri(String albumId) => endpoint('/albums/$albumId/media');
+
   Uri adminStatsUri() => endpoint('/admin/stats');
 
   Uri adminUsersUri() => endpoint('/admin/users');
+
+  Uri mediaCommentsUri(String mediaId) => endpoint('/media/$mediaId/comments');
+
+  Uri favoriteMediaUri(String mediaId) => endpoint('/media/$mediaId/favorite');
 
   Uri uploadInitUri() => endpoint('/media/upload/init');
 
