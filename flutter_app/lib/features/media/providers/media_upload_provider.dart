@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_transport.dart';
@@ -22,13 +23,17 @@ class MediaUploadProvider extends ChangeNotifier {
     required ApiTransport transport,
     required AuthProvider authProvider,
     required MediaListProvider mediaProvider,
+    required ConnectivityService connectivityService,
   })  : _config = config,
         _apiClient = apiClient,
         _transport = transport,
         _authProvider = authProvider,
         _mediaProvider = mediaProvider,
+        _connectivityService = connectivityService,
         _objectTransport = ApiTransport(
           client: createHttpClient(withCredentials: false),
+          onReachable: connectivityService.markReachable,
+          onUnreachable: connectivityService.markUnreachable,
         );
 
   final AppConfig _config;
@@ -36,6 +41,7 @@ class MediaUploadProvider extends ChangeNotifier {
   final ApiTransport _transport;
   final AuthProvider _authProvider;
   final MediaListProvider _mediaProvider;
+  final ConnectivityService _connectivityService;
   final ApiTransport _objectTransport;
 
   final List<MediaUploadTask> _tasks = <MediaUploadTask>[];
@@ -55,7 +61,10 @@ class MediaUploadProvider extends ChangeNotifier {
   bool get supportsFilePicking => supportsUploadPicking;
 
   bool get canPickFiles =>
-      !_config.useDemoData && supportsUploadPicking && _authProvider.isAuthenticated;
+      !_config.useDemoData &&
+      supportsUploadPicking &&
+      _authProvider.isAuthenticated &&
+      !_connectivityService.isOffline;
 
   String get pickerHint {
     if (_config.useDemoData) {
@@ -63,6 +72,9 @@ class MediaUploadProvider extends ChangeNotifier {
     }
     if (!_authProvider.isAuthenticated) {
       return 'Sign in with the live backend to start uploads.';
+    }
+    if (_connectivityService.isOffline) {
+      return _connectivityService.statusMessage;
     }
     if (!supportsUploadPicking) {
       return 'File picking is currently implemented for the Flutter web target.';
@@ -81,6 +93,11 @@ class MediaUploadProvider extends ChangeNotifier {
 
     if (!_authProvider.isAuthenticated) {
       _errorMessage = 'Sign in before uploading files.';
+      notifyListeners();
+      return;
+    }
+    if (_connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
       notifyListeners();
       return;
     }
@@ -476,7 +493,8 @@ class _UploadInitSession {
     final partSizeBytes = json['part_size_bytes'];
     final normalizedPartSize = partSizeBytes is num ? partSizeBytes.toInt() : 0;
     if (normalizedPartSize <= 0) {
-      throw const FormatException('The upload part size is missing or invalid.');
+      throw const FormatException(
+          'The upload part size is missing or invalid.');
     }
 
     return _UploadInitSession(

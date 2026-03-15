@@ -53,9 +53,11 @@ As of March 15, 2026, the repository includes the current working backend and Fl
 - SMTP invite delivery when SMTP transport is configured, with Mailpit-friendly local defaults in `.env.example`
 - focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, invite acceptance, admin mutations, media upload commands, favorites, albums, and shares
 - Flutter `MaterialApp.router` shell with SDK-only routing, adaptive `NavigationBar`/`NavigationRail` layout, live auth restore plus secure native token persistence, live media/albums/comments/admin reads and writes, browser multipart upload orchestration, `/ws/progress` reconciliation, and environment-backed endpoint config
-- Flutter smoke coverage for boot, demo sign-in, and route navigation plus DTO parsing coverage for API and worker progress payloads in `flutter_app/test/core/`
+- Flutter connectivity status tracking for browser online/offline state plus transport-level reachability feedback, keeping upload/profile actions honest when the backend cannot be reached
+- Flutter smoke coverage for boot, demo sign-in, and route navigation plus DTO parsing, connectivity-service coverage, and shared demo-flow helpers in `flutter_app/test/core/` and `flutter_app/test/shared/`
+- Flutter integration coverage for demo admin/member happy paths in `flutter_app/integration_test/`
 
-The Flutter client now covers the main documented mutation surfaces too. The biggest remaining client work is consuming the new signed-avatar and family-directory backend surfaces throughout Flutter, plus the longer-term mobile/offline slices unless a section explicitly says otherwise.
+The Flutter client now covers the main documented mutation surfaces and the signed-avatar/directory flows too. The biggest remaining client work is the broader native media-picking/mobile slice, deeper offline/cache polish, and live-backend end-to-end coverage beyond the current demo-mode happy paths.
 
 ### Design Goals
 

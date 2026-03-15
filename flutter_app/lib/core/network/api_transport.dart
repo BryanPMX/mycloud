@@ -6,9 +6,17 @@ import 'api_exception.dart';
 import 'http_client_factory.dart';
 
 class ApiTransport {
-  ApiTransport({http.Client? client}) : _client = client ?? createHttpClient();
+  ApiTransport({
+    http.Client? client,
+    void Function()? onReachable,
+    void Function(String reason)? onUnreachable,
+  })  : _client = client ?? createHttpClient(),
+        _onReachable = onReachable,
+        _onUnreachable = onUnreachable;
 
   final http.Client _client;
+  final void Function()? _onReachable;
+  final void Function(String reason)? _onUnreachable;
 
   Future<ApiPayload> get(
     Uri uri, {
@@ -84,10 +92,12 @@ class ApiTransport {
   ) async {
     try {
       final response = await request();
+      _onReachable?.call();
       return _parseResponse(response);
     } on ApiException {
       rethrow;
     } on Exception {
+      _onUnreachable?.call('Unable to reach the API.');
       throw const ApiException(
         statusCode: 0,
         message: 'Unable to reach the API.',
@@ -100,10 +110,12 @@ class ApiTransport {
   ) async {
     try {
       final response = await request();
+      _onReachable?.call();
       return _parseResponse(await http.Response.fromStream(response));
     } on ApiException {
       rethrow;
     } on Exception {
+      _onUnreachable?.call('Unable to reach the API.');
       throw const ApiException(
         statusCode: 0,
         message: 'Unable to reach the API.',

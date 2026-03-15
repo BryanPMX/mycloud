@@ -4,16 +4,19 @@ Current implementation note on March 15, 2026:
 - `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, secure native token persistence, media reads, comment create/delete, album create/edit/delete plus membership/share flows, profile display-name/avatar edits, non-admin directory-backed recipient picking, admin stats plus user-management screens, browser multipart uploads, and worker progress updates all hit the live Go API and WebSocket surfaces by default.
 - `AppConfig` still targets `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. `USE_DEMO_DATA` now defaults to `false`; enable it explicitly for smoke tests or offline UI work.
 - The Flutter network layer now uses `package:http`, sends browser credentials on web for API calls, uses a second non-credentialed browser client for presigned MinIO part uploads, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
+- `ConnectivityService` is now live instead of placeholder-only: it combines browser online/offline signals with transport-level reachability feedback, surfaces that status in the shell and upload UI, and disables upload/avatar file picking when the backend is unreachable.
 - The current file-picker implementation is still intentionally web-first for media uploads: it uses `FileUploadInputElement`, `Blob.slice`, and `FileReader.readAsArrayBuffer` so the browser can stream multipart chunks without adding another package. Secure token persistence is now in place for native targets, while broader native media picking is still pending.
 - Flutter now consumes `GET /users/directory` for album-recipient picking and caches signed avatar URLs by `user_id`. It seeds that cache from `/users/me`, `/users/directory`, comment authors, and share recipients, then refreshes stale entries through `GET /users/:id/avatar`.
 - The backend now also implements the documented CORS path through `ALLOWED_ORIGINS`, which is required for the Flutter web app to call `api.mynube.live` with cookies/credentials.
-- `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice.
+- `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice. The new `integration_test/` suite now compiles under analyze, but running it in this workspace still needs a supported non-web device because Flutter reported that web devices are not supported for integration tests here.
 - Confirmed production domain plan remains: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
 
 Reference docs used for the current live integration slice:
 - Flutter navigation overview: [docs.flutter.dev/ui/navigation](https://docs.flutter.dev/ui/navigation)
 - `MaterialApp.router`: [api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html](https://api.flutter.dev/flutter/material/MaterialApp/MaterialApp.router.html)
 - Flutter networking cookbook: [docs.flutter.dev/cookbook/networking/authenticated-requests](https://docs.flutter.dev/cookbook/networking/authenticated-requests)
+- Flutter integration testing guide: [docs.flutter.dev/testing/integration-tests](https://docs.flutter.dev/testing/integration-tests)
+- Flutter integration testing concepts: [docs.flutter.dev/cookbook/testing/integration/introduction](https://docs.flutter.dev/cookbook/testing/integration/introduction)
 - `showDialog`: [api.flutter.dev/flutter/material/showDialog.html](https://api.flutter.dev/flutter/material/showDialog.html)
 - `TextEditingController`: [api.flutter.dev/flutter/widgets/TextEditingController-class.html](https://api.flutter.dev/flutter/widgets/TextEditingController-class.html)
 - `package:http` browser credentials support: [pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html](https://pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html)
@@ -50,7 +53,8 @@ lib/
 │   ├── widgets/main_scaffold.dart   # Adaptive rail/bottom-nav shell
 │   ├── widgets/user_avatar.dart     # Shared user avatar renderer with signed-URL refresh
 │   └── utils/                       # Date + file-size formatters
-└── test/                            # Smoke, DTO parsing, album, and directory/avatar-cache coverage
+├── test/                            # Smoke, DTO parsing, connectivity, album, and directory/avatar-cache coverage
+└── integration_test/                # Demo-mode end-to-end happy paths for admin/member flows
 ```
 
 ## 2. Current Dependency Set
@@ -66,12 +70,14 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  integration_test:
+    sdk: flutter
 ```
 
 ## 3. Recommended Next Flutter Continuation
 
-1. Replace the temporary web-first file picker with the longer-term cross-platform media-selection approach once the native/mobile slice begins.
-2. Add deeper widget and integration coverage around admin edits, album sharing dialogs, avatar refreshes, uploads, and reconnect handling.
+1. Replace the temporary web-first file pickers with the longer-term cross-platform media-selection approach once the native/mobile slice begins.
+2. Expand integration coverage from demo-mode happy paths into live-backend scenarios for uploads, reconnect handling, and avatar refresh expiry.
 3. Tighten offline/cache invalidation behavior for other signed-URL surfaces beyond user avatars.
 
 ## 4. Target Architecture Reference

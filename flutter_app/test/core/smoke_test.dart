@@ -1,50 +1,15 @@
-import 'package:familycloud/app.dart';
-import 'package:familycloud/core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../shared/demo_app_harness.dart';
 
 void main() {
   testWidgets(
       'non-admin album owners can open share dialog and pick directory recipients',
       (tester) async {
-    tester.view.physicalSize = const Size(500, 1600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await tester.pumpWidget(
-      App(
-        config: AppConfig(
-          appName: 'Mynube',
-          appBaseUri: Uri(scheme: 'https', host: 'mynube.live'),
-          apiBaseUri: Uri(
-            scheme: 'https',
-            host: 'api.mynube.live',
-            path: '/api/v1',
-          ),
-          websocketUri: Uri(
-            scheme: 'wss',
-            host: 'api.mynube.live',
-            path: '/ws/progress',
-          ),
-          environmentLabel: 'test',
-          useDemoData: true,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).at(0), 'member@mynube.live');
-    await tester.enterText(find.byType(TextField).at(1), 'demo-password');
-    await tester.tap(find.text('Enter workspace'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Albums'));
-    await tester.pumpAndSettle();
+    await pumpDemoApp(tester);
+    await signInAsDemoMember(tester);
+    await openSection(tester, 'Albums');
     await tester.ensureVisible(
       find.byKey(const ValueKey<String>('album-share-album-1')),
     );
@@ -67,47 +32,8 @@ void main() {
   testWidgets(
       'boots, signs in, and exercises profile, album, and admin mutations',
       (tester) async {
-    tester.view.physicalSize = const Size(500, 1800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await tester.pumpWidget(
-      App(
-        config: AppConfig(
-          appName: 'Mynube',
-          appBaseUri: Uri(scheme: 'https', host: 'mynube.live'),
-          apiBaseUri: Uri(
-            scheme: 'https',
-            host: 'api.mynube.live',
-            path: '/api/v1',
-          ),
-          websocketUri: Uri(
-            scheme: 'wss',
-            host: 'api.mynube.live',
-            path: '/ws/progress',
-          ),
-          environmentLabel: 'test',
-          useDemoData: true,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Sign in to Mynube'), findsOneWidget);
-
-    final emailField = find.byType(TextField).at(0);
-    final passwordField = find.byType(TextField).at(1);
-    await tester.enterText(emailField, 'admin@mynube.live');
-    await tester.enterText(passwordField, 'demo-password');
-
-    await tester.ensureVisible(find.text('Enter workspace'));
-    await tester.tap(find.text('Enter workspace'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
+    await pumpDemoApp(tester, size: const Size(500, 1800));
+    await signInAsDemoAdmin(tester);
 
     expect(find.text('Media library'), findsOneWidget);
 
@@ -124,8 +50,7 @@ void main() {
 
     expect(find.text('Smoke test comment'), findsOneWidget);
 
-    await tester.tap(find.text('Albums'));
-    await tester.pumpAndSettle();
+    await openSection(tester, 'Albums');
 
     expect(find.text('Live album workspace'), findsOneWidget);
 
@@ -144,8 +69,7 @@ void main() {
 
     expect(find.text('Smoke Test Album'), findsOneWidget);
 
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
+    await openSection(tester, 'Profile');
 
     await tester.ensureVisible(
       find.byKey(const ValueKey<String>('profile-display-name-field')),
@@ -175,8 +99,7 @@ void main() {
 
     expect(find.text('Avatar saved.'), findsOneWidget);
 
-    await tester.tap(find.text('Admin'));
-    await tester.pumpAndSettle();
+    await openSection(tester, 'Admin');
     await tester.enterText(
       find.byKey(const ValueKey<String>('admin-invite-email')),
       'fresh@family.com',

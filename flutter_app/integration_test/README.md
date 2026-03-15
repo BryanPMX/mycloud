@@ -2,4 +2,7 @@
 
 End-to-end and high-level integration tests live here.
 
-Use this directory for app boot, auth, upload, and navigation happy-path coverage.
+Current coverage:
+- `app_happy_paths_test.dart` runs seeded demo admin and member happy paths with `IntegrationTestWidgetsFlutterBinding`, covering app boot, auth, library interactions, album sharing, profile edits, and admin invite flows
+
+Run this suite with `flutter test integration_test` on a supported non-web device target.

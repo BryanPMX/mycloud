@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/config/app_config.dart';
+import '../../core/connectivity/connectivity_service.dart';
 import '../../core/router/app_router.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/directory/providers/family_directory_provider.dart';
@@ -12,6 +13,7 @@ class MainScaffold extends StatelessWidget {
     required this.config,
     required this.authProvider,
     required this.familyDirectoryProvider,
+    required this.connectivityService,
     required this.selectedSection,
     required this.onDestinationSelected,
     required this.child,
@@ -20,6 +22,7 @@ class MainScaffold extends StatelessWidget {
   final AppConfig config;
   final AuthProvider authProvider;
   final FamilyDirectoryProvider familyDirectoryProvider;
+  final ConnectivityService connectivityService;
   final AppSection selectedSection;
   final ValueChanged<AppSection> onDestinationSelected;
   final Widget child;
@@ -38,7 +41,10 @@ class MainScaffold extends StatelessWidget {
     );
 
     return AnimatedBuilder(
-      animation: authProvider,
+      animation: Listenable.merge(<Listenable>[
+        authProvider,
+        connectivityService,
+      ]),
       builder: (context, _) {
         final destinations = _destinations(authProvider.canAccessAdmin);
         final selectedIndex = destinations.indexWhere(
@@ -173,6 +179,7 @@ class MainScaffold extends StatelessWidget {
                                 child: _MainPanel(
                                   config: config,
                                   authProvider: authProvider,
+                                  connectivityService: connectivityService,
                                   selectedSection: selectedSection,
                                   child: child,
                                 ),
@@ -182,6 +189,7 @@ class MainScaffold extends StatelessWidget {
                         : _MainPanel(
                             config: config,
                             authProvider: authProvider,
+                            connectivityService: connectivityService,
                             selectedSection: selectedSection,
                             child: child,
                           ),
@@ -230,12 +238,14 @@ class _MainPanel extends StatelessWidget {
   const _MainPanel({
     required this.config,
     required this.authProvider,
+    required this.connectivityService,
     required this.selectedSection,
     required this.child,
   });
 
   final AppConfig config;
   final AuthProvider authProvider;
+  final ConnectivityService connectivityService;
   final AppSection selectedSection;
   final Widget child;
 
@@ -274,6 +284,18 @@ class _MainPanel extends StatelessWidget {
                 Chip(
                   avatar: const Icon(Icons.cloud_done_rounded, size: 18),
                   label: Text(config.apiBaseUri.host),
+                ),
+                Chip(
+                  avatar: Icon(
+                    switch (connectivityService.status) {
+                      ConnectivityStatus.online => Icons.wifi_rounded,
+                      ConnectivityStatus.offline =>
+                        Icons.portable_wifi_off_rounded,
+                      ConnectivityStatus.unknown => Icons.sync_rounded,
+                    },
+                    size: 18,
+                  ),
+                  label: Text('Network ${connectivityService.statusLabel}'),
                 ),
                 if (user != null && !authProvider.canAccessAdmin)
                   Chip(

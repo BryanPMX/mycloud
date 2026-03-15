@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_transport.dart';
@@ -16,6 +17,7 @@ class ProfileProvider extends ChangeNotifier {
     required this.transport,
     required this.authProvider,
     required this.adminProvider,
+    required this.connectivityService,
   }) {
     authProvider.addListener(_handleAuthChanged);
   }
@@ -27,6 +29,7 @@ class ProfileProvider extends ChangeNotifier {
   final ApiTransport transport;
   final AuthProvider authProvider;
   final AdminDashboardProvider adminProvider;
+  final ConnectivityService connectivityService;
 
   bool _isSavingProfile = false;
   bool _isUploadingAvatar = false;
@@ -43,7 +46,9 @@ class ProfileProvider extends ChangeNotifier {
 
   bool get profileMessageIsError => _profileMessageIsError;
 
-  bool get canPickAvatar => config.useDemoData || supportsAvatarPicking;
+  bool get canPickAvatar =>
+      (config.useDemoData || supportsAvatarPicking) &&
+      !connectivityService.isOffline;
 
   String get avatarPickerHint {
     if (config.useDemoData) {
@@ -51,6 +56,9 @@ class ProfileProvider extends ChangeNotifier {
     }
     if (!supportsAvatarPicking) {
       return 'Avatar file picking is currently implemented for Flutter web only.';
+    }
+    if (connectivityService.isOffline) {
+      return connectivityService.statusMessage;
     }
     return 'Choose a JPG, PNG, WEBP, or HEIC image under 5 MB.';
   }
@@ -193,6 +201,11 @@ class ProfileProvider extends ChangeNotifier {
         'Sign in again before uploading an avatar.',
         isError: true,
       );
+      notifyListeners();
+      return false;
+    }
+    if (connectivityService.isOffline) {
+      _setProfileMessage(connectivityService.statusMessage, isError: true);
       notifyListeners();
       return false;
     }

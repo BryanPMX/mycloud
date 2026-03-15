@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../connectivity/connectivity_service.dart';
 import '../../features/admin/providers/admin_dashboard_provider.dart';
 import '../../features/admin/ui/admin_dashboard_screen.dart';
 import '../../features/albums/providers/album_provider.dart';
@@ -97,6 +98,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
     required this.adminProvider,
     required this.familyDirectoryProvider,
     required this.uploadProgressHub,
+    required this.connectivityService,
   }) {
     authProvider.addListener(_handleAuthChanged);
   }
@@ -112,6 +114,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
   final AdminDashboardProvider adminProvider;
   final FamilyDirectoryProvider familyDirectoryProvider;
   final UploadProgressHub uploadProgressHub;
+  final ConnectivityService connectivityService;
 
   @override
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -194,6 +197,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
                   config: appConfig,
                   authProvider: authProvider,
                   familyDirectoryProvider: familyDirectoryProvider,
+                  connectivityService: connectivityService,
                   selectedSection: _selectedSection,
                   onDestinationSelected: goToSection,
                   child: _buildSectionBody(),
@@ -226,6 +230,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
           apiClient: apiClient,
           uploadProgressHub: uploadProgressHub,
           currentUser: authProvider.currentUser,
+          connectivityService: connectivityService,
         );
       case AppSection.albums:
         return AlbumListScreen(

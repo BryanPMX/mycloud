@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'core/config/app_config.dart';
+import 'core/connectivity/connectivity_service.dart';
 import 'core/network/api_client.dart';
 import 'core/network/api_transport.dart';
 import 'core/router/app_router.dart';
@@ -28,6 +29,7 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
+  late final ConnectivityService _connectivityService;
   late final ApiTransport _transport;
   late final ApiClient _apiClient;
   late final SecureStorage _secureStorage;
@@ -48,7 +50,11 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
-    _transport = ApiTransport();
+    _connectivityService = ConnectivityService();
+    _transport = ApiTransport(
+      onReachable: _connectivityService.markReachable,
+      onUnreachable: _connectivityService.markUnreachable,
+    );
     _apiClient = ApiClient(widget.config);
     _secureStorage = SecureStorage();
     _authProvider = AuthProvider(
@@ -69,6 +75,7 @@ class _AppState extends State<App> {
       transport: _transport,
       authProvider: _authProvider,
       mediaProvider: _mediaProvider,
+      connectivityService: _connectivityService,
     );
     _albumProvider = AlbumProvider(
       config: widget.config,
@@ -100,6 +107,7 @@ class _AppState extends State<App> {
       transport: _transport,
       authProvider: _authProvider,
       adminProvider: _adminProvider,
+      connectivityService: _connectivityService,
     );
     _uploadProgressHub = UploadProgressHub(
       config: widget.config,
@@ -119,6 +127,7 @@ class _AppState extends State<App> {
       adminProvider: _adminProvider,
       familyDirectoryProvider: _familyDirectoryProvider,
       uploadProgressHub: _uploadProgressHub,
+      connectivityService: _connectivityService,
     );
     _authProvider.addListener(_handleAuthChanged);
     _mediaProvider.addListener(_handleSelectedMediaChanged);
@@ -140,6 +149,7 @@ class _AppState extends State<App> {
     _mediaProvider.dispose();
     _authProvider.dispose();
     _transport.dispose();
+    _connectivityService.dispose();
     super.dispose();
   }
 

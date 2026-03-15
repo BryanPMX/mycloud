@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/websocket/upload_progress_hub.dart';
 import '../../../shared/widgets/user_avatar.dart';
@@ -26,6 +27,7 @@ class PhotoGridScreen extends StatelessWidget {
     required this.apiClient,
     required this.uploadProgressHub,
     required this.currentUser,
+    required this.connectivityService,
   });
 
   final MediaListProvider mediaProvider;
@@ -35,6 +37,7 @@ class PhotoGridScreen extends StatelessWidget {
   final ApiClient apiClient;
   final UploadProgressHub uploadProgressHub;
   final User? currentUser;
+  final ConnectivityService connectivityService;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +47,7 @@ class PhotoGridScreen extends StatelessWidget {
         mediaUploadProvider,
         commentProvider,
         uploadProgressHub,
+        connectivityService,
       ]),
       builder: (context, _) {
         final theme = Theme.of(context);
@@ -126,6 +130,18 @@ class PhotoGridScreen extends StatelessWidget {
                                 label:
                                     'Progress ${uploadProgressHub.statusLabel}',
                               ),
+                              _MetricChip(
+                                icon: switch (connectivityService.status) {
+                                  ConnectivityStatus.online =>
+                                    Icons.wifi_rounded,
+                                  ConnectivityStatus.offline =>
+                                    Icons.portable_wifi_off_rounded,
+                                  ConnectivityStatus.unknown =>
+                                    Icons.sync_rounded,
+                                },
+                                label:
+                                    'Network ${connectivityService.statusLabel}',
+                              ),
                             ],
                           ),
                         ],
@@ -154,7 +170,8 @@ class PhotoGridScreen extends StatelessWidget {
                         label: const Text('Favorites only'),
                       ),
                       OutlinedButton.icon(
-                        onPressed: mediaProvider.isLoading
+                        onPressed: mediaProvider.isLoading ||
+                                connectivityService.isOffline
                             ? null
                             : () {
                                 mediaProvider.load();
@@ -169,6 +186,7 @@ class PhotoGridScreen extends StatelessWidget {
                     mediaUploadProvider: mediaUploadProvider,
                     uploadProgressHub: uploadProgressHub,
                     apiClient: apiClient,
+                    connectivityService: connectivityService,
                   ),
                   const SizedBox(height: 20),
                   if (mediaProvider.isLoading && items.isEmpty)
@@ -259,11 +277,13 @@ class _UploadPanel extends StatelessWidget {
     required this.mediaUploadProvider,
     required this.uploadProgressHub,
     required this.apiClient,
+    required this.connectivityService,
   });
 
   final MediaUploadProvider mediaUploadProvider;
   final UploadProgressHub uploadProgressHub;
   final ApiClient apiClient;
+  final ConnectivityService connectivityService;
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +337,15 @@ class _UploadPanel extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (connectivityService.isOffline) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          connectivityService.statusMessage,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -337,6 +366,15 @@ class _UploadPanel extends StatelessWidget {
                     _MetricChip(
                       icon: Icons.route_rounded,
                       label: apiClient.uploadInitUri().path,
+                    ),
+                    _MetricChip(
+                      icon: switch (connectivityService.status) {
+                        ConnectivityStatus.online => Icons.wifi_rounded,
+                        ConnectivityStatus.offline =>
+                          Icons.portable_wifi_off_rounded,
+                        ConnectivityStatus.unknown => Icons.sync_rounded,
+                      },
+                      label: connectivityService.statusLabel,
                     ),
                   ],
                 ),
