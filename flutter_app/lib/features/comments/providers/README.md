@@ -2,4 +2,4 @@
 
 Comment state providers live here.
 
-Use this directory for thread loading, optimistic updates, and deletion state.
+Use this directory for thread loading, inline comment posting, and deletion state.

@@ -73,17 +73,26 @@ class AlbumProvider extends ChangeNotifier {
 
   bool _isLoading = false;
   bool _hasLoaded = false;
+  bool _isCreating = false;
   String? _errorMessage;
+  final Set<String> _savingAlbumIds = <String>{};
+  final Set<String> _deletingAlbumIds = <String>{};
 
   bool get isLoading => _isLoading;
 
   bool get hasLoaded => _hasLoaded;
+
+  bool get isCreating => _isCreating;
 
   String? get errorMessage => _errorMessage;
 
   List<Album> get ownedAlbums => List<Album>.unmodifiable(_ownedAlbums);
 
   List<Album> get sharedAlbums => List<Album>.unmodifiable(_sharedAlbums);
+
+  bool isSavingAlbum(String albumId) => _savingAlbumIds.contains(albumId);
+
+  bool isDeletingAlbum(String albumId) => _deletingAlbumIds.contains(albumId);
 
   Future<void> load() async {
     if (_config.useDemoData) {
@@ -130,10 +139,173 @@ class AlbumProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> createAlbum({
+    required String name,
+    required String description,
+  }) async {
+    final trimmedName = name.trim();
+    final trimmedDescription = description.trim();
+    if (trimmedName.isEmpty) {
+      _errorMessage = 'Album name cannot be empty.';
+      notifyListeners();
+      return false;
+    }
+
+    _isCreating = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final album = _config.useDemoData
+          ? Album(
+              id: 'demo-album-${DateTime.now().microsecondsSinceEpoch}',
+              ownerId: _authProvider.currentUser?.id ?? 'demo-user',
+              name: trimmedName,
+              description: trimmedDescription,
+              mediaCount: 0,
+              createdAt: DateTime.now().toUtc(),
+              updatedAt: DateTime.now().toUtc(),
+              isOwnedByCurrentUser: true,
+            )
+          : Album.fromJson(
+              (await _authProvider.withAuthorization(
+                (headers) => _transport.postJson(
+                  _apiClient.albumsUri(),
+                  headers: headers,
+                  body: <String, String>{
+                    'name': trimmedName,
+                    'description': trimmedDescription,
+                  },
+                ),
+              ))
+                  .asMap(),
+              isOwnedByCurrentUser: true,
+            );
+
+      _ownedAlbums.insert(0, album);
+      _sortOwnedAlbums();
+      _hasLoaded = true;
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Unable to create the album right now.';
+      notifyListeners();
+      return false;
+    } finally {
+      _isCreating = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateAlbum({
+    required String albumId,
+    required String name,
+    required String description,
+  }) async {
+    final index = _ownedAlbums.indexWhere((album) => album.id == albumId);
+    final trimmedName = name.trim();
+    final trimmedDescription = description.trim();
+    if (index == -1) {
+      return false;
+    }
+    if (trimmedName.isEmpty) {
+      _errorMessage = 'Album name cannot be empty.';
+      notifyListeners();
+      return false;
+    }
+
+    _savingAlbumIds.add(albumId);
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updatedAlbum = _config.useDemoData
+          ? _ownedAlbums[index].copyWith(
+              name: trimmedName,
+              description: trimmedDescription,
+              updatedAt: DateTime.now().toUtc(),
+            )
+          : Album.fromJson(
+              (await _authProvider.withAuthorization(
+                (headers) => _transport.patchJson(
+                  _apiClient.albumDetailUri(albumId),
+                  headers: headers,
+                  body: <String, String>{
+                    'name': trimmedName,
+                    'description': trimmedDescription,
+                  },
+                ),
+              ))
+                  .asMap(),
+              isOwnedByCurrentUser: true,
+            );
+
+      _ownedAlbums[index] = updatedAlbum;
+      _sortOwnedAlbums();
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Unable to update the album right now.';
+      notifyListeners();
+      return false;
+    } finally {
+      _savingAlbumIds.remove(albumId);
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteAlbum(String albumId) async {
+    final index = _ownedAlbums.indexWhere((album) => album.id == albumId);
+    if (index == -1) {
+      return false;
+    }
+
+    _deletingAlbumIds.add(albumId);
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      if (!_config.useDemoData) {
+        await _authProvider.withAuthorization(
+          (headers) => _transport.delete(
+            _apiClient.albumDetailUri(albumId),
+            headers: headers,
+          ),
+        );
+      }
+
+      _ownedAlbums.removeAt(index);
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Unable to delete the album right now.';
+      notifyListeners();
+      return false;
+    } finally {
+      _deletingAlbumIds.remove(albumId);
+      notifyListeners();
+    }
+  }
+
   void reset() {
     _isLoading = false;
     _hasLoaded = _config.useDemoData;
+    _isCreating = false;
     _errorMessage = null;
+    _savingAlbumIds.clear();
+    _deletingAlbumIds.clear();
     _ownedAlbums
       ..clear()
       ..addAll(_config.useDemoData ? _seedOwnedAlbums : const <Album>[]);
@@ -141,5 +313,10 @@ class AlbumProvider extends ChangeNotifier {
       ..clear()
       ..addAll(_config.useDemoData ? _seedSharedAlbums : const <Album>[]);
     notifyListeners();
+  }
+
+  void _sortOwnedAlbums() {
+    _ownedAlbums
+        .sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
   }
 }

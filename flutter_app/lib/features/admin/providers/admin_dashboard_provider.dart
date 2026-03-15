@@ -72,14 +72,20 @@ class AdminDashboardProvider extends ChangeNotifier {
       description:
           'The client now uploads through the real multipart API, watches /ws/progress, and reconciles pending uploads back into the live media library.',
     ),
+    DeliveryLogEntry(
+      dateLabel: 'Mar 15, 2026',
+      title: 'Flutter profile, comment, and album mutations landed',
+      description:
+          'Display-name edits, comment create/delete, and owned album create, edit, and delete are now live in the Flutter client.',
+    ),
   ];
 
   final List<FlutterContinuation> nextFlutterContinuations =
       const <FlutterContinuation>[
     FlutterContinuation(
-      title: 'Land write flows for profile, comments, and album management',
+      title: 'Finish avatar, album sharing, and album membership writes',
       description:
-          'The upload path is live now, so the next highest-value work is mutation UX, validation, and optimistic updates for the remaining user-facing writes.',
+          'The biggest remaining user-facing mutation gaps are PUT /users/me/avatar, album share management, and add/remove media inside albums.',
       isHighestPriority: true,
     ),
     FlutterContinuation(
@@ -91,7 +97,7 @@ class AdminDashboardProvider extends ChangeNotifier {
     FlutterContinuation(
       title: 'Expand admin beyond stats',
       description:
-          'GET /admin/users, invite delivery, and account updates are ready to be surfaced in operator screens next.',
+          'GET /admin/users, invite delivery, and account updates are ready to move from backend-only support into real operator screens.',
       isHighestPriority: false,
     ),
     FlutterContinuation(

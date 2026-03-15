@@ -2,4 +2,4 @@
 
 Profile screens and widgets live here.
 
-Keep account settings and storage-usage presentation in this directory.
+Keep account settings, display-name editing, rollout status, and storage-usage presentation in this directory.

@@ -85,6 +85,7 @@ class _AppState extends State<App> {
     _profileProvider = ProfileProvider(
       config: widget.config,
       apiClient: _apiClient,
+      transport: _transport,
       authProvider: _authProvider,
       adminProvider: _adminProvider,
     );

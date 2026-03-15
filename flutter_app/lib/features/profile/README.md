@@ -2,4 +2,4 @@
 
 Profile feature code lives here.
 
-This feature owns the current user's account, avatar, and storage-usage views.
+This feature owns the current user's account summary, display-name editing, avatar work-in-progress, and storage-usage views.

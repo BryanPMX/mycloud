@@ -42,6 +42,13 @@ class AuthProvider extends ChangeNotifier {
 
   bool get usesDemoData => _config.useDemoData;
 
+  void updateCurrentUser(User user) {
+    _currentUser = user;
+    _status = AuthStatus.signedIn;
+    _errorMessage = null;
+    notifyListeners();
+  }
+
   Future<void> restore() async {
     _status = AuthStatus.restoring;
     _errorMessage = null;

@@ -6,6 +6,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/websocket/upload_progress_hub.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/utils/file_size_formatter.dart';
+import '../../auth/domain/user.dart';
 import '../../comments/domain/comment.dart';
 import '../../comments/providers/comment_provider.dart';
 import '../domain/media.dart';
@@ -21,6 +22,7 @@ class PhotoGridScreen extends StatelessWidget {
     required this.commentProvider,
     required this.apiClient,
     required this.uploadProgressHub,
+    required this.currentUser,
   });
 
   final MediaListProvider mediaProvider;
@@ -28,6 +30,7 @@ class PhotoGridScreen extends StatelessWidget {
   final CommentProvider commentProvider;
   final ApiClient apiClient;
   final UploadProgressHub uploadProgressHub;
+  final User? currentUser;
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +45,8 @@ class PhotoGridScreen extends StatelessWidget {
         final theme = Theme.of(context);
         final items = mediaProvider.visibleItems;
         final selectedMedia = mediaProvider.selectedMedia;
-        final activeUploads = mediaUploadProvider.tasks
-            .where((task) => !task.isTerminal)
-            .length;
+        final activeUploads =
+            mediaUploadProvider.tasks.where((task) => !task.isTerminal).length;
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -202,6 +204,8 @@ class PhotoGridScreen extends StatelessWidget {
                             thumbUrl: mediaProvider.thumbnailUrlFor(
                               selectedMedia.id,
                             ),
+                            commentProvider: commentProvider,
+                            currentUser: currentUser,
                           ),
                         ),
                       ],
@@ -229,6 +233,8 @@ class PhotoGridScreen extends StatelessWidget {
                         thumbUrl: mediaProvider.thumbnailUrlFor(
                           selectedMedia.id,
                         ),
+                        commentProvider: commentProvider,
+                        currentUser: currentUser,
                       ),
                     ],
                   ],
@@ -257,9 +263,8 @@ class _UploadPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tasks = mediaUploadProvider.tasks.take(4).toList(growable: false);
-    final activeCount = mediaUploadProvider.tasks
-        .where((task) => !task.isTerminal)
-        .length;
+    final activeCount =
+        mediaUploadProvider.tasks.where((task) => !task.isTerminal).length;
 
     return Card(
       child: Padding(
@@ -842,6 +847,8 @@ class _DetailPanel extends StatelessWidget {
     required this.commentsError,
     required this.apiClient,
     required this.thumbUrl,
+    required this.commentProvider,
+    required this.currentUser,
   });
 
   final Media media;
@@ -850,6 +857,8 @@ class _DetailPanel extends StatelessWidget {
   final String? commentsError;
   final ApiClient apiClient;
   final String? thumbUrl;
+  final CommentProvider commentProvider;
+  final User? currentUser;
 
   @override
   Widget build(BuildContext context) {
@@ -906,6 +915,14 @@ class _DetailPanel extends StatelessWidget {
             const SizedBox(height: 20),
             Text('Comments', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
+            if (currentUser != null) ...[
+              _CommentComposer(
+                key: ValueKey<String>('comment-composer-${media.id}'),
+                mediaId: media.id,
+                commentProvider: commentProvider,
+              ),
+              const SizedBox(height: 16),
+            ],
             if (commentsLoading)
               const Padding(
                 padding: EdgeInsets.only(bottom: 12),
@@ -941,11 +958,55 @@ class _DetailPanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        comment.author.displayName,
-                        style: theme.textTheme.labelLarge,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  comment.author.displayName,
+                                  style: theme.textTheme.labelLarge,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  DateFormatter.relative(comment.createdAt),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_canDeleteComment(comment))
+                            IconButton(
+                              onPressed:
+                                  commentProvider.isDeletingComment(comment.id)
+                                      ? null
+                                      : () {
+                                          unawaited(
+                                            commentProvider.deleteComment(
+                                              media.id,
+                                              comment.id,
+                                            ),
+                                          );
+                                        },
+                              icon: commentProvider
+                                      .isDeletingComment(comment.id)
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.delete_outline_rounded),
+                              tooltip: 'Delete comment',
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Text(comment.body),
                     ],
                   ),
@@ -956,6 +1017,103 @@ class _DetailPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _canDeleteComment(Comment comment) {
+    final user = currentUser;
+    if (user == null) {
+      return false;
+    }
+
+    return user.isAdmin || user.id == comment.author.id;
+  }
+}
+
+class _CommentComposer extends StatefulWidget {
+  const _CommentComposer({
+    super.key,
+    required this.mediaId,
+    required this.commentProvider,
+  });
+
+  final String mediaId;
+  final CommentProvider commentProvider;
+
+  @override
+  State<_CommentComposer> createState() => _CommentComposerState();
+}
+
+class _CommentComposerState extends State<_CommentComposer> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController()..addListener(_handleChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_handleChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canSubmit = _controller.text.trim().isNotEmpty &&
+        !widget.commentProvider.isSubmitting;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          key: ValueKey<String>('comment-input-${widget.mediaId}'),
+          controller: _controller,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Write a comment',
+            hintText: 'Add context for the rest of the family.',
+          ),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            key: ValueKey<String>('comment-submit-${widget.mediaId}'),
+            onPressed: canSubmit ? _submit : null,
+            icon: widget.commentProvider.isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send_rounded),
+            label: Text(
+              widget.commentProvider.isSubmitting
+                  ? 'Posting...'
+                  : 'Post comment',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submit() async {
+    final didPost = await widget.commentProvider.addComment(
+      widget.mediaId,
+      _controller.text,
+    );
+    if (didPost && mounted) {
+      _controller.clear();
+    }
+  }
+
+  void _handleChanged() {
+    setState(() {});
   }
 }
 

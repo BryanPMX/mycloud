@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('boots, signs in, and navigates to albums', (tester) async {
+  testWidgets(
+      'boots, signs in, and exercises profile, comment, and album mutations',
+      (tester) async {
     tester.view.physicalSize = const Size(500, 1800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -49,9 +51,59 @@ void main() {
 
     expect(find.text('Media library'), findsOneWidget);
 
+    await tester.ensureVisible(
+        find.byKey(const ValueKey<String>('comment-input-media-1')));
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('comment-input-media-1')),
+      'Smoke test comment',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('comment-submit-media-1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Smoke test comment'), findsOneWidget);
+
     await tester.tap(find.text('Albums'));
     await tester.pumpAndSettle();
 
     expect(find.text('Live album lists'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey<String>('create-album-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('album-name-field')),
+      'Smoke Test Album',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('album-description-field')),
+      'Created during widget coverage.',
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('album-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Smoke Test Album'), findsOneWidget);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('profile-display-name-field')),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('profile-display-name-field')),
+      'Demo Admin Updated',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('profile-display-name-save')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('profile-display-name-save')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile saved.'), findsOneWidget);
+    expect(find.text('Demo Admin Updated'), findsWidgets);
   });
 }

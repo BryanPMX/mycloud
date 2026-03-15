@@ -2,4 +2,4 @@
 
 Comment UI components live here.
 
-Keep thread sheets, inline comment lists, and composer widgets in this directory.
+Keep thread sheets, inline comment lists, and composer widgets in this directory, including the current inline composer embedded in the media detail panel.

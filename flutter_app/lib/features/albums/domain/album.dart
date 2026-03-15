@@ -21,6 +21,27 @@ class Album {
   final DateTime updatedAt;
   final bool isOwnedByCurrentUser;
 
+  Album copyWith({
+    String? name,
+    String? description,
+    String? coverMediaId,
+    int? mediaCount,
+    DateTime? updatedAt,
+    bool? isOwnedByCurrentUser,
+  }) {
+    return Album(
+      id: id,
+      ownerId: ownerId,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      coverMediaId: coverMediaId ?? this.coverMediaId,
+      mediaCount: mediaCount ?? this.mediaCount,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isOwnedByCurrentUser: isOwnedByCurrentUser ?? this.isOwnedByCurrentUser,
+    );
+  }
+
   factory Album.fromJson(
     Map<String, dynamic> json, {
     required bool isOwnedByCurrentUser,

@@ -2,4 +2,4 @@
 
 Album screens and widgets live here.
 
-Keep album browsing, detail screens, and share controls in this directory.
+Keep album browsing, owned-album create/edit/delete dialogs, detail screens, and share controls in this directory.

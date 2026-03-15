@@ -43,6 +43,10 @@ class ProfileScreen extends StatelessWidget {
                               style: theme.textTheme.titleLarge,
                             ),
                             const SizedBox(height: 16),
+                            _ProfileRow(
+                              label: 'Display',
+                              value: user.displayName,
+                            ),
                             _ProfileRow(label: 'Email', value: user.email),
                             _ProfileRow(label: 'Role', value: user.role.label),
                             _ProfileRow(
@@ -56,6 +60,38 @@ class ProfileScreen extends StatelessWidget {
                                   : DateFormatter.mediumDateTime(
                                       user.lastLoginAt!,
                                     ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 420,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Profile edits',
+                              style: theme.textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'PATCH /users/me is now wired so display-name changes persist through the live API instead of staying on the rollout list.',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _DisplayNameEditor(
+                              key: ValueKey<String>(
+                                'display-name-${user.displayName}',
+                              ),
+                              profileProvider: profileProvider,
+                              initialDisplayName: user.displayName,
                             ),
                           ],
                         ),
@@ -184,6 +220,115 @@ class ProfileScreen extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _DisplayNameEditor extends StatefulWidget {
+  const _DisplayNameEditor({
+    super.key,
+    required this.profileProvider,
+    required this.initialDisplayName,
+  });
+
+  final ProfileProvider profileProvider;
+  final String initialDisplayName;
+
+  @override
+  State<_DisplayNameEditor> createState() => _DisplayNameEditorState();
+}
+
+class _DisplayNameEditorState extends State<_DisplayNameEditor> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialDisplayName)
+      ..addListener(_handleChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_handleChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final currentUser = widget.profileProvider.currentUser;
+    final currentName = currentUser?.displayName ?? widget.initialDisplayName;
+    final isDirty = _controller.text.trim() != currentName.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          key: const ValueKey<String>('profile-display-name-field'),
+          controller: _controller,
+          decoration: const InputDecoration(
+            labelText: 'Display name',
+            hintText: 'How other family members see you',
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            FilledButton.icon(
+              key: const ValueKey<String>('profile-display-name-save'),
+              onPressed: widget.profileProvider.isSavingProfile || !isDirty
+                  ? null
+                  : _save,
+              icon: widget.profileProvider.isSavingProfile
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_rounded),
+              label: Text(
+                widget.profileProvider.isSavingProfile ? 'Saving...' : 'Save',
+              ),
+            ),
+            Text(
+              'Current API endpoint: PATCH /users/me',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        if (widget.profileProvider.profileMessage != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            widget.profileProvider.profileMessage!,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: widget.profileProvider.profileMessageIsError
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    final didSave = await widget.profileProvider.updateDisplayName(
+      _controller.text,
+    );
+    if (didSave && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleChanged() {
+    setState(() {});
   }
 }
 

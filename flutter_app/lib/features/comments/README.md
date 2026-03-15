@@ -2,4 +2,4 @@
 
 Comment feature code lives here.
 
-This feature owns media discussion threads and related client state.
+This feature owns media discussion threads, inline comment creation/deletion, and related client state.

@@ -220,6 +220,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
           commentProvider: commentProvider,
           apiClient: apiClient,
           uploadProgressHub: uploadProgressHub,
+          currentUser: authProvider.currentUser,
         );
       case AppSection.albums:
         return AlbumListScreen(albumProvider: albumProvider);

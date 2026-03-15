@@ -54,11 +54,15 @@ class ApiClient {
 
   Uri mediaCommentsUri(String mediaId) => endpoint('/media/$mediaId/comments');
 
+  Uri mediaCommentUri(String mediaId, String commentId) =>
+      endpoint('/media/$mediaId/comments/$commentId');
+
   Uri favoriteMediaUri(String mediaId) => endpoint('/media/$mediaId/favorite');
 
   Uri uploadInitUri() => endpoint('/media/upload/init');
 
-  Uri uploadPartUri(String mediaId) => endpoint('/media/upload/$mediaId/part-url');
+  Uri uploadPartUri(String mediaId) =>
+      endpoint('/media/upload/$mediaId/part-url');
 
   Uri uploadCompleteUri(String mediaId) =>
       endpoint('/media/upload/$mediaId/complete');

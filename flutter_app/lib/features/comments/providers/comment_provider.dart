@@ -16,7 +16,13 @@ class CommentProvider extends ChangeNotifier {
   })  : _config = config,
         _apiClient = apiClient,
         _transport = transport,
-        _authProvider = authProvider;
+        _authProvider = authProvider {
+    if (_config.useDemoData) {
+      for (final entry in _seedCommentsByMediaId.entries) {
+        _commentsByMediaId[entry.key] = List<Comment>.of(entry.value);
+      }
+    }
+  }
 
   final AppConfig _config;
   final ApiClient _apiClient;
@@ -65,20 +71,23 @@ class CommentProvider extends ChangeNotifier {
       <String, List<Comment>>{};
 
   bool _isLoading = false;
+  bool _isSubmitting = false;
   String? _errorMessage;
   String? _activeMediaId;
+  final Set<String> _deletingCommentIds = <String>{};
 
   bool get isLoading => _isLoading;
+
+  bool get isSubmitting => _isSubmitting;
 
   String? get errorMessage => _errorMessage;
 
   String? get activeMediaId => _activeMediaId;
 
-  List<Comment> commentsFor(String mediaId) {
-    if (_config.useDemoData) {
-      return _seedCommentsByMediaId[mediaId] ?? const <Comment>[];
-    }
+  bool isDeletingComment(String commentId) =>
+      _deletingCommentIds.contains(commentId);
 
+  List<Comment> commentsFor(String mediaId) {
     return _commentsByMediaId[mediaId] ?? const <Comment>[];
   }
 
@@ -120,11 +129,120 @@ class CommentProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> addComment(String mediaId, String body) async {
+    final author = _authProvider.currentUser;
+    final trimmedBody = body.trim();
+
+    if (author == null) {
+      _errorMessage = 'Sign in again before posting a comment.';
+      notifyListeners();
+      return false;
+    }
+    if (trimmedBody.isEmpty) {
+      _errorMessage = 'Comment text cannot be empty.';
+      notifyListeners();
+      return false;
+    }
+
+    _activeMediaId = mediaId;
+    _isSubmitting = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final comment = _config.useDemoData
+          ? Comment(
+              id: 'demo-comment-${DateTime.now().microsecondsSinceEpoch}',
+              author: CommentAuthor(
+                id: author.id,
+                displayName: author.displayName,
+                avatarUrl: author.avatarUrl,
+              ),
+              body: trimmedBody,
+              createdAt: DateTime.now().toUtc(),
+            )
+          : Comment.fromJson(
+              (await _authProvider.withAuthorization(
+                (headers) => _transport.postJson(
+                  _apiClient.mediaCommentsUri(mediaId),
+                  headers: headers,
+                  body: <String, String>{'body': trimmedBody},
+                ),
+              ))
+                  .asMap(),
+            );
+
+      _commentsByMediaId[mediaId] = List<Comment>.of(
+        _commentsByMediaId[mediaId] ?? const <Comment>[],
+      )..add(comment);
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Unable to post a comment right now.';
+      notifyListeners();
+      return false;
+    } finally {
+      _isSubmitting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteComment(String mediaId, String commentId) async {
+    final comments = _commentsByMediaId[mediaId];
+    if (comments == null || comments.isEmpty) {
+      return false;
+    }
+
+    _activeMediaId = mediaId;
+    _errorMessage = null;
+    _deletingCommentIds.add(commentId);
+    notifyListeners();
+
+    try {
+      if (!_config.useDemoData) {
+        await _authProvider.withAuthorization(
+          (headers) => _transport.delete(
+            _apiClient.mediaCommentUri(mediaId, commentId),
+            headers: headers,
+          ),
+        );
+      }
+
+      _commentsByMediaId[mediaId] = comments
+          .where((comment) => comment.id != commentId)
+          .toList(growable: false);
+      notifyListeners();
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _errorMessage = 'Unable to delete that comment right now.';
+      notifyListeners();
+      return false;
+    } finally {
+      _deletingCommentIds.remove(commentId);
+      notifyListeners();
+    }
+  }
+
   void clear() {
     _commentsByMediaId.clear();
+    if (_config.useDemoData) {
+      for (final entry in _seedCommentsByMediaId.entries) {
+        _commentsByMediaId[entry.key] = List<Comment>.of(entry.value);
+      }
+    }
     _isLoading = false;
+    _isSubmitting = false;
     _errorMessage = null;
     _activeMediaId = null;
+    _deletingCommentIds.clear();
     notifyListeners();
   }
 }
