@@ -2,4 +2,4 @@
 
 Profile state providers live here.
 
-Use this directory for current-user profile loading, display-name mutation state, and rollout-status summaries.
+Use this directory for current-user profile loading, display-name/avatar mutation state, and rollout-status summaries.

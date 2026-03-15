@@ -4,6 +4,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_transport.dart';
+import '../../../core/storage/secure_storage.dart';
 import '../domain/user.dart';
 
 enum AuthStatus { restoring, signedOut, signingIn, signedIn }
@@ -13,13 +14,16 @@ class AuthProvider extends ChangeNotifier {
     required AppConfig config,
     required ApiClient apiClient,
     required ApiTransport transport,
+    required SecureStorage secureStorage,
   })  : _config = config,
         _apiClient = apiClient,
-        _transport = transport;
+        _transport = transport,
+        _secureStorage = secureStorage;
 
   final AppConfig _config;
   final ApiClient _apiClient;
   final ApiTransport _transport;
+  final SecureStorage _secureStorage;
 
   AuthStatus _status = AuthStatus.restoring;
   User? _currentUser;
@@ -60,17 +64,29 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
+    if (_secureStorage.supportsSecurePersistence) {
+      _accessToken = await _secureStorage.readAccessToken();
+      _refreshToken = await _secureStorage.readRefreshToken();
+      if (_isBlank(_accessToken) && _isBlank(_refreshToken)) {
+        _status = AuthStatus.signedOut;
+        notifyListeners();
+        return;
+      }
+    }
+
     try {
       _currentUser = await _restoreCurrentUser();
       _status = AuthStatus.signedIn;
     } on ApiException catch (error) {
-      _clearSession();
+      await _clearPersistedSession();
+      _clearSessionState();
       _status = AuthStatus.signedOut;
       if (!error.isUnauthorized) {
         _errorMessage = error.message;
       }
     } catch (_) {
-      _clearSession();
+      await _clearPersistedSession();
+      _clearSessionState();
       _status = AuthStatus.signedOut;
       _errorMessage = 'Unable to restore the current session.';
     }
@@ -107,16 +123,19 @@ class AuthProvider extends ChangeNotifier {
       final payload = response.asMap();
       _accessToken = payload['access_token'] as String?;
       _refreshToken = payload['refresh_token'] as String?;
+      await _persistTokens();
       _currentUser = User.fromJson(
         payload['user'] as Map<String, dynamic>? ?? const <String, dynamic>{},
       );
       _status = AuthStatus.signedIn;
     } on ApiException catch (error) {
-      _clearSession();
+      await _clearPersistedSession();
+      _clearSessionState();
       _status = AuthStatus.signedOut;
       _errorMessage = error.message;
     } catch (_) {
-      _clearSession();
+      await _clearPersistedSession();
+      _clearSessionState();
       _status = AuthStatus.signedOut;
       _errorMessage = 'Unable to sign in right now.';
     }
@@ -140,7 +159,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     if (_config.useDemoData) {
-      _clearSession();
+      _clearSessionState();
       _status = AuthStatus.signedOut;
       notifyListeners();
       return;
@@ -158,7 +177,8 @@ class AuthProvider extends ChangeNotifier {
       // Clear the local session even if the remote revoke fails.
     }
 
-    _clearSession();
+    await _clearPersistedSession();
+    _clearSessionState();
     _status = AuthStatus.signedOut;
     notifyListeners();
   }
@@ -175,7 +195,8 @@ class AuthProvider extends ChangeNotifier {
 
       final refreshed = await _refreshSession();
       if (!refreshed) {
-        _clearSession();
+        await _clearPersistedSession();
+        _clearSessionState();
         _status = AuthStatus.signedOut;
         notifyListeners();
         rethrow;
@@ -194,10 +215,11 @@ class AuthProvider extends ChangeNotifier {
       return const <String, String>{};
     }
 
-    if (_accessToken == null || _accessToken!.trim().isEmpty) {
+    if (_isBlank(_accessToken)) {
       final refreshed = await _refreshSession();
       if (!refreshed) {
-        _clearSession();
+        await _clearPersistedSession();
+        _clearSessionState();
         _status = AuthStatus.signedOut;
         notifyListeners();
         return const <String, String>{};
@@ -208,6 +230,13 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<User> _restoreCurrentUser() async {
+    if (!kIsWeb && _isBlank(_accessToken) && !_isBlank(_refreshToken)) {
+      final refreshed = await _refreshSession();
+      if (!refreshed) {
+        throw const ApiException(statusCode: 401, message: 'Unauthorized');
+      }
+    }
+
     try {
       return await _fetchCurrentUser();
     } on ApiException catch (error) {
@@ -244,6 +273,7 @@ class AuthProvider extends ChangeNotifier {
       final payload = response.asMap();
       _accessToken = payload['access_token'] as String?;
       _refreshToken = payload['refresh_token'] as String? ?? _refreshToken;
+      await _persistTokens();
       return true;
     } on ApiException {
       return false;
@@ -277,8 +307,27 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _persistTokens() async {
+    if (!_secureStorage.supportsSecurePersistence) {
+      return;
+    }
+
+    await _secureStorage.saveTokens(
+      accessToken: _accessToken,
+      refreshToken: _refreshToken,
+    );
+  }
+
+  Future<void> _clearPersistedSession() async {
+    if (!_secureStorage.supportsSecurePersistence) {
+      return;
+    }
+
+    await _secureStorage.clearTokens();
+  }
+
   Map<String, String> _authorizationHeaders() {
-    if (_accessToken == null || _accessToken!.trim().isEmpty) {
+    if (_isBlank(_accessToken)) {
       return const <String, String>{'Accept': 'application/json'};
     }
 
@@ -290,7 +339,9 @@ class AuthProvider extends ChangeNotifier {
 
   bool get _currentUserIsActive => _currentUser != null;
 
-  void _clearSession() {
+  bool _isBlank(String? value) => value == null || value.trim().isEmpty;
+
+  void _clearSessionState() {
     _currentUser = null;
     _accessToken = null;
     _refreshToken = null;

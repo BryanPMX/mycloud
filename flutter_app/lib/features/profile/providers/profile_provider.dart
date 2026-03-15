@@ -7,6 +7,7 @@ import '../../../core/network/api_transport.dart';
 import '../../admin/providers/admin_dashboard_provider.dart';
 import '../../auth/domain/user.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../data/avatar_picker.dart';
 
 class ProfileProvider extends ChangeNotifier {
   ProfileProvider({
@@ -19,6 +20,8 @@ class ProfileProvider extends ChangeNotifier {
     authProvider.addListener(_handleAuthChanged);
   }
 
+  static const int maxAvatarBytes = 5 * 1024 * 1024;
+
   final AppConfig config;
   final ApiClient apiClient;
   final ApiTransport transport;
@@ -26,6 +29,7 @@ class ProfileProvider extends ChangeNotifier {
   final AdminDashboardProvider adminProvider;
 
   bool _isSavingProfile = false;
+  bool _isUploadingAvatar = false;
   String? _profileMessage;
   bool _profileMessageIsError = false;
 
@@ -33,9 +37,23 @@ class ProfileProvider extends ChangeNotifier {
 
   bool get isSavingProfile => _isSavingProfile;
 
+  bool get isUploadingAvatar => _isUploadingAvatar;
+
   String? get profileMessage => _profileMessage;
 
   bool get profileMessageIsError => _profileMessageIsError;
+
+  bool get canPickAvatar => config.useDemoData || supportsAvatarPicking;
+
+  String get avatarPickerHint {
+    if (config.useDemoData) {
+      return 'Demo mode simulates avatar updates without device file access.';
+    }
+    if (!supportsAvatarPicking) {
+      return 'Avatar file picking is currently implemented for Flutter web only.';
+    }
+    return 'Choose a JPG, PNG, WEBP, or HEIC image under 5 MB.';
+  }
 
   List<ProfileEndpoint> get endpoints => [
         ProfileEndpoint(label: 'App', uri: config.appBaseUri),
@@ -82,16 +100,15 @@ class ProfileProvider extends ChangeNotifier {
           done: true,
         ),
         RolloutStep(
-          title: 'Profile edits, comment writes, and owned album CRUD',
+          title: 'Profile, album, and admin mutation coverage',
           description:
-              'PATCH /users/me plus create/delete comment flows and owned album create, rename, description edits, and deletes are now wired into the live client.',
+              'Display-name edits, avatar uploads, album media membership and sharing flows, secure native token persistence, and admin user-management controls are now wired into the Flutter client.',
           done: true,
         ),
         RolloutStep(
-          title:
-              'Avatar upload, album sharing, native persistence, and admin controls',
+          title: 'Remaining polish',
           description:
-              'The next production-grade gaps are PUT /users/me/avatar, album membership/sharing controls, secure mobile token storage, and admin user-management screens.',
+              'The main follow-up is broader mobile media picking/offline polish plus a non-admin family-directory endpoint so album owners can choose individual recipients without relying on admin-only user listing.',
           done: false,
         ),
       ];
@@ -122,9 +139,9 @@ class ProfileProvider extends ChangeNotifier {
 
     try {
       if (config.useDemoData) {
-        authProvider.updateCurrentUser(
-          current.copyWith(displayName: displayName),
-        );
+        final updatedUser = current.copyWith(displayName: displayName);
+        authProvider.updateCurrentUser(updatedUser);
+        adminProvider.reconcileCurrentUser(updatedUser);
       } else {
         final response = await authProvider.withAuthorization(
           (headers) => transport.patchJson(
@@ -133,7 +150,9 @@ class ProfileProvider extends ChangeNotifier {
             headers: headers,
           ),
         );
-        authProvider.updateCurrentUser(User.fromJson(response.asMap()));
+        final updatedUser = User.fromJson(response.asMap());
+        authProvider.updateCurrentUser(updatedUser);
+        adminProvider.reconcileCurrentUser(updatedUser);
       }
 
       _setProfileMessage('Profile saved.');
@@ -149,6 +168,86 @@ class ProfileProvider extends ChangeNotifier {
       return false;
     } finally {
       _isSavingProfile = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> pickAndUploadAvatar() async {
+    final current = currentUser;
+    if (current == null) {
+      _setProfileMessage(
+        'Sign in again before uploading an avatar.',
+        isError: true,
+      );
+      notifyListeners();
+      return false;
+    }
+
+    _isUploadingAvatar = true;
+    _profileMessage = null;
+    notifyListeners();
+
+    try {
+      if (config.useDemoData) {
+        final updatedUser = current.copyWith(
+          avatarUrl:
+              'users/${current.id}/avatar-${DateTime.now().toUtc().millisecondsSinceEpoch}.png',
+        );
+        authProvider.updateCurrentUser(updatedUser);
+        _setProfileMessage('Avatar saved.');
+        return true;
+      }
+
+      final file = await pickAvatarFile();
+      if (file == null) {
+        _setProfileMessage('Avatar selection cancelled.');
+        return false;
+      }
+      if (!file.mimeType.startsWith('image/')) {
+        _setProfileMessage('Choose an image file for the avatar.',
+            isError: true);
+        return false;
+      }
+      if (file.sizeBytes <= 0 || file.sizeBytes > maxAvatarBytes) {
+        _setProfileMessage('Avatar images must be smaller than 5 MB.',
+            isError: true);
+        return false;
+      }
+
+      final bytes = await file.readChunk(0, file.sizeBytes);
+      final response = await authProvider.withAuthorization(
+        (headers) => transport.putBytes(
+          apiClient.currentUserAvatarUri(),
+          headers: <String, String>{
+            ...headers,
+            'Accept': 'application/json',
+            'Content-Type': file.mimeType,
+          },
+          body: bytes,
+        ),
+      );
+      final payload = response.asMap();
+      final avatarUrl = payload['avatar_url'] as String?;
+      authProvider.updateCurrentUser(current.copyWith(avatarUrl: avatarUrl));
+      _setProfileMessage('Avatar saved.');
+      return true;
+    } on UnsupportedError catch (error) {
+      _setProfileMessage(
+        error.message ?? 'Avatar picking is not available on this platform.',
+        isError: true,
+      );
+      return false;
+    } on ApiException catch (error) {
+      _setProfileMessage(error.message, isError: true);
+      return false;
+    } catch (_) {
+      _setProfileMessage(
+        'Unable to upload your avatar right now.',
+        isError: true,
+      );
+      return false;
+    } finally {
+      _isUploadingAvatar = false;
       notifyListeners();
     }
   }

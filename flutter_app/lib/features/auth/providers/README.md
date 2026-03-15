@@ -2,4 +2,4 @@
 
 Authentication state providers live here.
 
-Use this directory for Riverpod notifiers and derived auth state.
+Use this directory for `ChangeNotifier`-based auth/session state, including secure native token restore.

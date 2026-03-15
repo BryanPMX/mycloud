@@ -149,6 +149,8 @@ class MediaListProvider extends ChangeNotifier {
 
   String? get errorMessage => _errorMessage;
 
+  List<Media> get allItems => List<Media>.unmodifiable(_items);
+
   List<Media> get visibleItems {
     final normalizedQuery =
         _config.useDemoData ? _query.trim().toLowerCase() : '';
@@ -442,7 +444,8 @@ class MediaListProvider extends ChangeNotifier {
         ),
       );
       final media = Media.fromJson(response.asMap());
-      if (_upsertMedia(media, insertAtTop: true) && media.status == MediaStatus.ready) {
+      if (_upsertMedia(media, insertAtTop: true) &&
+          media.status == MediaStatus.ready) {
         unawaited(ensureThumbnailLoaded(media));
       }
       notifyListeners();

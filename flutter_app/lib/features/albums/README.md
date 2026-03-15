@@ -2,4 +2,4 @@
 
 Album feature code lives here.
 
-This feature owns album browsing plus the current owned-album create, edit, and delete UX on the client.
+This feature now owns album browsing, owned-album create/edit/delete, album media membership dialogs, and share-management UX on the client.

@@ -57,7 +57,7 @@ Current implemented slices:
 - `POST /api/v1/media/upload/:id/complete`
 - `DELETE /api/v1/media/upload/:id`
 - `GET /health`
-- Flutter `MaterialApp.router` shell with live auth/session restore, live media/albums/comments/admin-stats reads, browser multipart uploads, `/ws/progress` reconciliation, presigned thumbnail resolution, demo fallback mode, and environment-aware endpoint config
+- Flutter `MaterialApp.router` shell with live auth/session restore, secure native token persistence, live media/albums/comments/admin reads and writes, browser multipart uploads, `/ws/progress` reconciliation, presigned thumbnail resolution, demo fallback mode, and environment-aware endpoint config
 - validated Flutter tooling pass with `flutter analyze` and `flutter test`
 - validated backend tooling pass with `go test ./...`
 

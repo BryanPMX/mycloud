@@ -2,4 +2,4 @@
 
 Admin feature code lives here.
 
-This feature owns operator-facing dashboards and user-management tools in the client.
+This feature now owns operator-facing stats, invite creation, account updates, and deactivate flows in the client.

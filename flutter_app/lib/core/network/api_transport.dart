@@ -61,11 +61,13 @@ class ApiTransport {
     required List<int> body,
     Map<String, String>? headers,
   }) {
+    final resolvedHeaders = <String, String>{...?headers};
+    if (!_containsHeader(resolvedHeaders, 'Content-Type')) {
+      resolvedHeaders['Content-Type'] = 'application/octet-stream';
+    }
+
     final request = http.Request('PUT', uri)
-      ..headers.addAll(<String, String>{
-        'Content-Type': 'application/octet-stream',
-        ...?headers,
-      })
+      ..headers.addAll(resolvedHeaders)
       ..bodyBytes = body;
 
     return send(request);
@@ -163,6 +165,16 @@ class ApiTransport {
     }
 
     return null;
+  }
+
+  bool _containsHeader(Map<String, String> headers, String name) {
+    final normalizedName = name.toLowerCase();
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == normalizedName) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void dispose() {

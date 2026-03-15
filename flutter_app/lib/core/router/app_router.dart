@@ -223,7 +223,11 @@ class AppRouter extends RouterDelegate<AppRoutePath>
           currentUser: authProvider.currentUser,
         );
       case AppSection.albums:
-        return AlbumListScreen(albumProvider: albumProvider);
+        return AlbumListScreen(
+          albumProvider: albumProvider,
+          mediaProvider: mediaProvider,
+          adminProvider: adminProvider,
+        );
       case AppSection.profile:
         return ProfileScreen(profileProvider: profileProvider);
       case AppSection.admin:

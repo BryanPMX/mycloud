@@ -311,11 +311,11 @@ class _MainPanel extends StatelessWidget {
       case AppSection.media:
         return 'Live media reads, multipart uploads, worker progress, favorites, comment mutations, and presigned thumbnail fetches.';
       case AppSection.albums:
-        return 'Owned and shared album lists plus owned album create, edit, and delete now read and write against the live backend.';
+        return 'Owned and shared album lists, album membership dialogs, and album sharing controls now read and write against the live backend.';
       case AppSection.profile:
-        return 'Deployment endpoints, storage posture, and live display-name edits, with avatar upload and native persistence still pending.';
+        return 'Deployment endpoints, storage posture, live profile writes, and secure native token restore now reflect the current rollout state.';
       case AppSection.admin:
-        return 'Recent backend delivery, live system stats, and the remaining continuation order after the new mutation slice.';
+        return 'Recent backend delivery, live system stats, invites, and account-management controls for the current admin slice.';
     }
   }
 }

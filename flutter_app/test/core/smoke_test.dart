@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
-      'boots, signs in, and exercises profile, comment, and album mutations',
+      'boots, signs in, and exercises profile, album, and admin mutations',
       (tester) async {
     tester.view.physicalSize = const Size(500, 1800);
     tester.view.devicePixelRatio = 1.0;
@@ -67,7 +67,7 @@ void main() {
     await tester.tap(find.text('Albums'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Live album lists'), findsOneWidget);
+    expect(find.text('Live album workspace'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('create-album-button')));
     await tester.pumpAndSettle();
@@ -105,5 +105,26 @@ void main() {
 
     expect(find.text('Profile saved.'), findsOneWidget);
     expect(find.text('Demo Admin Updated'), findsWidgets);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('profile-avatar-upload')),
+    );
+    await tester
+        .tap(find.byKey(const ValueKey<String>('profile-avatar-upload')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Avatar saved.'), findsOneWidget);
+
+    await tester.tap(find.text('Admin'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('admin-invite-email')),
+      'fresh@family.com',
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('admin-invite-submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('https://mynube.live/accept?token=demo-'),
+        findsOneWidget);
   });
 }

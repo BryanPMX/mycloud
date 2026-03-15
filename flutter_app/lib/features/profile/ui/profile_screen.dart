@@ -67,6 +67,119 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   SizedBox(
+                    width: 360,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Avatar upload',
+                              style: theme.textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 34,
+                                  child: Text(
+                                    _initialsFromName(user.displayName),
+                                    style: theme.textTheme.titleLarge,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        user.avatarUrl == null
+                                            ? 'No avatar uploaded yet.'
+                                            : 'Stored object key',
+                                        style: theme.textTheme.titleMedium,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        user.avatarUrl ??
+                                            'PUT /users/me/avatar now updates the profile state and stores the returned avatar object key.',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                FilledButton.icon(
+                                  key: const ValueKey<String>(
+                                    'profile-avatar-upload',
+                                  ),
+                                  onPressed: profileProvider
+                                              .isUploadingAvatar ||
+                                          !profileProvider.canPickAvatar
+                                      ? null
+                                      : () {
+                                          profileProvider.pickAndUploadAvatar();
+                                        },
+                                  icon: profileProvider.isUploadingAvatar
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.image_rounded),
+                                  label: Text(
+                                    profileProvider.isUploadingAvatar
+                                        ? 'Uploading...'
+                                        : 'Upload avatar',
+                                  ),
+                                ),
+                                Text(
+                                  'Current API endpoint: PUT /users/me/avatar',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              profileProvider.avatarPickerHint,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            if (profileProvider.profileMessage != null) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                profileProvider.profileMessage!,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: profileProvider.profileMessageIsError
+                                      ? theme.colorScheme.error
+                                      : theme.colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
                     width: 420,
                     child: Card(
                       child: Padding(
@@ -80,7 +193,7 @@ class ProfileScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'PATCH /users/me is now wired so display-name changes persist through the live API instead of staying on the rollout list.',
+                              'PATCH /users/me and PUT /users/me/avatar are now both wired, so the profile screen reflects the live API instead of treating avatar changes as a rollout note.',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -303,32 +416,23 @@ class _DisplayNameEditorState extends State<_DisplayNameEditor> {
             ),
           ],
         ),
-        if (widget.profileProvider.profileMessage != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            widget.profileProvider.profileMessage!,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: widget.profileProvider.profileMessageIsError
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.primary,
-            ),
-          ),
-        ],
       ],
     );
   }
 
   Future<void> _save() async {
-    final didSave = await widget.profileProvider.updateDisplayName(
-      _controller.text,
-    );
-    if (didSave && mounted) {
-      setState(() {});
+    await widget.profileProvider.updateDisplayName(_controller.text);
+    if (!mounted) {
+      return;
     }
+
+    setState(() {});
   }
 
   void _handleChanged() {
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 }
 
@@ -343,22 +447,36 @@ class _ProfileRow extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 92,
-            child: Text(
-              label,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          Expanded(child: SelectableText(value)),
+          const SizedBox(height: 4),
+          Text(value, style: theme.textTheme.bodyLarge),
         ],
       ),
     );
   }
+}
+
+String _initialsFromName(String displayName) {
+  final parts = displayName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return '?';
+  }
+  if (parts.length == 1) {
+    return parts.first.characters.take(1).toString().toUpperCase();
+  }
+  return '${parts.first.characters.take(1)}${parts.last.characters.take(1)}'
+      .toUpperCase();
 }

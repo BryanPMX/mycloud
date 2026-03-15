@@ -2,4 +2,4 @@
 
 Album feature state providers live here.
 
-Use this directory for album lists, owned-album CRUD state, and future album detail/share state.
+Use this directory for album lists, owned-album CRUD state, album media membership, and share-management state.

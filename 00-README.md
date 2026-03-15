@@ -52,10 +52,10 @@ As of March 15, 2026, the repository includes the current working backend and Fl
 - worker-side staged upload scanning, promotion to originals, real WebP thumbnail generation, richer metadata extraction, and media row finalization
 - SMTP invite delivery when SMTP transport is configured, with Mailpit-friendly local defaults in `.env.example`
 - focused unit coverage for JWT, password hashing, cursor encoding, login orchestration, invite acceptance, admin mutations, media upload commands, favorites, albums, and shares
-- Flutter `MaterialApp.router` shell with SDK-only routing, adaptive `NavigationBar`/`NavigationRail` layout, live auth restore, live media/albums/comments/admin-stats reads, browser multipart upload orchestration, `/ws/progress` reconciliation, and environment-backed endpoint config
+- Flutter `MaterialApp.router` shell with SDK-only routing, adaptive `NavigationBar`/`NavigationRail` layout, live auth restore plus secure native token persistence, live media/albums/comments/admin reads and writes, browser multipart upload orchestration, `/ws/progress` reconciliation, and environment-backed endpoint config
 - Flutter smoke coverage for boot, demo sign-in, and route navigation plus DTO parsing coverage for API and worker progress payloads in `flutter_app/test/core/`
 
-The Flutter client now has validated live reads plus the browser upload/progress path. The biggest remaining client work is the remaining write flows, secure native token persistence, richer admin screens, and the longer-term mobile/offline slices unless a section explicitly says otherwise.
+The Flutter client now covers the main documented mutation surfaces too. The biggest remaining client work is an avatar-read path, a non-admin family-directory endpoint for per-user album sharing, and the longer-term mobile/offline slices unless a section explicitly says otherwise.
 
 ### Design Goals
 

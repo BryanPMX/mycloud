@@ -21,10 +21,12 @@ class Album {
   final DateTime updatedAt;
   final bool isOwnedByCurrentUser;
 
+  static const Object _unset = Object();
+
   Album copyWith({
     String? name,
     String? description,
-    String? coverMediaId,
+    Object? coverMediaId = _unset,
     int? mediaCount,
     DateTime? updatedAt,
     bool? isOwnedByCurrentUser,
@@ -34,7 +36,9 @@ class Album {
       ownerId: ownerId,
       name: name ?? this.name,
       description: description ?? this.description,
-      coverMediaId: coverMediaId ?? this.coverMediaId,
+      coverMediaId: identical(coverMediaId, _unset)
+          ? this.coverMediaId
+          : coverMediaId as String?,
       mediaCount: mediaCount ?? this.mediaCount,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

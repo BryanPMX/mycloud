@@ -6,6 +6,7 @@ import 'core/config/app_config.dart';
 import 'core/network/api_client.dart';
 import 'core/network/api_transport.dart';
 import 'core/router/app_router.dart';
+import 'core/storage/secure_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'core/websocket/upload_progress_hub.dart';
 import 'features/admin/providers/admin_dashboard_provider.dart';
@@ -28,6 +29,7 @@ class App extends StatefulWidget {
 class _AppState extends State<App> {
   late final ApiTransport _transport;
   late final ApiClient _apiClient;
+  late final SecureStorage _secureStorage;
   late final AuthProvider _authProvider;
   late final MediaListProvider _mediaProvider;
   late final MediaUploadProvider _mediaUploadProvider;
@@ -46,10 +48,12 @@ class _AppState extends State<App> {
     super.initState();
     _transport = ApiTransport();
     _apiClient = ApiClient(widget.config);
+    _secureStorage = SecureStorage();
     _authProvider = AuthProvider(
       config: widget.config,
       apiClient: _apiClient,
       transport: _transport,
+      secureStorage: _secureStorage,
     );
     _mediaProvider = MediaListProvider(
       config: widget.config,

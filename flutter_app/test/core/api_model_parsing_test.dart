@@ -1,4 +1,7 @@
+import 'package:familycloud/features/admin/domain/admin_invite_result.dart';
 import 'package:familycloud/features/admin/domain/admin_stats.dart';
+import 'package:familycloud/features/admin/domain/admin_user.dart';
+import 'package:familycloud/features/albums/domain/album_share.dart';
 import 'package:familycloud/features/auth/domain/user.dart';
 import 'package:familycloud/features/comments/domain/comment.dart';
 import 'package:familycloud/features/media/domain/media.dart';
@@ -84,6 +87,56 @@ void main() {
     expect(stats.totalUsers, 52);
     expect(stats.pendingJobs, 3);
     expect(stats.pctUsed, 0.25);
+  });
+
+  test('AdminUser.fromJson maps admin account DTOs', () {
+    final user = AdminUser.fromJson(<String, dynamic>{
+      'id': 'user-2',
+      'email': 'admin@mynube.live',
+      'display_name': 'Admin Operator',
+      'role': 'admin',
+      'storage_used': 2048,
+      'quota_bytes': 4096,
+      'active': true,
+      'created_at': '2026-03-14T16:00:00Z',
+      'last_login_at': '2026-03-15T08:30:00Z',
+    });
+
+    expect(user.isAdmin, isTrue);
+    expect(user.quotaBytes, 4096);
+    expect(user.lastLoginAt, DateTime.parse('2026-03-15T08:30:00Z'));
+  });
+
+  test('AdminInviteResult.fromJson keeps invite fallback fields', () {
+    final invite = AdminInviteResult.fromJson(<String, dynamic>{
+      'user_id': 'user-3',
+      'invite_url': 'https://mynube.live/accept?token=abc123',
+      'expires_at': '2026-03-18T18:00:00Z',
+    });
+
+    expect(invite.userId, 'user-3');
+    expect(invite.inviteUrl, contains('token=abc123'));
+  });
+
+  test('AlbumShare.fromJson maps family share responses', () {
+    final share = AlbumShare.fromJson(<String, dynamic>{
+      'id': 'share-1',
+      'album_id': 'album-1',
+      'shared_by': 'user-admin',
+      'shared_with': '00000000-0000-0000-0000-000000000000',
+      'recipient': <String, dynamic>{
+        'id': '00000000-0000-0000-0000-000000000000',
+        'display_name': 'Entire family',
+        'avatar_url': null,
+      },
+      'permission': 'contribute',
+      'expires_at': null,
+      'created_at': '2026-03-15T10:00:00Z',
+    });
+
+    expect(share.isFamilyShare, isTrue);
+    expect(share.permission, AlbumPermission.contribute);
+    expect(share.recipient?.displayName, 'Entire family');
   });
 
   test('UploadProgressEvent.fromJson maps worker websocket payloads', () {
