@@ -67,6 +67,14 @@ class ProfileProvider extends ChangeNotifier {
           label: 'Avatar upload',
           uri: apiClient.currentUserAvatarUri(),
         ),
+        ProfileEndpoint(
+          label: 'Avatar read',
+          uri: apiClient.userAvatarUri(currentUser?.id ?? 'user-id'),
+        ),
+        ProfileEndpoint(
+          label: 'Family directory',
+          uri: apiClient.usersDirectoryUri(),
+        ),
         ProfileEndpoint(label: 'Media list', uri: apiClient.mediaListUri()),
         ProfileEndpoint(label: 'Upload init', uri: apiClient.uploadInitUri()),
         ProfileEndpoint(label: 'Albums', uri: apiClient.albumsUri()),
@@ -106,9 +114,15 @@ class ProfileProvider extends ChangeNotifier {
           done: true,
         ),
         RolloutStep(
+          title: 'Signed avatars and family directory',
+          description:
+              'Flutter now consumes GET /users/directory and refreshes signed avatar reads through GET /users/:id/avatar, so profile, sharing, and comment surfaces can render real user imagery without admin-only fallbacks.',
+          done: true,
+        ),
+        RolloutStep(
           title: 'Remaining polish',
           description:
-              'The main follow-up is broader mobile media picking/offline polish plus a non-admin family-directory endpoint so album owners can choose individual recipients without relying on admin-only user listing.',
+              'The main follow-up is broader mobile media picking/offline polish plus deeper automated coverage around reconnects, recipient picking, and avatar refresh behavior.',
           done: false,
         ),
       ];

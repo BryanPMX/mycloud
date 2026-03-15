@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import '../../core/config/app_config.dart';
 import '../../core/router/app_router.dart';
 import '../../features/auth/providers/auth_provider.dart';
+import '../../features/directory/providers/family_directory_provider.dart';
+import 'user_avatar.dart';
 
 class MainScaffold extends StatelessWidget {
   const MainScaffold({
     super.key,
     required this.config,
     required this.authProvider,
+    required this.familyDirectoryProvider,
     required this.selectedSection,
     required this.onDestinationSelected,
     required this.child,
@@ -16,6 +19,7 @@ class MainScaffold extends StatelessWidget {
 
   final AppConfig config;
   final AuthProvider authProvider;
+  final FamilyDirectoryProvider familyDirectoryProvider;
   final AppSection selectedSection;
   final ValueChanged<AppSection> onDestinationSelected;
   final Widget child;
@@ -142,7 +146,13 @@ class MainScaffold extends StatelessWidget {
                                         ),
                                       ),
                                       if (user != null) ...[
-                                        _UserBadge(user: user.displayName),
+                                        _UserBadge(
+                                          userId: user.id,
+                                          displayName: user.displayName,
+                                          avatarUrl: user.avatarUrl,
+                                          familyDirectoryProvider:
+                                              familyDirectoryProvider,
+                                        ),
                                         const SizedBox(height: 12),
                                         IconButton.filledTonal(
                                           onPressed: () {
@@ -335,26 +345,33 @@ class _DestinationSpec {
 }
 
 class _UserBadge extends StatelessWidget {
-  const _UserBadge({required this.user});
+  const _UserBadge({
+    required this.userId,
+    required this.displayName,
+    required this.familyDirectoryProvider,
+    this.avatarUrl,
+  });
 
-  final String user;
+  final String userId;
+  final String displayName;
+  final String? avatarUrl;
+  final FamilyDirectoryProvider familyDirectoryProvider;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final initial = user.trim().isEmpty ? '?' : user.trim().substring(0, 1);
-
     return Column(
       children: [
-        CircleAvatar(
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Text(initial.toUpperCase()),
+        UserAvatar(
+          userId: userId,
+          displayName: displayName,
+          initialAvatarUrl: avatarUrl,
+          directoryProvider: familyDirectoryProvider,
         ),
         const SizedBox(height: 8),
         Text(
-          user,
+          displayName,
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium,
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
       ],
     );

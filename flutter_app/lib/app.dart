@@ -13,6 +13,7 @@ import 'features/admin/providers/admin_dashboard_provider.dart';
 import 'features/albums/providers/album_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/comments/providers/comment_provider.dart';
+import 'features/directory/providers/family_directory_provider.dart';
 import 'features/media/providers/media_list_provider.dart';
 import 'features/media/providers/media_upload_provider.dart';
 import 'features/profile/providers/profile_provider.dart';
@@ -36,6 +37,7 @@ class _AppState extends State<App> {
   late final AlbumProvider _albumProvider;
   late final CommentProvider _commentProvider;
   late final AdminDashboardProvider _adminProvider;
+  late final FamilyDirectoryProvider _familyDirectoryProvider;
   late final ProfileProvider _profileProvider;
   late final UploadProgressHub _uploadProgressHub;
   late final AppRouter _router;
@@ -86,6 +88,12 @@ class _AppState extends State<App> {
       transport: _transport,
       authProvider: _authProvider,
     );
+    _familyDirectoryProvider = FamilyDirectoryProvider(
+      config: widget.config,
+      apiClient: _apiClient,
+      transport: _transport,
+      authProvider: _authProvider,
+    );
     _profileProvider = ProfileProvider(
       config: widget.config,
       apiClient: _apiClient,
@@ -109,6 +117,7 @@ class _AppState extends State<App> {
       commentProvider: _commentProvider,
       profileProvider: _profileProvider,
       adminProvider: _adminProvider,
+      familyDirectoryProvider: _familyDirectoryProvider,
       uploadProgressHub: _uploadProgressHub,
     );
     _authProvider.addListener(_handleAuthChanged);
@@ -123,6 +132,7 @@ class _AppState extends State<App> {
     _router.dispose();
     _uploadProgressHub.dispose();
     _profileProvider.dispose();
+    _familyDirectoryProvider.dispose();
     _adminProvider.dispose();
     _commentProvider.dispose();
     _albumProvider.dispose();
@@ -156,6 +166,7 @@ class _AppState extends State<App> {
       _albumProvider.reset();
       _commentProvider.clear();
       _adminProvider.reset();
+      _familyDirectoryProvider.reset();
       return;
     }
 
@@ -176,7 +187,10 @@ class _AppState extends State<App> {
       return;
     }
 
-    await _albumProvider.load();
+    await Future.wait<void>(<Future<void>>[
+      _albumProvider.load(),
+      _familyDirectoryProvider.load(),
+    ]);
     if (_authProvider.currentUser?.id != userId) {
       return;
     }

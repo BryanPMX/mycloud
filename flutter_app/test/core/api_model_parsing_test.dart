@@ -4,6 +4,7 @@ import 'package:familycloud/features/admin/domain/admin_user.dart';
 import 'package:familycloud/features/albums/domain/album_share.dart';
 import 'package:familycloud/features/auth/domain/user.dart';
 import 'package:familycloud/features/comments/domain/comment.dart';
+import 'package:familycloud/features/directory/domain/directory_user.dart';
 import 'package:familycloud/features/media/domain/media.dart';
 import 'package:familycloud/core/websocket/upload_progress_event.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -116,6 +117,18 @@ void main() {
 
     expect(invite.userId, 'user-3');
     expect(invite.inviteUrl, contains('token=abc123'));
+  });
+
+  test('DirectoryUser.fromJson maps the family-directory DTO shape', () {
+    final user = DirectoryUser.fromJson(<String, dynamic>{
+      'id': 'user-3',
+      'display_name': 'Cousin Marco',
+      'avatar_url': 'https://signed.example/user-3',
+    });
+
+    expect(user.id, 'user-3');
+    expect(user.displayName, 'Cousin Marco');
+    expect(user.avatarUrl, 'https://signed.example/user-3');
   });
 
   test('AlbumShare.fromJson maps family share responses', () {

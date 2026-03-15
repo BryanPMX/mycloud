@@ -17,6 +17,15 @@ class ApiClient {
 
   Uri currentUserAvatarUri() => endpoint('/users/me/avatar');
 
+  Uri userAvatarUri(String userId, {int ttlSeconds = 300}) {
+    return endpoint(
+      '/users/$userId/avatar',
+      queryParameters: {'ttl': '$ttlSeconds'},
+    );
+  }
+
+  Uri usersDirectoryUri() => endpoint('/users/directory');
+
   Uri mediaListUri() => endpoint('/media');
 
   Uri mediaDetailUri(String mediaId) => endpoint('/media/$mediaId');

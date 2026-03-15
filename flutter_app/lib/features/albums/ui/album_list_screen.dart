@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/user_avatar.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/utils/file_size_formatter.dart';
-import '../../admin/providers/admin_dashboard_provider.dart';
+import '../../directory/domain/directory_user.dart';
+import '../../directory/providers/family_directory_provider.dart';
 import '../../media/domain/media.dart';
 import '../../media/providers/media_list_provider.dart';
 import '../domain/album.dart';
@@ -16,12 +18,14 @@ class AlbumListScreen extends StatelessWidget {
     super.key,
     required this.albumProvider,
     required this.mediaProvider,
-    required this.adminProvider,
+    required this.familyDirectoryProvider,
+    required this.currentUserId,
   });
 
   final AlbumProvider albumProvider;
   final MediaListProvider mediaProvider;
-  final AdminDashboardProvider adminProvider;
+  final FamilyDirectoryProvider familyDirectoryProvider;
+  final String currentUserId;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +33,7 @@ class AlbumListScreen extends StatelessWidget {
       animation: Listenable.merge(<Listenable>[
         albumProvider,
         mediaProvider,
-        adminProvider,
+        familyDirectoryProvider,
       ]),
       builder: (context, _) {
         final theme = Theme.of(context);
@@ -245,7 +249,8 @@ class AlbumListScreen extends StatelessWidget {
       builder: (context) => _AlbumSharesDialog(
         album: album,
         albumProvider: albumProvider,
-        adminProvider: adminProvider,
+        familyDirectoryProvider: familyDirectoryProvider,
+        currentUserId: currentUserId,
       ),
     );
   }
@@ -583,12 +588,14 @@ class _AlbumSharesDialog extends StatefulWidget {
   const _AlbumSharesDialog({
     required this.album,
     required this.albumProvider,
-    required this.adminProvider,
+    required this.familyDirectoryProvider,
+    required this.currentUserId,
   });
 
   final Album album;
   final AlbumProvider albumProvider;
-  final AdminDashboardProvider adminProvider;
+  final FamilyDirectoryProvider familyDirectoryProvider;
+  final String currentUserId;
 
   @override
   State<_AlbumSharesDialog> createState() => _AlbumSharesDialogState();
@@ -604,10 +611,9 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(widget.albumProvider.loadAlbumShares(widget.album.id));
-      if (widget.adminProvider.canManageUsers &&
-          !widget.adminProvider.hasLoadedUsers &&
-          !widget.adminProvider.isLoadingUsers) {
-        unawaited(widget.adminProvider.loadUsers());
+      if (!widget.familyDirectoryProvider.hasLoaded &&
+          !widget.familyDirectoryProvider.isLoading) {
+        unawaited(widget.familyDirectoryProvider.load());
       }
     });
   }
@@ -617,15 +623,17 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
         widget.albumProvider,
-        widget.adminProvider,
+        widget.familyDirectoryProvider,
       ]),
       builder: (context, _) {
         final theme = Theme.of(context);
         final shares = widget.albumProvider.sharesForAlbum(widget.album.id);
-        final canChooseIndividualRecipients =
-            widget.adminProvider.canManageUsers;
-        final candidates = widget.adminProvider.users
-            .where((user) => user.active && user.id != widget.album.ownerId)
+        final candidates = widget.familyDirectoryProvider.users
+            .where(
+              (user) =>
+                  user.id != widget.album.ownerId &&
+                  user.id != widget.currentUserId,
+            )
             .toList(growable: false);
 
         return Dialog(
@@ -681,15 +689,16 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                           color: theme.colorScheme.surfaceContainerLowest,
                           child: Padding(
                             padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Create a share',
-                                  style: theme.textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 16),
-                                if (canChooseIndividualRecipients)
+                            child: SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Create a share',
+                                    style: theme.textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: 16),
                                   DropdownButtonFormField<String?>(
                                     key: ValueKey<String>(
                                       'album-share-recipient-${widget.album.id}',
@@ -700,16 +709,18 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                       labelText: 'Recipient',
                                     ),
                                     items: <DropdownMenuItem<String?>>[
-                                      const DropdownMenuItem<String?>(
+                                      DropdownMenuItem<String?>(
                                         value: null,
-                                        child: Text('Entire family'),
+                                        child:
+                                            _FamilyRecipientLabel(theme: theme),
                                       ),
                                       ...candidates.map(
                                         (user) => DropdownMenuItem<String?>(
                                           value: user.id,
-                                          child: Text(
-                                            '${user.displayName} (${user.email})',
-                                            overflow: TextOverflow.ellipsis,
+                                          child: _DirectoryRecipientLabel(
+                                            user: user,
+                                            directoryProvider:
+                                                widget.familyDirectoryProvider,
                                           ),
                                         ),
                                       ),
@@ -719,139 +730,151 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                         _selectedRecipientId = value;
                                       });
                                     },
-                                  )
-                                else ...[
-                                  Text(
-                                    'Entire family',
-                                    style: theme.textTheme.titleMedium,
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Family-wide sharing works for all album owners today. Picking an individual recipient still needs a non-admin family-directory endpoint from the backend.',
+                                    widget.familyDirectoryProvider.isLoading &&
+                                            !widget.familyDirectoryProvider
+                                                .hasLoaded
+                                        ? 'Loading family recipients from GET /users/directory...'
+                                        : 'Recipient options come from GET /users/directory, and avatars refresh through GET /users/:id/avatar when a signed URL expires.',
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
-                                ],
-                                const SizedBox(height: 12),
-                                DropdownButtonFormField<AlbumPermission>(
-                                  initialValue: _permission,
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Permission',
-                                  ),
-                                  items: AlbumPermission.values
-                                      .map(
-                                        (permission) =>
-                                            DropdownMenuItem<AlbumPermission>(
-                                          value: permission,
-                                          child: Text(permission.label),
-                                        ),
-                                      )
-                                      .toList(growable: false),
-                                  onChanged: (value) {
-                                    if (value == null) {
-                                      return;
-                                    }
-                                    setState(() {
-                                      _permission = value;
-                                    });
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    OutlinedButton.icon(
-                                      onPressed: () async {
-                                        final selectedDate =
-                                            await showDatePicker(
-                                          context: context,
-                                          firstDate: DateTime.now(),
-                                          lastDate: DateTime.now().add(
-                                            const Duration(days: 365),
-                                          ),
-                                          initialDate:
-                                              _expiresAt ?? DateTime.now(),
-                                        );
-                                        if (!mounted || selectedDate == null) {
-                                          return;
-                                        }
-                                        setState(() {
-                                          _expiresAt = DateTime.utc(
-                                            selectedDate.year,
-                                            selectedDate.month,
-                                            selectedDate.day,
-                                            23,
-                                            59,
-                                            59,
-                                          );
-                                        });
-                                      },
-                                      icon: const Icon(Icons.event_outlined),
-                                      label: Text(
-                                        _expiresAt == null
-                                            ? 'No expiry'
-                                            : 'Expires ${DateFormatter.mediumDate(_expiresAt!)}',
+                                  if (widget.familyDirectoryProvider
+                                          .errorMessage !=
+                                      null) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      widget.familyDirectoryProvider
+                                          .errorMessage!,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        color: theme.colorScheme.error,
                                       ),
                                     ),
-                                    if (_expiresAt != null)
-                                      TextButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            _expiresAt = null;
-                                          });
-                                        },
-                                        child: const Text('Clear expiry'),
-                                      ),
                                   ],
-                                ),
-                                const Spacer(),
-                                FilledButton.icon(
-                                  key: ValueKey<String>(
-                                    'album-share-submit-${widget.album.id}',
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<AlbumPermission>(
+                                    initialValue: _permission,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Permission',
+                                    ),
+                                    items: AlbumPermission.values
+                                        .map(
+                                          (permission) =>
+                                              DropdownMenuItem<AlbumPermission>(
+                                            value: permission,
+                                            child: Text(permission.label),
+                                          ),
+                                        )
+                                        .toList(growable: false),
+                                    onChanged: (value) {
+                                      if (value == null) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        _permission = value;
+                                      });
+                                    },
                                   ),
-                                  onPressed: widget.albumProvider
-                                          .isMutatingAlbumShares(
-                                              widget.album.id)
-                                      ? null
-                                      : () async {
-                                          final created = await widget
-                                              .albumProvider
-                                              .createShare(
-                                            albumId: widget.album.id,
-                                            permission: _permission,
-                                            sharedWith:
-                                                canChooseIndividualRecipients
-                                                    ? _selectedRecipientId
-                                                    : null,
-                                            expiresAt: _expiresAt,
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: () async {
+                                          final selectedDate =
+                                              await showDatePicker(
+                                            context: context,
+                                            firstDate: DateTime.now(),
+                                            lastDate: DateTime.now().add(
+                                              const Duration(days: 365),
+                                            ),
+                                            initialDate:
+                                                _expiresAt ?? DateTime.now(),
                                           );
-                                          if (!mounted || !created) {
+                                          if (!mounted ||
+                                              selectedDate == null) {
                                             return;
                                           }
                                           setState(() {
-                                            _selectedRecipientId = null;
-                                            _permission = AlbumPermission.view;
-                                            _expiresAt = null;
+                                            _expiresAt = DateTime.utc(
+                                              selectedDate.year,
+                                              selectedDate.month,
+                                              selectedDate.day,
+                                              23,
+                                              59,
+                                              59,
+                                            );
                                           });
                                         },
-                                  icon: widget.albumProvider
-                                          .isMutatingAlbumShares(
-                                              widget.album.id)
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(Icons.share_rounded),
-                                  label: const Text('Create share'),
-                                ),
-                              ],
+                                        icon: const Icon(Icons.event_outlined),
+                                        label: Text(
+                                          _expiresAt == null
+                                              ? 'No expiry'
+                                              : 'Expires ${DateFormatter.mediumDate(_expiresAt!)}',
+                                        ),
+                                      ),
+                                      if (_expiresAt != null)
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _expiresAt = null;
+                                            });
+                                          },
+                                          child: const Text('Clear expiry'),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  FilledButton.icon(
+                                    key: ValueKey<String>(
+                                      'album-share-submit-${widget.album.id}',
+                                    ),
+                                    onPressed: widget.albumProvider
+                                            .isMutatingAlbumShares(
+                                                widget.album.id)
+                                        ? null
+                                        : () async {
+                                            final created = await widget
+                                                .albumProvider
+                                                .createShare(
+                                              albumId: widget.album.id,
+                                              permission: _permission,
+                                              sharedWith: _selectedRecipientId,
+                                              expiresAt: _expiresAt,
+                                            );
+                                            if (!mounted || !created) {
+                                              return;
+                                            }
+                                            setState(() {
+                                              _selectedRecipientId = null;
+                                              _permission =
+                                                  AlbumPermission.view;
+                                              _expiresAt = null;
+                                            });
+                                          },
+                                    icon: widget.albumProvider
+                                            .isMutatingAlbumShares(
+                                                widget.album.id)
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.share_rounded),
+                                    label: const Text('Create share'),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );
@@ -897,11 +920,46 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                              share.recipient?.displayName ??
-                                                  share.sharedWith,
-                                              style:
-                                                  theme.textTheme.titleMedium,
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                if (share.recipient == null ||
+                                                    share.isFamilyShare)
+                                                  CircleAvatar(
+                                                    radius: 16,
+                                                    backgroundColor: theme
+                                                        .colorScheme
+                                                        .secondaryContainer,
+                                                    child: Icon(
+                                                      Icons.groups_rounded,
+                                                      size: 18,
+                                                      color: theme.colorScheme
+                                                          .onSecondaryContainer,
+                                                    ),
+                                                  )
+                                                else
+                                                  UserAvatar(
+                                                    userId: share.recipient!.id,
+                                                    displayName: share
+                                                        .recipient!.displayName,
+                                                    initialAvatarUrl: share
+                                                        .recipient!.avatarUrl,
+                                                    directoryProvider: widget
+                                                        .familyDirectoryProvider,
+                                                    radius: 16,
+                                                  ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Text(
+                                                    share.recipient
+                                                            ?.displayName ??
+                                                        share.sharedWith,
+                                                    style: theme
+                                                        .textTheme.titleMedium,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
@@ -988,6 +1046,68 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
           ),
         );
       },
+    );
+  }
+}
+
+class _DirectoryRecipientLabel extends StatelessWidget {
+  const _DirectoryRecipientLabel({
+    required this.user,
+    required this.directoryProvider,
+  });
+
+  final DirectoryUser user;
+  final FamilyDirectoryProvider directoryProvider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        UserAvatar(
+          userId: user.id,
+          displayName: user.displayName,
+          initialAvatarUrl: user.avatarUrl,
+          directoryProvider: directoryProvider,
+          radius: 14,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            user.displayName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FamilyRecipientLabel extends StatelessWidget {
+  const _FamilyRecipientLabel({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 14,
+          backgroundColor: theme.colorScheme.secondaryContainer,
+          child: Icon(
+            Icons.groups_rounded,
+            size: 16,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+        ),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Text(
+            'Entire family',
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

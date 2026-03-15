@@ -7,6 +7,7 @@ import '../../features/albums/ui/album_list_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/ui/login_screen.dart';
 import '../../features/comments/providers/comment_provider.dart';
+import '../../features/directory/providers/family_directory_provider.dart';
 import '../../features/media/providers/media_list_provider.dart';
 import '../../features/media/providers/media_upload_provider.dart';
 import '../../features/media/ui/photo_grid_screen.dart';
@@ -94,6 +95,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
     required this.commentProvider,
     required this.profileProvider,
     required this.adminProvider,
+    required this.familyDirectoryProvider,
     required this.uploadProgressHub,
   }) {
     authProvider.addListener(_handleAuthChanged);
@@ -108,6 +110,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
   final CommentProvider commentProvider;
   final ProfileProvider profileProvider;
   final AdminDashboardProvider adminProvider;
+  final FamilyDirectoryProvider familyDirectoryProvider;
   final UploadProgressHub uploadProgressHub;
 
   @override
@@ -190,6 +193,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
                 child: MainScaffold(
                   config: appConfig,
                   authProvider: authProvider,
+                  familyDirectoryProvider: familyDirectoryProvider,
                   selectedSection: _selectedSection,
                   onDestinationSelected: goToSection,
                   child: _buildSectionBody(),
@@ -218,6 +222,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
           mediaProvider: mediaProvider,
           mediaUploadProvider: mediaUploadProvider,
           commentProvider: commentProvider,
+          familyDirectoryProvider: familyDirectoryProvider,
           apiClient: apiClient,
           uploadProgressHub: uploadProgressHub,
           currentUser: authProvider.currentUser,
@@ -226,10 +231,14 @@ class AppRouter extends RouterDelegate<AppRoutePath>
         return AlbumListScreen(
           albumProvider: albumProvider,
           mediaProvider: mediaProvider,
-          adminProvider: adminProvider,
+          familyDirectoryProvider: familyDirectoryProvider,
+          currentUserId: authProvider.currentUser?.id ?? '',
         );
       case AppSection.profile:
-        return ProfileScreen(profileProvider: profileProvider);
+        return ProfileScreen(
+          profileProvider: profileProvider,
+          familyDirectoryProvider: familyDirectoryProvider,
+        );
       case AppSection.admin:
         return AdminDashboardScreen(adminProvider: adminProvider);
     }

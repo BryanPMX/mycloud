@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../directory/providers/family_directory_provider.dart';
+import '../../../shared/widgets/user_avatar.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/utils/file_size_formatter.dart';
 import '../providers/profile_provider.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key, required this.profileProvider});
+  const ProfileScreen({
+    super.key,
+    required this.profileProvider,
+    required this.familyDirectoryProvider,
+  });
 
   final ProfileProvider profileProvider;
+  final FamilyDirectoryProvider familyDirectoryProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -82,12 +89,14 @@ class ProfileScreen extends StatelessWidget {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                CircleAvatar(
+                                UserAvatar(
+                                  key: ValueKey<String>(
+                                      'profile-avatar-${user.id}'),
+                                  userId: user.id,
+                                  displayName: user.displayName,
+                                  initialAvatarUrl: user.avatarUrl,
+                                  directoryProvider: familyDirectoryProvider,
                                   radius: 34,
-                                  child: Text(
-                                    _initialsFromName(user.displayName),
-                                    style: theme.textTheme.titleLarge,
-                                  ),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -98,13 +107,14 @@ class ProfileScreen extends StatelessWidget {
                                       Text(
                                         user.avatarUrl == null
                                             ? 'No avatar uploaded yet.'
-                                            : 'Stored object key',
+                                            : 'Signed avatar URL cached',
                                         style: theme.textTheme.titleMedium,
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        user.avatarUrl ??
-                                            'PUT /users/me/avatar now updates the profile state and stores the returned avatar object key.',
+                                        user.avatarUrl == null
+                                            ? 'Upload an image to start serving a short-lived signed avatar URL for this account.'
+                                            : 'PUT /users/me/avatar updates the current profile, and cached reads refresh through GET /users/:id/avatar when the signed URL expires.',
                                         style: theme.textTheme.bodyMedium
                                             ?.copyWith(
                                           color: theme
@@ -193,7 +203,7 @@ class ProfileScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'PATCH /users/me and PUT /users/me/avatar are now both wired, so the profile screen reflects the live API instead of treating avatar changes as a rollout note.',
+                              'PATCH /users/me, PUT /users/me/avatar, GET /users/:id/avatar, and GET /users/directory are now wired together so the profile screen reflects the live avatar-read flow instead of showing stored object-key placeholders.',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -463,20 +473,4 @@ class _ProfileRow extends StatelessWidget {
       ),
     );
   }
-}
-
-String _initialsFromName(String displayName) {
-  final parts = displayName
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  if (parts.isEmpty) {
-    return '?';
-  }
-  if (parts.length == 1) {
-    return parts.first.characters.take(1).toString().toUpperCase();
-  }
-  return '${parts.first.characters.take(1)}${parts.last.characters.take(1)}'
-      .toUpperCase();
 }

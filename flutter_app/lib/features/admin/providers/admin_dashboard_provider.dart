@@ -156,27 +156,21 @@ class AdminDashboardProvider extends ChangeNotifier {
   final List<FlutterContinuation> nextFlutterContinuations =
       const <FlutterContinuation>[
     FlutterContinuation(
-      title: 'Add avatar read URLs',
+      title: 'Expand native media picking',
       description:
-          'Avatar uploads are live, but the current API still returns only object keys, so rendering the actual image needs a dedicated avatar-read surface or signed URL helper.',
+          'Signed avatar reads and the family directory are now wired, so the next product gap is taking the browser-first media/file selection path further on Android and iOS.',
       isHighestPriority: true,
-    ),
-    FlutterContinuation(
-      title: 'Expose a family-member directory',
-      description:
-          'Non-admin album owners can create family-wide shares today, but picking a specific recipient cleanly still needs a non-admin user-list endpoint.',
-      isHighestPriority: true,
-    ),
-    FlutterContinuation(
-      title: 'Bring native media picking beyond auth',
-      description:
-          'Secure token persistence is in place for mobile, and the next native slice is broader file/image picking plus offline polish outside the browser-only upload path.',
-      isHighestPriority: false,
     ),
     FlutterContinuation(
       title: 'Deepen automated coverage around live flows',
       description:
-          'The next confidence win is widget and integration coverage for admin edits, share dialogs, and reconnect handling around the remaining backend gaps.',
+          'The next confidence win is widget and integration coverage for directory-backed share dialogs, avatar refreshes, admin edits, and reconnect handling around the remaining backend gaps.',
+      isHighestPriority: false,
+    ),
+    FlutterContinuation(
+      title: 'Tighten offline and cache behavior',
+      description:
+          'Signed URL caching now exists at the user-avatar layer, and the next polish pass is broader offline UX plus cache invalidation around media/library surfaces.',
       isHighestPriority: false,
     ),
   ];

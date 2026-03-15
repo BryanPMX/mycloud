@@ -1,11 +1,11 @@
 # 07 — Flutter Client Architecture
 
 Current implementation note on March 15, 2026:
-- `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, secure native token persistence, media reads, comment create/delete, album create/edit/delete plus membership/share flows, profile display-name/avatar edits, admin stats plus user-management screens, browser multipart uploads, and worker progress updates all hit the live Go API and WebSocket surfaces by default.
+- `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, secure native token persistence, media reads, comment create/delete, album create/edit/delete plus membership/share flows, profile display-name/avatar edits, non-admin directory-backed recipient picking, admin stats plus user-management screens, browser multipart uploads, and worker progress updates all hit the live Go API and WebSocket surfaces by default.
 - `AppConfig` still targets `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. `USE_DEMO_DATA` now defaults to `false`; enable it explicitly for smoke tests or offline UI work.
 - The Flutter network layer now uses `package:http`, sends browser credentials on web for API calls, uses a second non-credentialed browser client for presigned MinIO part uploads, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
 - The current file-picker implementation is still intentionally web-first for media uploads: it uses `FileUploadInputElement`, `Blob.slice`, and `FileReader.readAsArrayBuffer` so the browser can stream multipart chunks without adding another package. Secure token persistence is now in place for native targets, while broader native media picking is still pending.
-- The backend now exposes signed avatar reads via `GET /users/:id/avatar` and a non-admin family directory via `GET /users/directory`, so the next client work is consuming those surfaces consistently across profile, share, and comment UI.
+- Flutter now consumes `GET /users/directory` for album-recipient picking and caches signed avatar URLs by `user_id`. It seeds that cache from `/users/me`, `/users/directory`, comment authors, and share recipients, then refreshes stale entries through `GET /users/:id/avatar`.
 - The backend now also implements the documented CORS path through `ALLOWED_ORIGINS`, which is required for the Flutter web app to call `api.mynube.live` with cookies/credentials.
 - `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice.
 - Confirmed production domain plan remains: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
@@ -42,13 +42,15 @@ lib/
 │   ├── auth/                        # Live login + refresh + native secure session restore
 │   ├── media/                       # Live library reads, uploads, favorites, thumbs, and inline comment actions
 │   ├── albums/                      # Live owned/shared album overview UI + album CRUD/share/membership dialogs
+│   ├── directory/                   # Family directory reads + signed avatar URL cache keyed by user_id
 │   ├── profile/                     # Endpoint/status + display-name/avatar editing UI
 │   ├── admin/                       # Live stats, invites, and account-management UI
 │   └── comments/                    # Live media comment reads + create/delete mutations
 ├── shared/
 │   ├── widgets/main_scaffold.dart   # Adaptive rail/bottom-nav shell
+│   ├── widgets/user_avatar.dart     # Shared user avatar renderer with signed-URL refresh
 │   └── utils/                       # Date + file-size formatters
-└── test/core/*.dart                 # Smoke + DTO parsing tests for live/demo flows
+└── test/                            # Smoke, DTO parsing, album, and directory/avatar-cache coverage
 ```
 
 ## 2. Current Dependency Set
@@ -68,10 +70,9 @@ dev_dependencies:
 
 ## 3. Recommended Next Flutter Continuation
 
-1. Consume `GET /users/:id/avatar` and the signed `avatar_url` fields so Flutter can cache and refresh real avatar images instead of showing placeholders/object keys.
-2. Wire `GET /users/directory` into the album sharing flow so owners can pick individual family recipients without admin credentials.
-3. Replace the temporary web-first file picker with the longer-term cross-platform media-selection approach once the native/mobile slice begins.
-4. Add deeper widget and integration coverage around admin edits, album sharing dialogs, avatar refreshes, uploads, and reconnect handling.
+1. Replace the temporary web-first file picker with the longer-term cross-platform media-selection approach once the native/mobile slice begins.
+2. Add deeper widget and integration coverage around admin edits, album sharing dialogs, avatar refreshes, uploads, and reconnect handling.
+3. Tighten offline/cache invalidation behavior for other signed-URL surfaces beyond user avatars.
 
 ## 4. Target Architecture Reference
 

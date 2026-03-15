@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/websocket/upload_progress_hub.dart';
+import '../../../shared/widgets/user_avatar.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/utils/file_size_formatter.dart';
 import '../../auth/domain/user.dart';
 import '../../comments/domain/comment.dart';
 import '../../comments/providers/comment_provider.dart';
+import '../../directory/providers/family_directory_provider.dart';
 import '../domain/media.dart';
 import '../domain/upload_task.dart';
 import '../providers/media_list_provider.dart';
@@ -20,6 +22,7 @@ class PhotoGridScreen extends StatelessWidget {
     required this.mediaProvider,
     required this.mediaUploadProvider,
     required this.commentProvider,
+    required this.familyDirectoryProvider,
     required this.apiClient,
     required this.uploadProgressHub,
     required this.currentUser,
@@ -28,6 +31,7 @@ class PhotoGridScreen extends StatelessWidget {
   final MediaListProvider mediaProvider;
   final MediaUploadProvider mediaUploadProvider;
   final CommentProvider commentProvider;
+  final FamilyDirectoryProvider familyDirectoryProvider;
   final ApiClient apiClient;
   final UploadProgressHub uploadProgressHub;
   final User? currentUser;
@@ -205,6 +209,7 @@ class PhotoGridScreen extends StatelessWidget {
                               selectedMedia.id,
                             ),
                             commentProvider: commentProvider,
+                            familyDirectoryProvider: familyDirectoryProvider,
                             currentUser: currentUser,
                           ),
                         ),
@@ -234,6 +239,7 @@ class PhotoGridScreen extends StatelessWidget {
                           selectedMedia.id,
                         ),
                         commentProvider: commentProvider,
+                        familyDirectoryProvider: familyDirectoryProvider,
                         currentUser: currentUser,
                       ),
                     ],
@@ -848,6 +854,7 @@ class _DetailPanel extends StatelessWidget {
     required this.apiClient,
     required this.thumbUrl,
     required this.commentProvider,
+    required this.familyDirectoryProvider,
     required this.currentUser,
   });
 
@@ -858,6 +865,7 @@ class _DetailPanel extends StatelessWidget {
   final ApiClient apiClient;
   final String? thumbUrl;
   final CommentProvider commentProvider;
+  final FamilyDirectoryProvider familyDirectoryProvider;
   final User? currentUser;
 
   @override
@@ -961,6 +969,14 @@ class _DetailPanel extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          UserAvatar(
+                            userId: comment.author.id,
+                            displayName: comment.author.displayName,
+                            initialAvatarUrl: comment.author.avatarUrl,
+                            directoryProvider: familyDirectoryProvider,
+                            radius: 16,
+                          ),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
