@@ -142,6 +142,30 @@ func (r *fakeMediaRepo) ApplyProcessingResult(context.Context, uuid.UUID, domain
 	return nil
 }
 
+type fakeShareRepo struct {
+	canContribute bool
+}
+
+func (r *fakeShareRepo) Create(context.Context, *domain.Share) error {
+	return nil
+}
+
+func (r *fakeShareRepo) FindByID(context.Context, uuid.UUID) (*domain.Share, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (r *fakeShareRepo) ListActiveByAlbum(context.Context, uuid.UUID) ([]*domain.Share, error) {
+	return nil, nil
+}
+
+func (r *fakeShareRepo) UserCanContribute(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return r.canContribute, nil
+}
+
+func (r *fakeShareRepo) Delete(context.Context, uuid.UUID) error {
+	return nil
+}
+
 func TestCreateAlbumHandlerExecuteCreatesTrimmedAlbum(t *testing.T) {
 	t.Parallel()
 
@@ -188,6 +212,7 @@ func TestAddMediaHandlerExecuteCountsAddedAndExisting(t *testing.T) {
 				secondMediaID: {ID: secondMediaID, OwnerID: ownerID},
 			},
 		},
+		&fakeShareRepo{},
 	)
 
 	result, err := handler.Execute(context.Background(), AddMediaCommand{
@@ -200,6 +225,52 @@ func TestAddMediaHandlerExecuteCountsAddedAndExisting(t *testing.T) {
 	}
 	if result.Added != 1 || result.AlreadyInAlbum != 1 {
 		t.Fatalf("Execute() = %#v, want 1 added and 1 already_in_album", result)
+	}
+}
+
+func TestAddMediaHandlerExecuteAllowsContributorToAddOnlyOwnMedia(t *testing.T) {
+	t.Parallel()
+
+	ownerID := uuid.New()
+	contributorID := uuid.New()
+	albumID := uuid.New()
+	ownMediaID := uuid.New()
+	otherMediaID := uuid.New()
+
+	handler := NewAddMediaHandler(
+		&fakeUserRepo{user: &domain.User{ID: contributorID, Active: true}},
+		&fakeAlbumRepo{
+			album:        &domain.Album{ID: albumID, OwnerID: ownerID},
+			addedResults: map[uuid.UUID]bool{ownMediaID: true},
+		},
+		&fakeMediaRepo{
+			media: map[uuid.UUID]*domain.Media{
+				ownMediaID:   {ID: ownMediaID, OwnerID: contributorID},
+				otherMediaID: {ID: otherMediaID, OwnerID: ownerID},
+			},
+		},
+		&fakeShareRepo{canContribute: true},
+	)
+
+	result, err := handler.Execute(context.Background(), AddMediaCommand{
+		UserID:   contributorID,
+		AlbumID:  albumID,
+		MediaIDs: []uuid.UUID{ownMediaID},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Added != 1 || result.AlreadyInAlbum != 0 {
+		t.Fatalf("Execute() = %#v, want 1 added and 0 already_in_album", result)
+	}
+
+	_, err = handler.Execute(context.Background(), AddMediaCommand{
+		UserID:   contributorID,
+		AlbumID:  albumID,
+		MediaIDs: []uuid.UUID{otherMediaID},
+	})
+	if err != domain.ErrForbidden {
+		t.Fatalf("Execute() error = %v, want %v when contributor adds someone else's media", err, domain.ErrForbidden)
 	}
 }
 

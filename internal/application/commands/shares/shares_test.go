@@ -108,6 +108,10 @@ func (r *fakeShareRepo) ListActiveByAlbum(context.Context, uuid.UUID) ([]*domain
 	return nil, nil
 }
 
+func (r *fakeShareRepo) UserCanContribute(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return false, nil
+}
+
 func (r *fakeShareRepo) Delete(_ context.Context, id uuid.UUID) error {
 	r.deletedID = id
 	return nil

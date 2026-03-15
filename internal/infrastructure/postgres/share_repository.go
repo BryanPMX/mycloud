@@ -122,6 +122,26 @@ func (r *ShareRepository) ListActiveByAlbum(ctx context.Context, albumID uuid.UU
 	return shares, nil
 }
 
+func (r *ShareRepository) UserCanContribute(ctx context.Context, albumID, userID uuid.UUID) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM shares
+			WHERE album_id = $1
+			  AND shared_with IN ($2, $3)
+			  AND permission = $4
+			  AND (expires_at IS NULL OR expires_at > now())
+		)
+	`
+
+	var allowed bool
+	if err := r.db.QueryRow(ctx, query, albumID, userID, uuid.Nil, domain.PermissionContribute).Scan(&allowed); err != nil {
+		return false, err
+	}
+
+	return allowed, nil
+}
+
 func (r *ShareRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	const query = `
 		DELETE FROM shares

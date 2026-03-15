@@ -5,7 +5,7 @@ Current implementation note on March 15, 2026:
 - `AppConfig` still targets `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. `USE_DEMO_DATA` now defaults to `false`; enable it explicitly for smoke tests or offline UI work.
 - The Flutter network layer now uses `package:http`, sends browser credentials on web for API calls, uses a second non-credentialed browser client for presigned MinIO part uploads, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
 - The current file-picker implementation is still intentionally web-first for media uploads: it uses `FileUploadInputElement`, `Blob.slice`, and `FileReader.readAsArrayBuffer` so the browser can stream multipart chunks without adding another package. Secure token persistence is now in place for native targets, while broader native media picking is still pending.
-- Recent repo logs plus the current backend handlers now point to the next biggest cross-system gaps as avatar-read URLs and non-admin recipient discovery for album sharing rather than the original mutation wiring.
+- The backend now exposes signed avatar reads via `GET /users/:id/avatar` and a non-admin family directory via `GET /users/directory`, so the next client work is consuming those surfaces consistently across profile, share, and comment UI.
 - The backend now also implements the documented CORS path through `ALLOWED_ORIGINS`, which is required for the Flutter web app to call `api.mynube.live` with cookies/credentials.
 - `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice.
 - Confirmed production domain plan remains: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
@@ -68,10 +68,10 @@ dev_dependencies:
 
 ## 3. Recommended Next Flutter Continuation
 
-1. Add a proper avatar-read surface so the client can render uploaded avatars instead of only showing the stored object key returned by the API today.
-2. Expose a non-admin family-directory endpoint so album owners can choose an individual recipient without relying on admin-only user listing.
+1. Consume `GET /users/:id/avatar` and the signed `avatar_url` fields so Flutter can cache and refresh real avatar images instead of showing placeholders/object keys.
+2. Wire `GET /users/directory` into the album sharing flow so owners can pick individual family recipients without admin credentials.
 3. Replace the temporary web-first file picker with the longer-term cross-platform media-selection approach once the native/mobile slice begins.
-4. Add deeper widget and integration coverage around admin edits, album sharing dialogs, uploads, and reconnect handling.
+4. Add deeper widget and integration coverage around admin edits, album sharing dialogs, avatar refreshes, uploads, and reconnect handling.
 
 ## 4. Target Architecture Reference
 

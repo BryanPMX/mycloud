@@ -93,6 +93,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	protected.GET("/users/me", deps.UserHandler.GetMe)
 	protected.PATCH("/users/me", deps.UserHandler.UpdateMe)
 	protected.PUT("/users/me/avatar", deps.UserHandler.UpdateAvatar)
+	protected.GET("/users/directory", deps.UserHandler.ListDirectory)
+	protected.GET("/users/:id/avatar", deps.UserHandler.GetAvatarURL)
 	protected.GET("/media", deps.MediaHandler.List)
 	protected.GET("/media/search", deps.MediaHandler.Search)
 	protected.GET("/media/trash", deps.MediaHandler.ListTrash)

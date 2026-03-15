@@ -78,6 +78,49 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID, last
 	return nil
 }
 
+func (r *UserRepository) ListActiveUsers(ctx context.Context) ([]*domain.User, error) {
+	const query = `
+		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
+		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		FROM users
+		WHERE active = true
+		ORDER BY lower(display_name), id
+	`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]*domain.User, 0)
+	for rows.Next() {
+		record := userRow{}
+		if err := rows.Scan(
+			&record.ID,
+			&record.Email,
+			&record.DisplayName,
+			&record.AvatarKey,
+			&record.Role,
+			&record.PasswordHash,
+			&record.StorageUsed,
+			&record.QuotaBytes,
+			&record.Active,
+			&record.InviteToken,
+			&record.InviteExpiry,
+			&record.CreatedAt,
+			&record.UpdatedAt,
+			&record.LastLoginAt,
+		); err != nil {
+			return nil, err
+		}
+
+		users = append(users, record.toDomain())
+	}
+
+	return users, rows.Err()
+}
+
 func (r *UserRepository) UpdateProfile(ctx context.Context, id uuid.UUID, displayName string) (*domain.User, error) {
 	const query = `
 		UPDATE users

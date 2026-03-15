@@ -34,7 +34,7 @@ As of March 15, 2026, the repository includes the current working backend and Fl
 - PostgreSQL, Redis, and MinIO wiring in the API composition root
 - initial SQL migration with quota and album-count triggers
 - secure JWT login, refresh, logout, and invite-accept flows
-- authenticated `GET /users/me` plus self-service `PATCH /users/me` and `PUT /users/me/avatar`
+- authenticated `GET /users/me`, non-admin `GET /users/directory`, signed `GET /users/:id/avatar`, plus self-service `PATCH /users/me` and `PUT /users/me/avatar`
 - response security headers and fixed-window rate limiting in the Go HTTP stack
 - authorization-aware `GET /media`, `GET /media/:id`, `GET /media/search`, and trash listing with cursor pagination
 - presigned original download URLs via `GET /media/:id/url`
@@ -55,7 +55,7 @@ As of March 15, 2026, the repository includes the current working backend and Fl
 - Flutter `MaterialApp.router` shell with SDK-only routing, adaptive `NavigationBar`/`NavigationRail` layout, live auth restore plus secure native token persistence, live media/albums/comments/admin reads and writes, browser multipart upload orchestration, `/ws/progress` reconciliation, and environment-backed endpoint config
 - Flutter smoke coverage for boot, demo sign-in, and route navigation plus DTO parsing coverage for API and worker progress payloads in `flutter_app/test/core/`
 
-The Flutter client now covers the main documented mutation surfaces too. The biggest remaining client work is an avatar-read path, a non-admin family-directory endpoint for per-user album sharing, and the longer-term mobile/offline slices unless a section explicitly says otherwise.
+The Flutter client now covers the main documented mutation surfaces too. The biggest remaining client work is consuming the new signed-avatar and family-directory backend surfaces throughout Flutter, plus the longer-term mobile/offline slices unless a section explicitly says otherwise.
 
 ### Design Goals
 

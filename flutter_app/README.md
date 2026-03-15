@@ -10,4 +10,4 @@ Current state on March 15, 2026:
 - demo mode remains available through `--dart-define=USE_DEMO_DATA=true`
 - `flutter analyze` and `flutter test` both pass
 
-Keep cross-platform app code here, with platform-specific shells under `android/`, `ios/`, and `web/`. The next work is an avatar-read surface, a non-admin family-directory endpoint for individual album-recipient picking, and the broader mobile/offline polish beyond the current browser-first upload path.
+Keep cross-platform app code here, with platform-specific shells under `android/`, `ios/`, and `web/`. The next work is consuming the new signed-avatar and `/users/directory` backend surfaces in Flutter, plus the broader mobile/offline polish beyond the current browser-first upload path.

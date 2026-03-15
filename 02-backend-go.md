@@ -218,7 +218,7 @@ type Permission string
 
 const (
     PermissionView     Permission = "view"
-    PermissionContribute Permission = "contribute" // can upload to shared album
+    PermissionContribute Permission = "contribute" // can add your own media to a shared album
 )
 
 type Share struct {

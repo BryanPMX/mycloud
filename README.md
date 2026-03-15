@@ -14,13 +14,14 @@ Current implemented slices:
 - MinIO wiring for direct multipart uploads
 - split internal/public MinIO endpoint support so server-side object operations stay on the Docker network while presigned URLs can target the public object host
 - Redis-backed `process_media` and scheduled `cleanup` jobs, with worker-side scan, thumbnail generation, metadata extraction, and promotion flow
-- self-service profile writes via `PATCH /api/v1/users/me` and avatar uploads via `PUT /api/v1/users/me/avatar`
+- self-service profile reads/writes via `GET/PATCH /api/v1/users/me`, signed avatar reads via `GET /api/v1/users/:id/avatar`, and avatar uploads via `PUT /api/v1/users/me/avatar`
 - fixed-window API rate limiting plus response security headers in the Go middleware stack
 - configurable API CORS handling for `mynube.live`-style web clients via `ALLOWED_ORIGINS`
 - Redis-backed worker progress events plus authenticated `GET /ws/progress`
 - SMTP-backed admin invite delivery when SMTP is configured, while still returning `invite_url` in the response
 - admin user list/invite/update/deactivate endpoints and admin system stats
-- album list/create/detail/update/delete, album-media add/remove, and album share management
+- album list/create/detail/update/delete, album-media add/remove with contributor-owned additions on shared albums, and album share management
+- non-admin family directory reads via `GET /api/v1/users/directory`
 - comment persistence plus media comment list/create/delete endpoints
 - media favorites on `GET /media` and `GET /albums/:id/media`, plus favorite/unfavorite endpoints
 - `POST /api/v1/auth/login`
@@ -30,6 +31,8 @@ Current implemented slices:
 - `GET /api/v1/users/me`
 - `PATCH /api/v1/users/me`
 - `PUT /api/v1/users/me/avatar`
+- `GET /api/v1/users/:id/avatar`
+- `GET /api/v1/users/directory`
 - `GET /api/v1/media`
 - `POST /api/v1/media/:id/favorite`
 - `DELETE /api/v1/media/:id/favorite`

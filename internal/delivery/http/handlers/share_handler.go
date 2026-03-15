@@ -9,8 +9,10 @@ import (
 
 	sharecmd "github.com/yourorg/mycloud/internal/application/commands/shares"
 	sharequery "github.com/yourorg/mycloud/internal/application/queries/shares"
+	userquery "github.com/yourorg/mycloud/internal/application/queries/users"
 	"github.com/yourorg/mycloud/internal/delivery/http/dto"
 	"github.com/yourorg/mycloud/internal/delivery/http/middleware"
+	"github.com/yourorg/mycloud/internal/domain"
 	"github.com/yourorg/mycloud/pkg/httpx"
 )
 
@@ -18,17 +20,20 @@ type ShareHandler struct {
 	listHandler   *sharequery.ListSharesHandler
 	createHandler *sharecmd.CreateShareHandler
 	deleteHandler *sharecmd.RevokeShareHandler
+	avatars       *avatarPresenter
 }
 
 func NewShareHandler(
 	listHandler *sharequery.ListSharesHandler,
 	createHandler *sharecmd.CreateShareHandler,
 	deleteHandler *sharecmd.RevokeShareHandler,
+	avatarStorage domain.AvatarAssetReader,
 ) *ShareHandler {
 	return &ShareHandler{
 		listHandler:   listHandler,
 		createHandler: createHandler,
 		deleteHandler: deleteHandler,
+		avatars:       newAvatarPresenter(avatarStorage, userquery.DefaultAvatarURLTTL),
 	}
 }
 
@@ -56,7 +61,12 @@ func (h *ShareHandler) List(c *gin.Context) {
 
 	items := make([]dto.ShareResponse, 0, len(shares))
 	for _, share := range shares {
-		items = append(items, dto.ToShareResponse(share))
+		response, err := h.avatars.shareResponse(c.Request.Context(), share)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		items = append(items, response)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"shares": items})
@@ -107,7 +117,13 @@ func (h *ShareHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.ToShareResponse(share))
+	response, err := h.avatars.shareResponse(c.Request.Context(), share)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, response)
 }
 
 func (h *ShareHandler) Delete(c *gin.Context) {

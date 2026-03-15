@@ -1,7 +1,7 @@
 # 03 — REST API Reference
 
 Current implementation status on March 14, 2026:
-- Implemented now: `GET /health`, `GET /ws/progress`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invite/accept`, `GET /api/v1/users/me`, `PATCH /api/v1/users/me`, `PUT /api/v1/users/me/avatar`, `GET /api/v1/media`, `GET /api/v1/media/search`, `GET /api/v1/media/trash`, `DELETE /api/v1/media/trash`, `GET /api/v1/media/:id`, `GET /api/v1/media/:id/url`, `GET /api/v1/media/:id/thumb`, `DELETE /api/v1/media/:id`, `POST /api/v1/media/:id/restore`, `DELETE /api/v1/media/:id/permanent`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`, `DELETE /api/v1/media/upload/:id`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `GET /api/v1/admin/users`, `POST /api/v1/admin/users/invite`, `PATCH /api/v1/admin/users/:id`, `DELETE /api/v1/admin/users/:id`, `GET /api/v1/admin/stats`
+- Implemented now: `GET /health`, `GET /ws/progress`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `POST /api/v1/auth/invite/accept`, `GET /api/v1/users/me`, `PATCH /api/v1/users/me`, `PUT /api/v1/users/me/avatar`, `GET /api/v1/users/:id/avatar`, `GET /api/v1/users/directory`, `GET /api/v1/media`, `GET /api/v1/media/search`, `GET /api/v1/media/trash`, `DELETE /api/v1/media/trash`, `GET /api/v1/media/:id`, `GET /api/v1/media/:id/url`, `GET /api/v1/media/:id/thumb`, `DELETE /api/v1/media/:id`, `POST /api/v1/media/:id/restore`, `DELETE /api/v1/media/:id/permanent`, `POST /api/v1/media/:id/favorite`, `DELETE /api/v1/media/:id/favorite`, `POST /api/v1/media/upload/init`, `POST /api/v1/media/upload/:id/part-url`, `POST /api/v1/media/upload/:id/complete`, `DELETE /api/v1/media/upload/:id`, `GET /api/v1/albums`, `POST /api/v1/albums`, `GET /api/v1/albums/:id`, `PATCH /api/v1/albums/:id`, `DELETE /api/v1/albums/:id`, `GET /api/v1/albums/:id/media`, `POST /api/v1/albums/:id/media`, `DELETE /api/v1/albums/:id/media/:mediaId`, `GET /api/v1/albums/:id/shares`, `POST /api/v1/albums/:id/shares`, `DELETE /api/v1/albums/:id/shares/:shareId`, `GET /api/v1/media/:id/comments`, `POST /api/v1/media/:id/comments`, `DELETE /api/v1/media/:id/comments/:commentId`, `GET /api/v1/admin/users`, `POST /api/v1/admin/users/invite`, `PATCH /api/v1/admin/users/:id`, `DELETE /api/v1/admin/users/:id`, `GET /api/v1/admin/stats`
 - Planned later: the remaining endpoints below unless otherwise noted
 
 All API endpoints live under `/api/v1/`. All request/response bodies are `application/json`.
@@ -188,7 +188,7 @@ Get the authenticated user's profile.
   "id":            "uuid",
   "email":         "user@family.com",
   "display_name":  "Dad",
-  "avatar_url":    "users/550e8400-e29b-41d4-a716-446655440000/avatar-20260314T160509.png",
+  "avatar_url":    "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.png?X-Amz-Signature=...",
   "role":          "member",
   "storage_used":  12884901888,
   "quota_bytes":   21474836480,
@@ -198,7 +198,7 @@ Get the authenticated user's profile.
 }
 ```
 
-Current implementation note on March 14, 2026: `avatar_url` currently exposes the stored avatar object key, matching the other avatar-bearing DTOs in the API. A separate avatar-read surface or presigned avatar URLs can still be added later if we want the field to become a fully qualified URL.
+Current implementation note on March 15, 2026: `avatar_url` now returns a short-lived presigned GET URL when an avatar exists. If the client cache expires, it can refresh the image by calling `GET /users/:id/avatar`.
 
 ---
 
@@ -227,10 +227,49 @@ Content-Length: 204800
 
 **Response 200**
 ```json
-{ "avatar_url": "users/550e8400-e29b-41d4-a716-446655440000/avatar-20260314T160509.jpg" }
+{ "avatar_url": "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.jpg?X-Amz-Signature=..." }
 ```
 
-Current implementation note on March 14, 2026: the API accepts `image/jpeg`, `image/png`, `image/webp`, and `image/heic`; uploads over 5 MB return `413 Payload Too Large`. Replacing an avatar best-effort deletes the previous avatar object from `fc-avatars`.
+Current implementation note on March 15, 2026: the API accepts `image/jpeg`, `image/png`, `image/webp`, and `image/heic`; uploads over 5 MB return `413 Payload Too Large`. Replacing an avatar best-effort deletes the previous avatar object from `fc-avatars`, and the response now returns a fresh short-lived presigned avatar URL.
+
+---
+
+### GET /users/:id/avatar
+Return a short-lived presigned GET URL for a user's avatar.
+
+**Query Parameters**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ttl` | int | 300 | Signed URL TTL in seconds, max 3600 |
+
+**Response 200**
+```json
+{
+  "url":        "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.jpg?X-Amz-Signature=...",
+  "expires_at": "2026-03-15T18:30:00Z"
+}
+```
+
+Returns `404 Not Found` when the target user has no avatar or the stored avatar object no longer exists.
+
+---
+
+### GET /users/directory
+List the family directory for album sharing and avatar lookups. This endpoint never exposes email addresses.
+
+**Response 200**
+```json
+{
+  "users": [
+    {
+      "id":           "uuid",
+      "display_name": "Grandma Rose",
+      "avatar_url":   "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.jpg?X-Amz-Signature=..."
+    }
+  ]
+}
+```
 
 ---
 
@@ -597,6 +636,8 @@ Add existing media items to an album.
 { "added": 3, "already_in_album": 0 }
 ```
 
+Current implementation note on March 15, 2026: album owners and admins can still manage album membership. Recipients with `permission = "contribute"` can now add media too, but only media they own themselves. Removing media remains owner/admin-only.
+
 ---
 
 ### DELETE /albums/:id/media/:mediaId
@@ -630,7 +671,7 @@ Share an album with a family member or all family members.
   "recipient": {
     "id":           "uuid",
     "display_name": "Grandma Rose",
-    "avatar_url":   "avatars/grandma.webp"
+    "avatar_url":   "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.webp?X-Amz-Signature=..."
   },
   "permission":   "view",
   "expires_at":   "2025-01-01T00:00:00Z",
@@ -639,6 +680,7 @@ Share an album with a family member or all family members.
 ```
 
 If `shared_with` is omitted, the API creates a family-wide share using the all-zero UUID sentinel and returns a `recipient.display_name` of `Entire family`.
+`permission = "contribute"` allows the recipient to add only their own media into the shared album; it does not grant full album management.
 
 ---
 
@@ -657,7 +699,7 @@ List all active shares for an album.
       "recipient": {
         "id":           "uuid",
         "display_name": "Grandma Rose",
-        "avatar_url":   "avatars/grandma.webp"
+        "avatar_url":   "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.webp?X-Amz-Signature=..."
       },
       "permission":   "view",
       "expires_at":   null,
@@ -687,7 +729,7 @@ List comments on a media item.
   "comments": [
     {
       "id":         "uuid",
-      "author":     { "id": "uuid", "display_name": "Uncle Bob", "avatar_url": "..." },
+      "author":     { "id": "uuid", "display_name": "Uncle Bob", "avatar_url": "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.webp?X-Amz-Signature=..." },
       "body":       "Great shot!",
       "created_at": "2024-06-15T10:30:00Z"
     }
@@ -731,6 +773,7 @@ List all registered users.
       "id":           "uuid",
       "email":        "user@family.com",
       "display_name": "Dad",
+      "avatar_url":   "https://minio.mynube.live/fc-avatars/users/550e8400-e29b-41d4-a716-446655440000/avatar-20260315T160509.webp?X-Amz-Signature=...",
       "role":         "member",
       "storage_used": 5368709120,
       "quota_bytes":  21474836480,

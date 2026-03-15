@@ -125,6 +125,19 @@ func (s *StorageService) DeleteAvatar(ctx context.Context, key string) error {
 	return s.removeObjectIfExists(ctx, s.avatarsBucket, key, "delete avatar object")
 }
 
+func (s *StorageService) PresignAvatar(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	u, err := s.presignClient.PresignedGetObject(ctx, s.avatarsBucket, key, ttl, nil)
+	if err != nil {
+		return "", fmt.Errorf("presign avatar: %w", err)
+	}
+
+	return u.String(), nil
+}
+
+func (s *StorageService) AvatarExists(ctx context.Context, key string) (bool, error) {
+	return s.objectExists(ctx, s.avatarsBucket, key, "stat avatar object")
+}
+
 func (s *StorageService) OpenUpload(ctx context.Context, key string) (io.ReadCloser, error) {
 	obj, err := s.core.Client.GetObject(ctx, s.uploadsBucket, key, miniosdk.GetObjectOptions{})
 	if err != nil {

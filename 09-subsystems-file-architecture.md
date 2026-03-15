@@ -27,7 +27,7 @@ As of March 15, 2026, the following starter work is now implemented for MyCloud:
 - Redis client + refresh session store
 - Postgres comments repository plus media comment flows
 - HTTP router, auth middleware, admin role middleware, request IDs, response security headers, fixed-window rate limiting, and structured request logging
-- auth endpoints plus `POST /auth/invite/accept`, `GET /users/me`, `PATCH /users/me`, `PUT /users/me/avatar`, media list/detail/search/trash routes, presigned original reads, media favorite routes, album/share routes, media comment routes, and admin user-management/stat routes
+- auth endpoints plus `POST /auth/invite/accept`, `GET /users/me`, `GET /users/directory`, signed `GET /users/:id/avatar`, `PATCH /users/me`, `PUT /users/me/avatar`, media list/detail/search/trash routes, presigned original reads, media favorite routes, album/share routes, media comment routes, and admin user-management/stat routes
 - album creation/listing/detail/update/delete, album-specific media listing, album-media membership changes, and share list/create/revoke flows
 - direct multipart upload init/part-url/complete/abort flows with MinIO wiring
 - trash restore/permanent-delete/empty-trash flows with best-effort MinIO asset cleanup
@@ -37,7 +37,7 @@ As of March 15, 2026, the following starter work is now implemented for MyCloud:
 
 Still intentionally pending:
 
-- an avatar-read surface, non-admin recipient discovery for individual album sharing, and the broader mobile/offline slices
+- broader Flutter consumption of the new avatar/directory surfaces, plus the broader mobile/offline slices
 
 ---
 

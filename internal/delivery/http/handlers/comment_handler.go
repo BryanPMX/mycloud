@@ -8,8 +8,10 @@ import (
 
 	commentcmd "github.com/yourorg/mycloud/internal/application/commands/comments"
 	commentquery "github.com/yourorg/mycloud/internal/application/queries/comments"
+	userquery "github.com/yourorg/mycloud/internal/application/queries/users"
 	"github.com/yourorg/mycloud/internal/delivery/http/dto"
 	"github.com/yourorg/mycloud/internal/delivery/http/middleware"
+	"github.com/yourorg/mycloud/internal/domain"
 	"github.com/yourorg/mycloud/pkg/httpx"
 )
 
@@ -17,17 +19,20 @@ type CommentHandler struct {
 	listHandler   *commentquery.ListCommentsHandler
 	addHandler    *commentcmd.AddCommentHandler
 	deleteHandler *commentcmd.DeleteCommentHandler
+	avatars       *avatarPresenter
 }
 
 func NewCommentHandler(
 	listHandler *commentquery.ListCommentsHandler,
 	addHandler *commentcmd.AddCommentHandler,
 	deleteHandler *commentcmd.DeleteCommentHandler,
+	avatarStorage domain.AvatarAssetReader,
 ) *CommentHandler {
 	return &CommentHandler{
 		listHandler:   listHandler,
 		addHandler:    addHandler,
 		deleteHandler: deleteHandler,
+		avatars:       newAvatarPresenter(avatarStorage, userquery.DefaultAvatarURLTTL),
 	}
 }
 
@@ -55,7 +60,12 @@ func (h *CommentHandler) List(c *gin.Context) {
 
 	items := make([]dto.CommentResponse, 0, len(comments))
 	for _, comment := range comments {
-		items = append(items, dto.ToCommentResponse(comment))
+		response, err := h.avatars.commentResponse(c.Request.Context(), comment)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		items = append(items, response)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"comments": items})
@@ -92,7 +102,13 @@ func (h *CommentHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.ToCommentResponse(comment))
+	response, err := h.avatars.commentResponse(c.Request.Context(), comment)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, response)
 }
 
 func (h *CommentHandler) Delete(c *gin.Context) {

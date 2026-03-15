@@ -23,10 +23,17 @@ type AvatarURLResponse struct {
 	AvatarURL *string `json:"avatar_url"`
 }
 
+type DirectoryUserResponse struct {
+	ID          string  `json:"id"`
+	DisplayName string  `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url"`
+}
+
 type AdminUserResponse struct {
 	ID          string     `json:"id"`
 	Email       string     `json:"email"`
 	DisplayName string     `json:"display_name"`
+	AvatarURL   *string    `json:"avatar_url"`
 	Role        string     `json:"role"`
 	StorageUsed int64      `json:"storage_used"`
 	QuotaBytes  int64      `json:"quota_bytes"`

@@ -113,6 +113,8 @@ func main() {
 	logoutHandler := authcmd.NewLogoutHandler(sessionStore, tokenService)
 	acceptInviteHandler := authcmd.NewAcceptInviteHandler(adminRepo, sessionStore, tokenService, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	getMeHandler := userquery.NewGetMeHandler(userRepo)
+	getAvatarURLHandler := userquery.NewGetAvatarURLHandler(userRepo, storageService)
+	listDirectoryHandler := userquery.NewListDirectoryHandler(userRepo, storageService)
 	updateProfileHandler := usercmd.NewUpdateProfileHandler(userRepo)
 	updateAvatarHandler := usercmd.NewUpdateAvatarHandler(userRepo, storageService, keyBuilder)
 	listUsersHandler := adminquery.NewListUsersHandler(userRepo, adminRepo)
@@ -131,7 +133,7 @@ func main() {
 	createAlbumHandler := albumcmd.NewCreateAlbumHandler(userRepo, albumRepo)
 	updateAlbumHandler := albumcmd.NewUpdateAlbumHandler(userRepo, albumRepo)
 	deleteAlbumHandler := albumcmd.NewDeleteAlbumHandler(userRepo, albumRepo)
-	addAlbumMediaHandler := albumcmd.NewAddMediaHandler(userRepo, albumRepo, mediaRepo)
+	addAlbumMediaHandler := albumcmd.NewAddMediaHandler(userRepo, albumRepo, mediaRepo, shareRepo)
 	removeAlbumMediaHandler := albumcmd.NewRemoveMediaHandler(userRepo, albumRepo)
 	listSharesHandler := sharequery.NewListSharesHandler(userRepo, albumRepo, shareRepo)
 	createShareHandler := sharecmd.NewCreateShareHandler(userRepo, albumRepo, shareRepo)
@@ -170,6 +172,7 @@ func main() {
 			acceptInviteHandler,
 			cfg.AppEnv == "production",
 			int(cfg.JWTRefreshTTL.Seconds()),
+			storageService,
 		),
 		AlbumHandler: handlers.NewAlbumHandler(
 			getAlbumHandler,
@@ -185,8 +188,16 @@ func main() {
 			listSharesHandler,
 			createShareHandler,
 			revokeShareHandler,
+			storageService,
 		),
-		UserHandler: handlers.NewUserHandler(getMeHandler, updateProfileHandler, updateAvatarHandler),
+		UserHandler: handlers.NewUserHandler(
+			getMeHandler,
+			getAvatarURLHandler,
+			listDirectoryHandler,
+			updateProfileHandler,
+			updateAvatarHandler,
+			storageService,
+		),
 		ProgressHub: progressHub,
 		MediaHandler: handlers.NewMediaHandler(
 			getMediaHandler,
@@ -206,12 +217,18 @@ func main() {
 			permanentDeleteMediaHandler,
 			emptyTrashHandler,
 		),
-		CommentHandler: handlers.NewCommentHandler(listCommentsHandler, addCommentHandler, deleteCommentHandler),
+		CommentHandler: handlers.NewCommentHandler(
+			listCommentsHandler,
+			addCommentHandler,
+			deleteCommentHandler,
+			storageService,
+		),
 		AdminHandler: handlers.NewAdminHandler(
 			listUsersHandler,
 			inviteUserHandler,
 			updateUserHandler,
 			systemStatsHandler,
+			storageService,
 		),
 	})
 

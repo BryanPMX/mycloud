@@ -13,6 +13,11 @@ type UserRepository interface {
 	UpdateLastLogin(ctx context.Context, id uuid.UUID, lastLoginAt time.Time) error
 }
 
+type UserDirectoryRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
+	ListActiveUsers(ctx context.Context) ([]*User, error)
+}
+
 type UserProfileRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, displayName string) (*User, error)
@@ -74,6 +79,7 @@ type ShareRepository interface {
 	Create(ctx context.Context, share *Share) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Share, error)
 	ListActiveByAlbum(ctx context.Context, albumID uuid.UUID) ([]*Share, error)
+	UserCanContribute(ctx context.Context, albumID, userID uuid.UUID) (bool, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 

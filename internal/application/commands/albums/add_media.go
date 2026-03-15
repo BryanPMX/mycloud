@@ -23,17 +23,20 @@ type AddMediaHandler struct {
 	userRepo  domain.UserRepository
 	albumRepo domain.AlbumRepository
 	mediaRepo domain.MediaRepository
+	shareRepo domain.ShareRepository
 }
 
 func NewAddMediaHandler(
 	userRepo domain.UserRepository,
 	albumRepo domain.AlbumRepository,
 	mediaRepo domain.MediaRepository,
+	shareRepo domain.ShareRepository,
 ) *AddMediaHandler {
 	return &AddMediaHandler{
 		userRepo:  userRepo,
 		albumRepo: albumRepo,
 		mediaRepo: mediaRepo,
+		shareRepo: shareRepo,
 	}
 }
 
@@ -42,9 +45,25 @@ func (h *AddMediaHandler) Execute(ctx context.Context, command AddMediaCommand) 
 		return AddMediaResult{}, domain.ErrInvalidInput
 	}
 
-	user, album, err := requireManageableAlbum(ctx, h.userRepo, h.albumRepo, command.UserID, command.AlbumID)
+	user, err := requireActiveUser(ctx, h.userRepo, command.UserID)
 	if err != nil {
 		return AddMediaResult{}, err
+	}
+
+	album, err := h.albumRepo.FindByID(ctx, command.AlbumID)
+	if err != nil {
+		return AddMediaResult{}, err
+	}
+
+	canManage := album.OwnerID == user.ID || user.IsAdmin()
+	if !canManage {
+		allowed, err := h.shareRepo.UserCanContribute(ctx, album.ID, user.ID)
+		if err != nil {
+			return AddMediaResult{}, err
+		}
+		if !allowed {
+			return AddMediaResult{}, domain.ErrForbidden
+		}
 	}
 
 	seen := make(map[uuid.UUID]struct{}, len(command.MediaIDs))
@@ -62,7 +81,10 @@ func (h *AddMediaHandler) Execute(ctx context.Context, command AddMediaCommand) 
 		if err != nil {
 			return AddMediaResult{}, err
 		}
-		if media.OwnerID != album.OwnerID {
+		if canManage && media.OwnerID != album.OwnerID {
+			return AddMediaResult{}, domain.ErrForbidden
+		}
+		if !canManage && media.OwnerID != user.ID {
 			return AddMediaResult{}, domain.ErrForbidden
 		}
 

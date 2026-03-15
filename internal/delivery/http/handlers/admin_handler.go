@@ -9,8 +9,10 @@ import (
 
 	admincmd "github.com/yourorg/mycloud/internal/application/commands/admin"
 	adminquery "github.com/yourorg/mycloud/internal/application/queries/admin"
+	userquery "github.com/yourorg/mycloud/internal/application/queries/users"
 	"github.com/yourorg/mycloud/internal/delivery/http/dto"
 	"github.com/yourorg/mycloud/internal/delivery/http/middleware"
+	"github.com/yourorg/mycloud/internal/domain"
 	"github.com/yourorg/mycloud/pkg/httpx"
 )
 
@@ -19,6 +21,7 @@ type AdminHandler struct {
 	inviteUserHandler  *admincmd.InviteUserHandler
 	updateUserHandler  *admincmd.UpdateUserHandler
 	systemStatsHandler *adminquery.SystemStatsHandler
+	avatars            *avatarPresenter
 }
 
 func NewAdminHandler(
@@ -26,12 +29,14 @@ func NewAdminHandler(
 	inviteUserHandler *admincmd.InviteUserHandler,
 	updateUserHandler *admincmd.UpdateUserHandler,
 	systemStatsHandler *adminquery.SystemStatsHandler,
+	avatarStorage domain.AvatarAssetReader,
 ) *AdminHandler {
 	return &AdminHandler{
 		listUsersHandler:   listUsersHandler,
 		inviteUserHandler:  inviteUserHandler,
 		updateUserHandler:  updateUserHandler,
 		systemStatsHandler: systemStatsHandler,
+		avatars:            newAvatarPresenter(avatarStorage, userquery.DefaultAvatarURLTTL),
 	}
 }
 
@@ -52,7 +57,12 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 	items := make([]dto.AdminUserResponse, 0, len(users))
 	for _, user := range users {
-		items = append(items, dto.ToAdminUserResponse(user))
+		response, err := h.avatars.adminUserResponse(c.Request.Context(), user)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		items = append(items, response)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"users": items})
@@ -125,7 +135,13 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.ToAdminUserResponse(user))
+	response, err := h.avatars.adminUserResponse(c.Request.Context(), user)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *AdminHandler) DeactivateUser(c *gin.Context) {

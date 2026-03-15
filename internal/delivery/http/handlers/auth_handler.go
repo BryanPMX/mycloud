@@ -6,7 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	authcmd "github.com/yourorg/mycloud/internal/application/commands/auth"
-	"github.com/yourorg/mycloud/internal/delivery/http/dto"
+	userquery "github.com/yourorg/mycloud/internal/application/queries/users"
+	"github.com/yourorg/mycloud/internal/domain"
 	"github.com/yourorg/mycloud/pkg/httpx"
 )
 
@@ -17,6 +18,7 @@ type AuthHandler struct {
 	acceptInviteHandler *authcmd.AcceptInviteHandler
 	secureCookies       bool
 	refreshTTL          int
+	avatars             *avatarPresenter
 }
 
 func NewAuthHandler(
@@ -26,6 +28,7 @@ func NewAuthHandler(
 	acceptInviteHandler *authcmd.AcceptInviteHandler,
 	secureCookies bool,
 	refreshTTLSeconds int,
+	avatarStorage domain.AvatarAssetReader,
 ) *AuthHandler {
 	return &AuthHandler{
 		loginHandler:        loginHandler,
@@ -34,6 +37,7 @@ func NewAuthHandler(
 		acceptInviteHandler: acceptInviteHandler,
 		secureCookies:       secureCookies,
 		refreshTTL:          refreshTTLSeconds,
+		avatars:             newAvatarPresenter(avatarStorage, userquery.DefaultAvatarURLTTL),
 	}
 }
 
@@ -57,11 +61,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	h.setAuthCookies(c, result.AccessToken, result.RefreshToken, result.ExpiresIn)
+	userResponse, err := h.avatars.userResponse(c.Request.Context(), result.User)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,
 		"expires_in":    result.ExpiresIn,
-		"user":          dto.ToUserResponse(result.User),
+		"user":          userResponse,
 	})
 }
 
@@ -121,11 +131,17 @@ func (h *AuthHandler) AcceptInvite(c *gin.Context) {
 	}
 
 	h.setAuthCookies(c, result.AccessToken, result.RefreshToken, result.ExpiresIn)
+	userResponse, err := h.avatars.userResponse(c.Request.Context(), result.User)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  result.AccessToken,
 		"refresh_token": result.RefreshToken,
 		"expires_in":    result.ExpiresIn,
-		"user":          dto.ToUserResponse(result.User),
+		"user":          userResponse,
 	})
 }
 

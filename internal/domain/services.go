@@ -36,6 +36,11 @@ type AvatarStorage interface {
 	DeleteAvatar(ctx context.Context, key string) error
 }
 
+type AvatarAssetReader interface {
+	PresignAvatar(ctx context.Context, key string, ttl time.Duration) (string, error)
+	AvatarExists(ctx context.Context, key string) (bool, error)
+}
+
 type MediaAssetReader interface {
 	PresignOriginalDownload(ctx context.Context, key string, ttl time.Duration) (string, error)
 	PresignThumbnail(ctx context.Context, key string, ttl time.Duration) (string, error)
