@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_transport.dart';
@@ -17,10 +18,12 @@ class AlbumProvider extends ChangeNotifier {
     required ApiClient apiClient,
     required ApiTransport transport,
     required AuthProvider authProvider,
+    required ConnectivityService connectivityService,
   })  : _config = config,
         _apiClient = apiClient,
         _transport = transport,
         _authProvider = authProvider,
+        _connectivityService = connectivityService,
         _ownedAlbums = List<Album>.of(
           config.useDemoData ? _seedOwnedAlbums : const <Album>[],
         ),
@@ -204,6 +207,7 @@ class AlbumProvider extends ChangeNotifier {
   final ApiClient _apiClient;
   final ApiTransport _transport;
   final AuthProvider _authProvider;
+  final ConnectivityService _connectivityService;
 
   final List<Album> _ownedAlbums;
   final List<Album> _sharedAlbums;
@@ -274,6 +278,9 @@ class AlbumProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (_blockIfOffline()) {
+      return;
+    }
 
     _isLoading = true;
     _errorMessage = null;
@@ -320,6 +327,9 @@ class AlbumProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (_blockIfOffline()) {
+      return;
+    }
 
     _loadingAlbumMediaIds.add(albumId);
     _errorMessage = null;
@@ -358,6 +368,9 @@ class AlbumProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (_blockIfOffline()) {
+      return;
+    }
 
     _loadingShareAlbumIds.add(albumId);
     _errorMessage = null;
@@ -389,6 +402,10 @@ class AlbumProvider extends ChangeNotifier {
     required String name,
     required String description,
   }) async {
+    if (!_config.useDemoData && _blockIfOffline()) {
+      return false;
+    }
+
     final trimmedName = name.trim();
     final trimmedDescription = description.trim();
     if (trimmedName.isEmpty) {
@@ -452,6 +469,10 @@ class AlbumProvider extends ChangeNotifier {
     required String name,
     required String description,
   }) async {
+    if (!_config.useDemoData && _blockIfOffline()) {
+      return false;
+    }
+
     final index = _ownedAlbums.indexWhere((album) => album.id == albumId);
     final trimmedName = name.trim();
     final trimmedDescription = description.trim();
@@ -509,6 +530,10 @@ class AlbumProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteAlbum(String albumId) async {
+    if (!_config.useDemoData && _blockIfOffline()) {
+      return false;
+    }
+
     final index = _ownedAlbums.indexWhere((album) => album.id == albumId);
     if (index == -1) {
       return false;
@@ -553,6 +578,10 @@ class AlbumProvider extends ChangeNotifier {
     required String albumId,
     required List<Media> media,
   }) async {
+    if (!_config.useDemoData && _blockIfOffline()) {
+      return false;
+    }
+
     if (media.isEmpty) {
       _errorMessage = 'Choose at least one media item to add.';
       notifyListeners();
@@ -624,6 +653,10 @@ class AlbumProvider extends ChangeNotifier {
     required String albumId,
     required String mediaId,
   }) async {
+    if (!_config.useDemoData && _blockIfOffline()) {
+      return false;
+    }
+
     _mutatingAlbumMediaIds.add(albumId);
     _errorMessage = null;
     notifyListeners();
@@ -679,6 +712,10 @@ class AlbumProvider extends ChangeNotifier {
     String? sharedWith,
     DateTime? expiresAt,
   }) async {
+    if (!_config.useDemoData && _blockIfOffline()) {
+      return false;
+    }
+
     _mutatingAlbumShareIds.add(albumId);
     _errorMessage = null;
     notifyListeners();
@@ -747,6 +784,10 @@ class AlbumProvider extends ChangeNotifier {
     required String albumId,
     required String shareId,
   }) async {
+    if (!_config.useDemoData && _blockIfOffline()) {
+      return false;
+    }
+
     _mutatingAlbumShareIds.add(albumId);
     _errorMessage = null;
     notifyListeners();
@@ -844,5 +885,15 @@ class AlbumProvider extends ChangeNotifier {
     }
 
     return 0;
+  }
+
+  bool _blockIfOffline() {
+    if (_connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
+      notifyListeners();
+      return true;
+    }
+
+    return false;
   }
 }

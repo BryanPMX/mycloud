@@ -15,17 +15,52 @@ import 'features/albums/providers/album_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/comments/providers/comment_provider.dart';
 import 'features/directory/providers/family_directory_provider.dart';
+import 'features/media/data/upload_picker.dart';
 import 'features/media/providers/media_list_provider.dart';
 import 'features/media/providers/media_upload_provider.dart';
+import 'features/profile/data/avatar_picker.dart';
 import 'features/profile/providers/profile_provider.dart';
 
 class App extends StatefulWidget {
-  const App({super.key, required this.config});
+  const App({
+    super.key,
+    required this.config,
+    this.controller,
+    this.uploadFilesPicker,
+    this.lostUploadFilesRetriever,
+    this.avatarFilePicker,
+    this.lostAvatarFileRetriever,
+  });
 
   final AppConfig config;
+  final AppController? controller;
+  final UploadFilesPicker? uploadFilesPicker;
+  final LostUploadFilesRetriever? lostUploadFilesRetriever;
+  final AvatarFilePicker? avatarFilePicker;
+  final LostAvatarFileRetriever? lostAvatarFileRetriever;
 
   @override
   State<App> createState() => _AppState();
+}
+
+class AppController {
+  AuthProvider? get authProvider => _authProvider;
+  MediaUploadProvider? get mediaUploadProvider => _mediaUploadProvider;
+  UploadProgressHub? get uploadProgressHub => _uploadProgressHub;
+
+  AuthProvider? _authProvider;
+  MediaUploadProvider? _mediaUploadProvider;
+  UploadProgressHub? _uploadProgressHub;
+
+  void _attach({
+    required AuthProvider authProvider,
+    required MediaUploadProvider mediaUploadProvider,
+    required UploadProgressHub uploadProgressHub,
+  }) {
+    _authProvider = authProvider;
+    _mediaUploadProvider = mediaUploadProvider;
+    _uploadProgressHub = uploadProgressHub;
+  }
 }
 
 class _AppState extends State<App> {
@@ -68,6 +103,7 @@ class _AppState extends State<App> {
       apiClient: _apiClient,
       transport: _transport,
       authProvider: _authProvider,
+      connectivityService: _connectivityService,
     );
     _mediaUploadProvider = MediaUploadProvider(
       config: widget.config,
@@ -76,18 +112,22 @@ class _AppState extends State<App> {
       authProvider: _authProvider,
       mediaProvider: _mediaProvider,
       connectivityService: _connectivityService,
+      uploadFilesPicker: widget.uploadFilesPicker,
+      lostUploadFilesRetriever: widget.lostUploadFilesRetriever,
     );
     _albumProvider = AlbumProvider(
       config: widget.config,
       apiClient: _apiClient,
       transport: _transport,
       authProvider: _authProvider,
+      connectivityService: _connectivityService,
     );
     _commentProvider = CommentProvider(
       config: widget.config,
       apiClient: _apiClient,
       transport: _transport,
       authProvider: _authProvider,
+      connectivityService: _connectivityService,
     );
     _adminProvider = AdminDashboardProvider(
       config: widget.config,
@@ -108,12 +148,19 @@ class _AppState extends State<App> {
       authProvider: _authProvider,
       adminProvider: _adminProvider,
       connectivityService: _connectivityService,
+      avatarFilePicker: widget.avatarFilePicker,
+      lostAvatarFileRetriever: widget.lostAvatarFileRetriever,
     );
     _uploadProgressHub = UploadProgressHub(
       config: widget.config,
       authProvider: _authProvider,
       mediaProvider: _mediaProvider,
       uploadProvider: _mediaUploadProvider,
+    );
+    widget.controller?._attach(
+      authProvider: _authProvider,
+      mediaUploadProvider: _mediaUploadProvider,
+      uploadProgressHub: _uploadProgressHub,
     );
     _router = AppRouter(
       appConfig: widget.config,
@@ -200,6 +247,14 @@ class _AppState extends State<App> {
     await Future.wait<void>(<Future<void>>[
       _albumProvider.load(),
       _familyDirectoryProvider.load(),
+    ]);
+    if (_authProvider.currentUser?.id != userId) {
+      return;
+    }
+
+    await Future.wait<void>(<Future<void>>[
+      _mediaUploadProvider.recoverLostFiles(),
+      _profileProvider.recoverLostAvatarUpload(),
     ]);
     if (_authProvider.currentUser?.id != userId) {
       return;

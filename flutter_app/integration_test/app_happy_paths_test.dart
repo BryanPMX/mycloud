@@ -51,6 +51,11 @@ void main() {
       find.byKey(const ValueKey<String>('profile-display-name-field')),
       'Integration Admin',
     );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey<String>('profile-display-name-save')),
+    );
     await tester.tap(
       find.byKey(const ValueKey<String>('profile-display-name-save')),
     );

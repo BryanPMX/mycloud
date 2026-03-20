@@ -60,13 +60,18 @@ Future<void> signInToDemoWorkspace(
 }) async {
   expect(find.text('Sign in to Mynube'), findsOneWidget);
 
-  final emailField = find.byType(TextField).at(0);
-  final passwordField = find.byType(TextField).at(1);
-  await tester.enterText(emailField, email);
-  await tester.enterText(passwordField, password);
+  await tester.enterText(
+    find.byKey(const ValueKey<String>('login-email')),
+    email,
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey<String>('login-password')),
+    password,
+  );
 
-  await tester.ensureVisible(find.text('Enter workspace'));
-  await tester.tap(find.text('Enter workspace'));
+  await tester
+      .ensureVisible(find.byKey(const ValueKey<String>('login-submit')));
+  await tester.tap(find.byKey(const ValueKey<String>('login-submit')));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
   await tester.pumpAndSettle();

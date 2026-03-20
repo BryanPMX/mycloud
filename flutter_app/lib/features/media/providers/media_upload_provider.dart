@@ -24,12 +24,17 @@ class MediaUploadProvider extends ChangeNotifier {
     required AuthProvider authProvider,
     required MediaListProvider mediaProvider,
     required ConnectivityService connectivityService,
+    UploadFilesPicker? uploadFilesPicker,
+    LostUploadFilesRetriever? lostUploadFilesRetriever,
   })  : _config = config,
         _apiClient = apiClient,
         _transport = transport,
         _authProvider = authProvider,
         _mediaProvider = mediaProvider,
         _connectivityService = connectivityService,
+        _uploadFilesPicker = uploadFilesPicker ?? pickUploadFiles,
+        _lostUploadFilesRetriever =
+            lostUploadFilesRetriever ?? recoverLostUploadFiles,
         _objectTransport = ApiTransport(
           client: createHttpClient(withCredentials: false),
           onReachable: connectivityService.markReachable,
@@ -42,6 +47,8 @@ class MediaUploadProvider extends ChangeNotifier {
   final AuthProvider _authProvider;
   final MediaListProvider _mediaProvider;
   final ConnectivityService _connectivityService;
+  final UploadFilesPicker _uploadFilesPicker;
+  final LostUploadFilesRetriever _lostUploadFilesRetriever;
   final ApiTransport _objectTransport;
 
   final List<MediaUploadTask> _tasks = <MediaUploadTask>[];
@@ -49,6 +56,7 @@ class MediaUploadProvider extends ChangeNotifier {
   final Set<String> _cancelRequestedTaskIds = <String>{};
 
   bool _isPickingFiles = false;
+  bool _hasRecoveredLostFiles = false;
   String? _errorMessage;
   int _taskSequence = 0;
 
@@ -77,35 +85,15 @@ class MediaUploadProvider extends ChangeNotifier {
       return _connectivityService.statusMessage;
     }
     if (!supportsUploadPicking) {
-      return 'File picking is currently implemented for the Flutter web target.';
+      return 'File picking is not available on this platform.';
     }
-    return 'Choose images or videos to send them directly to storage.';
+    return 'Choose photos or videos from your device to send them directly to storage.';
   }
 
   Future<void> pickAndUpload() async {
     _errorMessage = null;
 
-    if (_config.useDemoData) {
-      _errorMessage = 'Uploads are disabled while demo data is enabled.';
-      notifyListeners();
-      return;
-    }
-
-    if (!_authProvider.isAuthenticated) {
-      _errorMessage = 'Sign in before uploading files.';
-      notifyListeners();
-      return;
-    }
-    if (_connectivityService.isOffline) {
-      _errorMessage = _connectivityService.statusMessage;
-      notifyListeners();
-      return;
-    }
-
-    if (!supportsUploadPicking) {
-      _errorMessage =
-          'File picking is currently implemented for the Flutter web target.';
-      notifyListeners();
+    if (!_canStartUpload()) {
       return;
     }
 
@@ -113,21 +101,7 @@ class MediaUploadProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final files = await pickUploadFiles();
-      for (final file in files) {
-        final task = MediaUploadTask(
-          localId: 'upload-${_taskSequence++}',
-          filename: file.name,
-          mimeType: file.mimeType,
-          sizeBytes: file.sizeBytes,
-          createdAt: DateTime.now().toUtc(),
-          stage: MediaUploadStage.queued,
-          progress: 0,
-        );
-        _tasks.insert(0, task);
-        notifyListeners();
-        unawaited(_uploadFile(task.localId, file));
-      }
+      await queueUploads(await _uploadFilesPicker());
     } on UnsupportedError catch (error) {
       _errorMessage = error.message;
       notifyListeners();
@@ -136,6 +110,51 @@ class MediaUploadProvider extends ChangeNotifier {
       notifyListeners();
     } finally {
       _isPickingFiles = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> queueUploads(List<SelectedUploadFile> files) async {
+    for (final file in files) {
+      final sizeBytes = await file.loadSizeBytes();
+      final task = MediaUploadTask(
+        localId: 'upload-${_taskSequence++}',
+        filename: file.name,
+        mimeType: file.mimeType,
+        sizeBytes: sizeBytes,
+        createdAt: DateTime.now().toUtc(),
+        stage: MediaUploadStage.queued,
+        progress: 0,
+      );
+      _tasks.insert(0, task);
+      notifyListeners();
+      unawaited(_uploadFile(task.localId, file, sizeBytes: sizeBytes));
+    }
+  }
+
+  Future<void> recoverLostFiles() async {
+    if (_hasRecoveredLostFiles ||
+        _config.useDemoData ||
+        !_authProvider.isAuthenticated) {
+      return;
+    }
+    _hasRecoveredLostFiles = true;
+
+    try {
+      final files = await _lostUploadFilesRetriever();
+      if (files.isEmpty) {
+        return;
+      }
+
+      _errorMessage =
+          'Recovered files from an interrupted picker session. Uploading now...';
+      notifyListeners();
+      await queueUploads(files);
+    } on UnsupportedError {
+      // Ignore unsupported lost-data recovery on non-Android targets.
+    } catch (_) {
+      _errorMessage =
+          'Unable to restore the interrupted upload picker session.';
       notifyListeners();
     }
   }
@@ -218,14 +237,13 @@ class MediaUploadProvider extends ChangeNotifier {
     _taskIdByMediaId.clear();
     _cancelRequestedTaskIds.clear();
     _isPickingFiles = false;
+    _hasRecoveredLostFiles = false;
     _errorMessage = null;
     notifyListeners();
   }
 
-  Future<void> _uploadFile(
-    String localId,
-    SelectedUploadFile file,
-  ) async {
+  Future<void> _uploadFile(String localId, SelectedUploadFile file,
+      {required int sizeBytes}) async {
     String? mediaId;
     var shouldAbortRemoteUpload = false;
 
@@ -245,7 +263,7 @@ class MediaUploadProvider extends ChangeNotifier {
           body: <String, Object>{
             'filename': file.name,
             'mime_type': file.mimeType,
-            'size_bytes': file.sizeBytes,
+            'size_bytes': sizeBytes,
           },
         ),
       );
@@ -257,7 +275,7 @@ class MediaUploadProvider extends ChangeNotifier {
       shouldAbortRemoteUpload = true;
       _taskIdByMediaId[uploadMediaId] = localId;
 
-      final totalParts = (file.sizeBytes / initSession.partSizeBytes).ceil();
+      final totalParts = (sizeBytes / initSession.partSizeBytes).ceil();
       _replaceTask(
         localId,
         _taskFor(localId)!.copyWith(
@@ -275,7 +293,7 @@ class MediaUploadProvider extends ChangeNotifier {
         _throwIfCancellationRequested(localId);
 
         final start = (partNumber - 1) * initSession.partSizeBytes;
-        final end = math.min(file.sizeBytes, start + initSession.partSizeBytes);
+        final end = math.min(sizeBytes, start + initSession.partSizeBytes);
         final chunk = await file.readChunk(start, end);
 
         final presignPayload = await _authProvider.withAuthorization(
@@ -475,6 +493,31 @@ class MediaUploadProvider extends ChangeNotifier {
   void dispose() {
     _objectTransport.dispose();
     super.dispose();
+  }
+
+  bool _canStartUpload() {
+    if (_config.useDemoData) {
+      _errorMessage = 'Uploads are disabled while demo data is enabled.';
+      notifyListeners();
+      return false;
+    }
+    if (!_authProvider.isAuthenticated) {
+      _errorMessage = 'Sign in before uploading files.';
+      notifyListeners();
+      return false;
+    }
+    if (_connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
+      notifyListeners();
+      return false;
+    }
+    if (!supportsUploadPicking) {
+      _errorMessage = 'File picking is not available on this platform.';
+      notifyListeners();
+      return false;
+    }
+
+    return true;
   }
 }
 

@@ -58,6 +58,10 @@ Future<List<SelectedUploadFile>> pickUploadFiles() async {
   return completer.future;
 }
 
+Future<List<SelectedUploadFile>> recoverLostUploadFiles() async {
+  return const <SelectedUploadFile>[];
+}
+
 class _WebSelectedUploadFile extends SelectedUploadFile {
   _WebSelectedUploadFile(this._file);
 

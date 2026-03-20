@@ -387,6 +387,7 @@ class _UploadPanel extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 FilledButton.icon(
+                  key: const ValueKey<String>('media-upload-start'),
                   onPressed: mediaUploadProvider.isPickingFiles ||
                           !mediaUploadProvider.canPickFiles
                       ? null
@@ -409,6 +410,7 @@ class _UploadPanel extends StatelessWidget {
                 if (!uploadProgressHub.isConnected &&
                     mediaUploadProvider.tasks.isNotEmpty)
                   OutlinedButton.icon(
+                    key: const ValueKey<String>('media-progress-reconnect'),
                     onPressed: uploadProgressHub.retryNow,
                     icon: const Icon(Icons.sync_rounded),
                     label: const Text('Reconnect progress'),
@@ -763,10 +765,15 @@ class _MediaPreviewState extends State<_MediaPreview> {
               Image.network(
                 widget.thumbnailUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _PreviewFallback(
-                  media: widget.media,
-                  statusColor: widget.statusColor,
-                ),
+                errorBuilder: (_, __, ___) {
+                  unawaited(
+                    widget.mediaProvider.handleThumbnailLoadError(widget.media),
+                  );
+                  return _PreviewFallback(
+                    media: widget.media,
+                    statusColor: widget.statusColor,
+                  );
+                },
                 loadingBuilder: (context, child, loadingProgress) {
                   if (loadingProgress == null) {
                     return child;

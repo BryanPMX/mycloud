@@ -125,6 +125,16 @@ class UploadProgressHub extends ChangeNotifier {
     await ensureConnected();
   }
 
+  @visibleForTesting
+  Future<void> simulateConnectionDrop() async {
+    if (_isDisposed) {
+      return;
+    }
+
+    await _closeConnection();
+    _handleConnectionDrop();
+  }
+
   void _handleAuthChanged() {
     if (_config.useDemoData) {
       _errorMessage = null;

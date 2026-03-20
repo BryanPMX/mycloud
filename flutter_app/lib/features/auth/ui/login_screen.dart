@@ -100,6 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   const SizedBox(height: 20),
                                   TextField(
+                                    key: const ValueKey<String>('login-email'),
                                     controller: _emailController,
                                     keyboardType: TextInputType.emailAddress,
                                     decoration: const InputDecoration(
@@ -111,6 +112,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                   const SizedBox(height: 16),
                                   TextField(
+                                    key: const ValueKey<String>(
+                                        'login-password'),
                                     controller: _passwordController,
                                     obscureText: true,
                                     decoration: const InputDecoration(
@@ -133,6 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ],
                                   const SizedBox(height: 20),
                                   FilledButton.icon(
+                                    key: const ValueKey<String>('login-submit'),
                                     onPressed: widget.authProvider.isBusy
                                         ? null
                                         : () {

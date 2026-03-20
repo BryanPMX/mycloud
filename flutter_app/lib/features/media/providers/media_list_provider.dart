@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_transport.dart';
+import '../../../core/network/signed_url_cache.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../domain/media.dart';
 
@@ -15,10 +17,21 @@ class MediaListProvider extends ChangeNotifier {
     required ApiClient apiClient,
     required ApiTransport transport,
     required AuthProvider authProvider,
+    required ConnectivityService connectivityService,
+    Duration defaultThumbnailTtl = const Duration(minutes: 5),
+    Duration thumbnailRefreshLeeway = const Duration(seconds: 30),
+    DateTime Function()? clock,
   })  : _config = config,
         _apiClient = apiClient,
         _transport = transport,
         _authProvider = authProvider,
+        _connectivityService = connectivityService,
+        _defaultThumbnailTtl = defaultThumbnailTtl,
+        _clock = clock ?? DateTime.now,
+        _thumbnailCache = SignedUrlCache(
+          refreshLeeway: thumbnailRefreshLeeway,
+          clock: clock,
+        ),
         _items = List<Media>.of(
           config.useDemoData ? _seedItems : const <Media>[],
         ) {
@@ -31,6 +44,9 @@ class MediaListProvider extends ChangeNotifier {
   final ApiClient _apiClient;
   final ApiTransport _transport;
   final AuthProvider _authProvider;
+  final ConnectivityService _connectivityService;
+  final Duration _defaultThumbnailTtl;
+  final DateTime Function() _clock;
 
   static final List<Media> _seedItems = <Media>[
     Media(
@@ -127,7 +143,7 @@ class MediaListProvider extends ChangeNotifier {
   ];
 
   final List<Media> _items;
-  final Map<String, String> _thumbnailUrls = <String, String>{};
+  final SignedUrlCache _thumbnailCache;
   final Set<String> _thumbnailLoadsInFlight = <String>{};
 
   String _query = '';
@@ -190,11 +206,16 @@ class MediaListProvider extends ChangeNotifier {
   int get readyCount =>
       _items.where((item) => item.status == MediaStatus.ready).length;
 
-  String? thumbnailUrlFor(String mediaId) => _thumbnailUrls[mediaId];
+  String? thumbnailUrlFor(String mediaId) => _thumbnailCache.urlFor(mediaId);
 
   Future<void> load() async {
     if (_config.useDemoData) {
       _hasLoaded = true;
+      notifyListeners();
+      return;
+    }
+    if (_connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
       notifyListeners();
       return;
     }
@@ -239,7 +260,6 @@ class MediaListProvider extends ChangeNotifier {
       _items
         ..clear()
         ..addAll(items);
-      _thumbnailUrls.clear();
       _thumbnailLoadsInFlight.clear();
       _syncSelectedMedia();
       _hasLoaded = true;
@@ -288,6 +308,12 @@ class MediaListProvider extends ChangeNotifier {
   }
 
   Future<void> toggleFavorite(String mediaId) async {
+    if (!_config.useDemoData && _connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
+      notifyListeners();
+      return;
+    }
+
     final index = _items.indexWhere((media) => media.id == mediaId);
     if (index == -1) {
       return;
@@ -341,8 +367,9 @@ class MediaListProvider extends ChangeNotifier {
   Future<void> ensureThumbnailLoaded(Media media) async {
     if (_config.useDemoData ||
         media.status != MediaStatus.ready ||
-        _thumbnailUrls.containsKey(media.id) ||
-        _thumbnailLoadsInFlight.contains(media.id)) {
+        _thumbnailLoadsInFlight.contains(media.id) ||
+        _connectivityService.isOffline ||
+        !_thumbnailCache.needsRefresh(media.id)) {
       return;
     }
 
@@ -359,8 +386,10 @@ class MediaListProvider extends ChangeNotifier {
       );
       final payload = response.asMap();
       final url = payload['url'] as String?;
-      if (url != null && url.isNotEmpty) {
-        _thumbnailUrls[media.id] = url;
+      final expiresAt =
+          DateTime.tryParse(payload['expires_at'] as String? ?? '')?.toUtc() ??
+              _clock().toUtc().add(_defaultThumbnailTtl);
+      if (_thumbnailCache.remember(media.id, url, expiresAt: expiresAt)) {
         notifyListeners();
       }
     } catch (_) {
@@ -368,6 +397,16 @@ class MediaListProvider extends ChangeNotifier {
     } finally {
       _thumbnailLoadsInFlight.remove(media.id);
     }
+  }
+
+  Future<void> handleThumbnailLoadError(Media media) async {
+    _thumbnailCache.invalidate(media.id);
+    if (_connectivityService.isOffline) {
+      notifyListeners();
+      return;
+    }
+
+    await ensureThumbnailLoaded(media);
   }
 
   void insertPendingUpload({
@@ -422,8 +461,9 @@ class MediaListProvider extends ChangeNotifier {
     _items[index] = updated;
 
     if (status != MediaStatus.ready) {
-      _thumbnailUrls.remove(mediaId);
+      _thumbnailCache.invalidate(mediaId);
     } else {
+      _thumbnailCache.invalidate(mediaId);
       unawaited(ensureThumbnailLoaded(updated));
     }
 
@@ -432,7 +472,7 @@ class MediaListProvider extends ChangeNotifier {
   }
 
   Future<void> refreshMediaItem(String mediaId) async {
-    if (_config.useDemoData) {
+    if (_config.useDemoData || _connectivityService.isOffline) {
       return;
     }
 
@@ -446,6 +486,7 @@ class MediaListProvider extends ChangeNotifier {
       final media = Media.fromJson(response.asMap());
       if (_upsertMedia(media, insertAtTop: true) &&
           media.status == MediaStatus.ready) {
+        _thumbnailCache.invalidate(media.id);
         unawaited(ensureThumbnailLoaded(media));
       }
       notifyListeners();
@@ -461,7 +502,7 @@ class MediaListProvider extends ChangeNotifier {
     _isLoading = false;
     _hasLoaded = _config.useDemoData;
     _errorMessage = null;
-    _thumbnailUrls.clear();
+    _thumbnailCache.clear();
     _thumbnailLoadsInFlight.clear();
     _requestSequence++;
     _items

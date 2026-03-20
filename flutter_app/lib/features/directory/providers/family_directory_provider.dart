@@ -4,6 +4,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_transport.dart';
+import '../../../core/network/signed_url_cache.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../domain/directory_user.dart';
 
@@ -15,12 +16,17 @@ class FamilyDirectoryProvider extends ChangeNotifier {
     required AuthProvider authProvider,
     Duration defaultAvatarTtl = const Duration(minutes: 5),
     Duration avatarRefreshLeeway = const Duration(seconds: 30),
+    DateTime Function()? clock,
   })  : _config = config,
         _apiClient = apiClient,
         _transport = transport,
         _authProvider = authProvider,
         _defaultAvatarTtl = defaultAvatarTtl,
-        _avatarRefreshLeeway = avatarRefreshLeeway {
+        _clock = clock ?? DateTime.now,
+        _avatarCache = SignedUrlCache(
+          refreshLeeway: avatarRefreshLeeway,
+          clock: clock,
+        ) {
     _authProvider.addListener(_handleAuthChanged);
     if (_config.useDemoData) {
       _applyDirectoryUsers(_seedUsers);
@@ -45,11 +51,10 @@ class FamilyDirectoryProvider extends ChangeNotifier {
   final ApiTransport _transport;
   final AuthProvider _authProvider;
   final Duration _defaultAvatarTtl;
-  final Duration _avatarRefreshLeeway;
+  final DateTime Function() _clock;
 
   final List<DirectoryUser> _users = <DirectoryUser>[];
-  final Map<String, _AvatarCacheEntry> _avatarCache =
-      <String, _AvatarCacheEntry>{};
+  final SignedUrlCache _avatarCache;
   final Set<String> _refreshingAvatarUserIds = <String>{};
 
   bool _isLoading = false;
@@ -65,7 +70,7 @@ class FamilyDirectoryProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   String? avatarUrlFor(String userId) {
-    return _avatarCache[userId.trim()]?.url;
+    return _avatarCache.urlFor(userId);
   }
 
   bool avatarNeedsRefresh(String userId) {
@@ -75,14 +80,7 @@ class FamilyDirectoryProvider extends ChangeNotifier {
       return false;
     }
 
-    final entry = _avatarCache[normalizedUserId];
-    if (entry == null) {
-      return true;
-    }
-
-    return DateTime.now()
-        .toUtc()
-        .isAfter(entry.expiresAt.subtract(_avatarRefreshLeeway));
+    return _avatarCache.needsRefresh(normalizedUserId);
   }
 
   Future<void> load() async {
@@ -130,11 +128,13 @@ class FamilyDirectoryProvider extends ChangeNotifier {
       return;
     }
 
-    if (_normalizeUrl(initialAvatarUrl) != null) {
+    final normalizedInitialAvatarUrl = initialAvatarUrl?.trim();
+    if (normalizedInitialAvatarUrl != null &&
+        normalizedInitialAvatarUrl.isNotEmpty) {
       _rememberAvatarUrl(
         normalizedUserId,
-        initialAvatarUrl,
-        expiresAt: DateTime.now().toUtc().add(_defaultAvatarTtl),
+        normalizedInitialAvatarUrl,
+        expiresAt: _clock().toUtc().add(_defaultAvatarTtl),
       );
     }
 
@@ -176,7 +176,7 @@ class FamilyDirectoryProvider extends ChangeNotifier {
       _rememberAvatarUrl(
         normalizedUserId,
         url,
-        expiresAt: expiresAt ?? DateTime.now().toUtc().add(_defaultAvatarTtl),
+        expiresAt: expiresAt ?? _clock().toUtc().add(_defaultAvatarTtl),
         notify: true,
       );
     } on ApiException catch (error) {
@@ -184,7 +184,7 @@ class FamilyDirectoryProvider extends ChangeNotifier {
         _rememberAvatarUrl(
           normalizedUserId,
           null,
-          expiresAt: DateTime.now().toUtc().add(_defaultAvatarTtl),
+          expiresAt: _clock().toUtc().add(_defaultAvatarTtl),
           notify: true,
         );
       }
@@ -200,7 +200,7 @@ class FamilyDirectoryProvider extends ChangeNotifier {
       _rememberAvatarUrl(
         userId,
         null,
-        expiresAt: DateTime.now().toUtc().add(_defaultAvatarTtl),
+        expiresAt: _clock().toUtc().add(_defaultAvatarTtl),
         notify: true,
       );
       return;
@@ -249,7 +249,7 @@ class FamilyDirectoryProvider extends ChangeNotifier {
     _rememberAvatarUrl(
       currentUser.id,
       currentUser.avatarUrl,
-      expiresAt: DateTime.now().toUtc().add(_defaultAvatarTtl),
+      expiresAt: _clock().toUtc().add(_defaultAvatarTtl),
     );
     notifyListeners();
   }
@@ -259,7 +259,7 @@ class FamilyDirectoryProvider extends ChangeNotifier {
       ..clear()
       ..addAll(users);
 
-    final seededExpiry = DateTime.now().toUtc().add(_defaultAvatarTtl);
+    final seededExpiry = _clock().toUtc().add(_defaultAvatarTtl);
     for (final user in users) {
       _rememberAvatarUrl(user.id, user.avatarUrl, expiresAt: seededExpiry);
     }
@@ -290,52 +290,13 @@ class FamilyDirectoryProvider extends ChangeNotifier {
       return;
     }
 
-    final normalizedUrl = _normalizeUrl(avatarUrl);
-    final nextEntry = _AvatarCacheEntry(
-      url: normalizedUrl,
-      expiresAt: expiresAt.toUtc(),
+    final changed = _avatarCache.remember(
+      normalizedUserId,
+      avatarUrl,
+      expiresAt: expiresAt,
     );
-    final previousEntry = _avatarCache[normalizedUserId];
-    if (previousEntry == nextEntry) {
-      return;
-    }
-
-    _avatarCache[normalizedUserId] = nextEntry;
-    if (notify) {
+    if (notify && changed) {
       notifyListeners();
     }
   }
-
-  String? _normalizeUrl(String? avatarUrl) {
-    final normalized = avatarUrl?.trim();
-    if (normalized == null || normalized.isEmpty) {
-      return null;
-    }
-
-    return normalized;
-  }
-}
-
-class _AvatarCacheEntry {
-  const _AvatarCacheEntry({
-    required this.url,
-    required this.expiresAt,
-  });
-
-  final String? url;
-  final DateTime expiresAt;
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) {
-      return true;
-    }
-
-    return other is _AvatarCacheEntry &&
-        other.url == url &&
-        other.expiresAt == expiresAt;
-  }
-
-  @override
-  int get hashCode => Object.hash(url, expiresAt);
 }

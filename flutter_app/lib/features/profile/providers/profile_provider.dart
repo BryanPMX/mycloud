@@ -8,6 +8,7 @@ import '../../../core/network/api_transport.dart';
 import '../../admin/providers/admin_dashboard_provider.dart';
 import '../../auth/domain/user.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../media/data/selected_upload_file.dart';
 import '../data/avatar_picker.dart';
 
 class ProfileProvider extends ChangeNotifier {
@@ -18,7 +19,11 @@ class ProfileProvider extends ChangeNotifier {
     required this.authProvider,
     required this.adminProvider,
     required this.connectivityService,
+    AvatarFilePicker? avatarFilePicker,
+    LostAvatarFileRetriever? lostAvatarFileRetriever,
   }) {
+    _avatarFilePicker = avatarFilePicker ?? pickAvatarFile;
+    _lostAvatarFileRetriever = lostAvatarFileRetriever ?? recoverLostAvatarFile;
     authProvider.addListener(_handleAuthChanged);
   }
 
@@ -30,9 +35,12 @@ class ProfileProvider extends ChangeNotifier {
   final AuthProvider authProvider;
   final AdminDashboardProvider adminProvider;
   final ConnectivityService connectivityService;
+  late final AvatarFilePicker _avatarFilePicker;
+  late final LostAvatarFileRetriever _lostAvatarFileRetriever;
 
   bool _isSavingProfile = false;
   bool _isUploadingAvatar = false;
+  bool _hasRecoveredLostAvatar = false;
   String? _profileMessage;
   bool _profileMessageIsError = false;
 
@@ -55,7 +63,7 @@ class ProfileProvider extends ChangeNotifier {
       return 'Demo mode simulates avatar updates without device file access.';
     }
     if (!supportsAvatarPicking) {
-      return 'Avatar file picking is currently implemented for Flutter web only.';
+      return 'Avatar file picking is not available on this platform.';
     }
     if (connectivityService.isOffline) {
       return connectivityService.statusMessage;
@@ -130,7 +138,7 @@ class ProfileProvider extends ChangeNotifier {
         RolloutStep(
           title: 'Remaining polish',
           description:
-              'The main follow-up is broader mobile media picking/offline polish plus deeper automated coverage around reconnects, recipient picking, and avatar refresh behavior.',
+              'The main follow-up is running the live upload/reconnect integration path with real credentials and setting production iOS build metadata.',
           done: false,
         ),
       ];
@@ -221,27 +229,87 @@ class ProfileProvider extends ChangeNotifier {
               'users/${current.id}/avatar-${DateTime.now().toUtc().millisecondsSinceEpoch}.png',
         );
         authProvider.updateCurrentUser(updatedUser);
+        adminProvider.reconcileCurrentUser(updatedUser);
         _setProfileMessage('Avatar saved.');
         return true;
       }
 
-      final file = await pickAvatarFile();
+      final file = await _avatarFilePicker();
       if (file == null) {
         _setProfileMessage('Avatar selection cancelled.');
         return false;
       }
+
+      return _uploadAvatarFile(file);
+    } on UnsupportedError catch (error) {
+      _setProfileMessage(
+        error.message ?? 'Avatar picking is not available on this platform.',
+        isError: true,
+      );
+      return false;
+    } finally {
+      _isUploadingAvatar = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> recoverLostAvatarUpload() async {
+    if (_hasRecoveredLostAvatar ||
+        config.useDemoData ||
+        currentUser == null ||
+        connectivityService.isOffline) {
+      return;
+    }
+    _hasRecoveredLostAvatar = true;
+
+    try {
+      final file = await _lostAvatarFileRetriever();
+      if (file == null) {
+        return;
+      }
+
+      _setProfileMessage(
+        'Recovered an interrupted avatar selection. Uploading now...',
+      );
+      notifyListeners();
+
+      _isUploadingAvatar = true;
+      notifyListeners();
+      await _uploadAvatarFile(file);
+    } on UnsupportedError {
+      // Ignore unsupported lost-data recovery on non-Android targets.
+    } finally {
+      _isUploadingAvatar = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _uploadAvatarFile(SelectedUploadFile file) async {
+    final current = currentUser;
+    if (current == null) {
+      _setProfileMessage(
+        'Sign in again before uploading an avatar.',
+        isError: true,
+      );
+      return false;
+    }
+
+    _profileMessage = null;
+    try {
       if (!file.mimeType.startsWith('image/')) {
         _setProfileMessage('Choose an image file for the avatar.',
             isError: true);
         return false;
       }
-      if (file.sizeBytes <= 0 || file.sizeBytes > maxAvatarBytes) {
+
+      final sizeBytes = await file.loadSizeBytes();
+      if (sizeBytes <= 0 || sizeBytes > maxAvatarBytes) {
         _setProfileMessage('Avatar images must be smaller than 5 MB.',
             isError: true);
         return false;
       }
 
-      final bytes = await file.readChunk(0, file.sizeBytes);
+      final bytes = await file.readChunk(0, sizeBytes);
       final response = await authProvider.withAuthorization(
         (headers) => transport.putBytes(
           apiClient.currentUserAvatarUri(),
@@ -255,15 +323,11 @@ class ProfileProvider extends ChangeNotifier {
       );
       final payload = response.asMap();
       final avatarUrl = payload['avatar_url'] as String?;
-      authProvider.updateCurrentUser(current.copyWith(avatarUrl: avatarUrl));
+      final updatedUser = current.copyWith(avatarUrl: avatarUrl);
+      authProvider.updateCurrentUser(updatedUser);
+      adminProvider.reconcileCurrentUser(updatedUser);
       _setProfileMessage('Avatar saved.');
       return true;
-    } on UnsupportedError catch (error) {
-      _setProfileMessage(
-        error.message ?? 'Avatar picking is not available on this platform.',
-        isError: true,
-      );
-      return false;
     } on ApiException catch (error) {
       _setProfileMessage(error.message, isError: true);
       return false;
@@ -273,13 +337,13 @@ class ProfileProvider extends ChangeNotifier {
         isError: true,
       );
       return false;
-    } finally {
-      _isUploadingAvatar = false;
-      notifyListeners();
     }
   }
 
   void _handleAuthChanged() {
+    if (authProvider.currentUser == null) {
+      _hasRecoveredLostAvatar = false;
+    }
     notifyListeners();
   }
 

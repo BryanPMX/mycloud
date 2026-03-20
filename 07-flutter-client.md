@@ -1,14 +1,14 @@
 # 07 — Flutter Client Architecture
 
-Current implementation note on March 15, 2026:
-- `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, secure native token persistence, media reads, comment create/delete, album create/edit/delete plus membership/share flows, profile display-name/avatar edits, non-admin directory-backed recipient picking, admin stats plus user-management screens, browser multipart uploads, and worker progress updates all hit the live Go API and WebSocket surfaces by default.
+Current implementation note on March 20, 2026:
+- `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, secure native token persistence, media reads, comment create/delete, album create/edit/delete plus membership/share flows, profile display-name/avatar edits, non-admin directory-backed recipient picking, admin stats plus user-management screens, browser multipart uploads, native Android/iOS picking, and worker progress updates all hit the live Go API and WebSocket surfaces by default.
 - `AppConfig` still targets `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. `USE_DEMO_DATA` now defaults to `false`; enable it explicitly for smoke tests or offline UI work.
 - The Flutter network layer now uses `package:http`, sends browser credentials on web for API calls, uses a second non-credentialed browser client for presigned MinIO part uploads, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
-- `ConnectivityService` is now live instead of placeholder-only: it combines browser online/offline signals with transport-level reachability feedback, surfaces that status in the shell and upload UI, and disables upload/avatar file picking when the backend is unreachable.
-- The current file-picker implementation is still intentionally web-first for media uploads: it uses `FileUploadInputElement`, `Blob.slice`, and `FileReader.readAsArrayBuffer` so the browser can stream multipart chunks without adding another package. Secure token persistence is now in place for native targets, while broader native media picking is still pending.
-- Flutter now consumes `GET /users/directory` for album-recipient picking and caches signed avatar URLs by `user_id`. It seeds that cache from `/users/me`, `/users/directory`, comment authors, and share recipients, then refreshes stale entries through `GET /users/:id/avatar`.
+- `ConnectivityService` is now live instead of placeholder-only: it combines browser online/offline signals with transport-level reachability feedback, surfaces that status in the shell and upload UI, and now blocks favorites, comments, and album mutations in addition to upload/avatar actions when the backend is unreachable.
+- The media picker is now split intentionally by platform: web still uses `FileUploadInputElement`, `Blob.slice`, and `FileReader.readAsArrayBuffer` so the browser can stream multipart chunks without another package, while Android/iOS now use `image_picker` with Android lost-data recovery and a single-media fallback for older iOS gallery behavior.
+- Flutter now consumes `GET /users/directory` for album-recipient picking and caches signed avatar URLs by `user_id`. It seeds that cache from `/users/me`, `/users/directory`, comment authors, and share recipients, then refreshes stale entries through `GET /users/:id/avatar`. Media thumbnails now use the same TTL-aware signed-URL cache pattern against `GET /media/:id/thumb`.
 - The backend now also implements the documented CORS path through `ALLOWED_ORIGINS`, which is required for the Flutter web app to call `api.mynube.live` with cookies/credentials.
-- `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice. The new `integration_test/` suite now compiles under analyze, but running it in this workspace still needs a supported non-web device because Flutter reported that web devices are not supported for integration tests here.
+- `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice. The `integration_test/` suite now also runs on the local iOS simulator in this workspace, and the new live-backend upload/reconnect variant is checked in behind credential-based skipping.
 - Confirmed production domain plan remains: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
 
 Reference docs used for the current live integration slice:
@@ -17,6 +17,9 @@ Reference docs used for the current live integration slice:
 - Flutter networking cookbook: [docs.flutter.dev/cookbook/networking/authenticated-requests](https://docs.flutter.dev/cookbook/networking/authenticated-requests)
 - Flutter integration testing guide: [docs.flutter.dev/testing/integration-tests](https://docs.flutter.dev/testing/integration-tests)
 - Flutter integration testing concepts: [docs.flutter.dev/cookbook/testing/integration/introduction](https://docs.flutter.dev/cookbook/testing/integration/introduction)
+- `image_picker` plugin: [pub.dev/packages/image_picker](https://pub.dev/packages/image_picker)
+- Android Photo Picker: [developer.android.com/about/versions/13/features/photopicker](https://developer.android.com/about/versions/13/features/photopicker)
+- Apple `PHPickerViewController`: [developer.apple.com/documentation/photosui/phpickerviewcontroller](https://developer.apple.com/documentation/photosui/phpickerviewcontroller)
 - `showDialog`: [api.flutter.dev/flutter/material/showDialog.html](https://api.flutter.dev/flutter/material/showDialog.html)
 - `TextEditingController`: [api.flutter.dev/flutter/widgets/TextEditingController-class.html](https://api.flutter.dev/flutter/widgets/TextEditingController-class.html)
 - `package:http` browser credentials support: [pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html](https://pub.dev/documentation/http/latest/browser_client/BrowserClient-class.html)
@@ -76,9 +79,9 @@ dev_dependencies:
 
 ## 3. Recommended Next Flutter Continuation
 
-1. Replace the temporary web-first file pickers with the longer-term cross-platform media-selection approach once the native/mobile slice begins.
-2. Expand integration coverage from demo-mode happy paths into live-backend scenarios for uploads, reconnect handling, and avatar refresh expiry.
-3. Tighten offline/cache invalidation behavior for other signed-URL surfaces beyond user avatars.
+1. Run `integration_test/live_backend_upload_reconnect_test.dart` with real backend credentials plus seeded upload-safe accounts so the new live variant exercises end-to-end uploads instead of skipping.
+2. Propagate the same offline guard pattern into any remaining admin/directory-only flows that still rely on generic API failures instead of connectivity-aware messaging.
+3. Set a real `version:` in `flutter_app/pubspec.yaml` so iOS simulator/device builds stop warning about missing bundle version metadata.
 
 ## 4. Target Architecture Reference
 

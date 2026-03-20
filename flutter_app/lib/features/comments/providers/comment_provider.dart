@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/api_transport.dart';
@@ -13,10 +14,12 @@ class CommentProvider extends ChangeNotifier {
     required ApiClient apiClient,
     required ApiTransport transport,
     required AuthProvider authProvider,
+    required ConnectivityService connectivityService,
   })  : _config = config,
         _apiClient = apiClient,
         _transport = transport,
-        _authProvider = authProvider {
+        _authProvider = authProvider,
+        _connectivityService = connectivityService {
     if (_config.useDemoData) {
       for (final entry in _seedCommentsByMediaId.entries) {
         _commentsByMediaId[entry.key] = List<Comment>.of(entry.value);
@@ -28,6 +31,7 @@ class CommentProvider extends ChangeNotifier {
   final ApiClient _apiClient;
   final ApiTransport _transport;
   final AuthProvider _authProvider;
+  final ConnectivityService _connectivityService;
 
   static final Map<String, List<Comment>> _seedCommentsByMediaId =
       <String, List<Comment>>{
@@ -99,6 +103,11 @@ class CommentProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (_connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
+      notifyListeners();
+      return;
+    }
 
     _isLoading = true;
     notifyListeners();
@@ -140,6 +149,11 @@ class CommentProvider extends ChangeNotifier {
     }
     if (trimmedBody.isEmpty) {
       _errorMessage = 'Comment text cannot be empty.';
+      notifyListeners();
+      return false;
+    }
+    if (!_config.useDemoData && _connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
       notifyListeners();
       return false;
     }
@@ -194,6 +208,11 @@ class CommentProvider extends ChangeNotifier {
   Future<bool> deleteComment(String mediaId, String commentId) async {
     final comments = _commentsByMediaId[mediaId];
     if (comments == null || comments.isEmpty) {
+      return false;
+    }
+    if (!_config.useDemoData && _connectivityService.isOffline) {
+      _errorMessage = _connectivityService.statusMessage;
+      notifyListeners();
       return false;
     }
 

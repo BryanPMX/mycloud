@@ -9,5 +9,7 @@ abstract class SelectedUploadFile {
 
   int get sizeBytes;
 
+  Future<int> loadSizeBytes() async => sizeBytes;
+
   Future<Uint8List> readChunk(int start, int end);
 }

@@ -156,21 +156,21 @@ class AdminDashboardProvider extends ChangeNotifier {
   final List<FlutterContinuation> nextFlutterContinuations =
       const <FlutterContinuation>[
     FlutterContinuation(
-      title: 'Expand native media picking',
+      title: 'Run live device coverage',
       description:
-          'Signed avatar reads and the family directory are now wired, so the next product gap is taking the browser-first media/file selection path further on Android and iOS.',
+          'Native Android/iOS media picking is now wired, so the next highest-value step is running the new live upload/reconnect coverage with real backend credentials.',
       isHighestPriority: true,
     ),
     FlutterContinuation(
       title: 'Deepen automated coverage around live flows',
       description:
-          'The next confidence win is widget and integration coverage for directory-backed share dialogs, avatar refreshes, admin edits, and reconnect handling around the remaining backend gaps.',
+          'The next confidence win is widening the same device-level pattern to more directory-backed share dialogs, avatar refreshes, admin edits, and reconnect-sensitive flows.',
       isHighestPriority: false,
     ),
     FlutterContinuation(
       title: 'Tighten offline and cache behavior',
       description:
-          'Signed URL caching now exists at the user-avatar layer, and the next polish pass is broader offline UX plus cache invalidation around media/library surfaces.',
+          'Signed URL caching now exists for avatars and thumbnails, and the next polish pass is carrying the same connectivity-aware UX into any remaining admin-only surfaces.',
       isHighestPriority: false,
     ),
   ];

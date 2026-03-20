@@ -1,4 +1,5 @@
 import 'package:familycloud/core/config/app_config.dart';
+import 'package:familycloud/core/connectivity/connectivity_service.dart';
 import 'package:familycloud/core/network/api_client.dart';
 import 'package:familycloud/core/network/api_transport.dart';
 import 'package:familycloud/core/storage/secure_storage.dart';
@@ -12,6 +13,7 @@ void main() {
   late AppConfig config;
   late ApiTransport transport;
   late ApiClient apiClient;
+  late ConnectivityService connectivityService;
   late AuthProvider authProvider;
   late MediaListProvider mediaProvider;
   late AlbumProvider albumProvider;
@@ -35,6 +37,9 @@ void main() {
     );
     transport = ApiTransport();
     apiClient = ApiClient(config);
+    connectivityService = ConnectivityService(
+      registerPlatformListener: (_) => null,
+    );
     authProvider = AuthProvider(
       config: config,
       apiClient: apiClient,
@@ -47,12 +52,14 @@ void main() {
       apiClient: apiClient,
       transport: transport,
       authProvider: authProvider,
+      connectivityService: connectivityService,
     );
     albumProvider = AlbumProvider(
       config: config,
       apiClient: apiClient,
       transport: transport,
       authProvider: authProvider,
+      connectivityService: connectivityService,
     );
   });
 
@@ -60,6 +67,7 @@ void main() {
     albumProvider.dispose();
     mediaProvider.dispose();
     authProvider.dispose();
+    connectivityService.dispose();
     transport.dispose();
   });
 

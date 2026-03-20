@@ -19,7 +19,8 @@ Future<PlatformWebSocketConnection> connectPlatformWebSocket(
   late final StreamSubscription<html.MessageEvent> messageSubscription;
 
   Object connectionError([String? message]) {
-    return StateError(message ?? 'Unable to connect to the progress websocket.');
+    return StateError(
+        message ?? 'Unable to connect to the progress websocket.');
   }
 
   void failOpen([String? message]) {
