@@ -1,0 +1,3 @@
+class MediaRepository {
+  const MediaRepository();
+}

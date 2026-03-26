@@ -1,0 +1,3 @@
+class AlbumRepository {
+  const AlbumRepository();
+}
