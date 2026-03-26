@@ -11,6 +11,7 @@ OUTPUT_DIR="$APP_DIR/build/web"
 : "${API_BASE_URL:=https://api.mynube.live/api/v1}"
 : "${WS_BASE_URL:=wss://api.mynube.live/ws/progress}"
 : "${APP_ENV:=production}"
+: "${USE_DEMO_DATA:=false}"
 
 cd "$APP_DIR"
 
@@ -20,6 +21,7 @@ flutter --suppress-analytics --no-version-check build web --release \
   --dart-define=API_BASE_URL="$API_BASE_URL" \
   --dart-define=WS_BASE_URL="$WS_BASE_URL" \
   --dart-define=APP_ENV="$APP_ENV" \
+  --dart-define=USE_DEMO_DATA="$USE_DEMO_DATA" \
   "$@"
 
 if [ -n "${WEB_DEPLOY_DIR:-}" ]; then

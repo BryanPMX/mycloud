@@ -64,6 +64,7 @@ coverage/
 
 # Dependency directories
 node_modules/
+.vercel/
 
 # Go cache and local tooling
 .gocache/
