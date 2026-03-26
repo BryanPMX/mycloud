@@ -1,4 +1,4 @@
-package com.example.familycloud
+package live.mynube.app
 
 import io.flutter.embedding.android.FlutterActivity
 

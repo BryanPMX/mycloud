@@ -61,7 +61,9 @@ Current implemented slices:
 - `DELETE /api/v1/media/upload/:id`
 - `GET /health`
 - Flutter `MaterialApp.router` shell with live auth/session restore, secure native token persistence, live media/albums/comments/admin reads and writes, browser multipart uploads, `/ws/progress` reconciliation, presigned thumbnail resolution, demo fallback mode, and environment-aware endpoint config
+- Flutter release metadata and mobile identifiers normalized for production: `version: 1.0.0+1`, consumer-facing `Mynube` branding, `live.mynube.app` bundle/application ids, Android `key.properties` signing scaffold, and local Xcode team id `55BP75778A`
 - validated Flutter tooling pass with `flutter analyze` and `flutter test`
+- validated Flutter release build pass with `scripts/deploy-web.sh`, `flutter build ios --release --no-codesign`, and `flutter build appbundle --release`
 - validated backend tooling pass with `go test ./...`
 
 Use the numbered design docs for architecture and implementation status:

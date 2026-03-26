@@ -1,0 +1,6 @@
+# Copy this file to flutter_app/android/key.properties and replace the values
+# before generating a Play Store or production-signed Android build.
+storeFile=../../secrets/mynube-upload-keystore.jks
+storePassword=replace-with-keystore-password
+keyAlias=upload
+keyPassword=replace-with-key-password

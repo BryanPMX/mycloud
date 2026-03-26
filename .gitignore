@@ -78,6 +78,7 @@ flutter_app/.packages
 flutter_app/build/
 flutter_app/.metadata
 flutter_app/android/.gradle/
+flutter_app/android/key.properties
 flutter_app/android/app/debug/
 flutter_app/android/app/profile/
 flutter_app/android/app/release/

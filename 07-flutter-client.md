@@ -1,6 +1,6 @@
 # 07 — Flutter Client Architecture
 
-Current implementation note on March 20, 2026:
+Current implementation note on March 26, 2026:
 - `flutter_app/` still uses the lightweight `ChangeNotifier` + custom `RouterDelegate` foundation, but it now goes beyond seeded placeholders: auth/session restore, secure native token persistence, media reads, comment create/delete, album create/edit/delete plus membership/share flows, profile display-name/avatar edits, non-admin directory-backed recipient picking, admin stats plus user-management screens, browser multipart uploads, native Android/iOS picking, and worker progress updates all hit the live Go API and WebSocket surfaces by default.
 - `AppConfig` still targets `https://mynube.live` for the app, `https://api.mynube.live/api/v1` for REST, and `wss://api.mynube.live/ws/progress` for worker updates. `USE_DEMO_DATA` now defaults to `false`; enable it explicitly for smoke tests or offline UI work.
 - The Flutter network layer now uses `package:http`, sends browser credentials on web for API calls, uses a second non-credentialed browser client for presigned MinIO part uploads, retries protected reads after `/auth/refresh`, and resolves presigned thumbnail URLs from `GET /media/:id/thumb`.
@@ -8,7 +8,8 @@ Current implementation note on March 20, 2026:
 - The media picker is now split intentionally by platform: web still uses `FileUploadInputElement`, `Blob.slice`, and `FileReader.readAsArrayBuffer` so the browser can stream multipart chunks without another package, while Android/iOS now use `image_picker` with Android lost-data recovery and a single-media fallback for older iOS gallery behavior.
 - Flutter now consumes `GET /users/directory` for album-recipient picking and caches signed avatar URLs by `user_id`. It seeds that cache from `/users/me`, `/users/directory`, comment authors, and share recipients, then refreshes stale entries through `GET /users/:id/avatar`. Media thumbnails now use the same TTL-aware signed-URL cache pattern against `GET /media/:id/thumb`.
 - The backend now also implements the documented CORS path through `ALLOWED_ORIGINS`, which is required for the Flutter web app to call `api.mynube.live` with cookies/credentials.
-- `flutter analyze`, `flutter test`, and `go test ./...` all pass for this slice. The `integration_test/` suite now also runs on the local iOS simulator in this workspace, and the new live-backend upload/reconnect variant is checked in behind credential-based skipping.
+- the release shell now uses a real app version (`1.0.0+1`), consistent consumer-facing `Mynube` branding, Android/iOS bundle ids rooted at `live.mynube.app`, Android release-keystore scaffolding via `android/key.properties`, and Xcode team id `55BP75778A` for automatic iOS signing
+- `flutter analyze`, `flutter test`, `scripts/deploy-web.sh`, `flutter build ios --release --no-codesign`, `flutter build appbundle --release`, and `go test ./...` all pass for this slice. The `integration_test/` suite still runs on the local iOS simulator in this workspace, and the live-backend upload/reconnect variant remains checked in behind credential-based skipping.
 - Confirmed production domain plan remains: `https://mynube.live` for the Flutter web app, `https://api.mynube.live` for the Go API, `https://minio.mynube.live` for presigned object traffic, and `https://console.mynube.live` for the MinIO console/admin surface.
 
 Reference docs used for the current live integration slice:
@@ -66,8 +67,10 @@ lib/
 dependencies:
   flutter:
     sdk: flutter
+  cupertino_icons: ^1.0.8
   flutter_secure_storage: ^10.0.0
   http: ^1.2.1
+  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:
@@ -80,8 +83,9 @@ dev_dependencies:
 ## 3. Recommended Next Flutter Continuation
 
 1. Run `integration_test/live_backend_upload_reconnect_test.dart` with real backend credentials plus seeded upload-safe accounts so the new live variant exercises end-to-end uploads instead of skipping.
-2. Propagate the same offline guard pattern into any remaining admin/directory-only flows that still rely on generic API failures instead of connectivity-aware messaging.
-3. Set a real `version:` in `flutter_app/pubspec.yaml` so iOS simulator/device builds stop warning about missing bundle version metadata.
+2. Install Apple Development/Distribution certificates in Xcode for team `55BP75778A`, then archive with `flutter build ipa` or Xcode Organizer so TestFlight/App Store upload becomes possible.
+3. Generate the Android upload keystore from `flutter_app/android/key.properties.example`, switch to a signed `.aab`, and enroll the app in Play App Signing.
+4. Propagate the same offline guard pattern into any remaining admin/directory-only flows that still rely on generic API failures instead of connectivity-aware messaging.
 
 ## 4. Target Architecture Reference
 
