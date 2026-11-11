@@ -16,6 +16,8 @@ jobs:
           cache: true
       - name: Formatting
         run: test -z "$(gofmt -l cmd internal pkg)"
+      - name: Portainer storage selection and private port contracts
+        run: python3 tests/compose_config_test.py
       - run: go vet ./...
       - run: go test -race ./...
       - name: Scan source for secrets

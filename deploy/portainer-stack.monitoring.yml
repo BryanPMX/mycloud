@@ -1,5 +1,6 @@
 # server-hp's existing Prometheus uses host networking. Publish metrics ONLY on
-# loopback. This adds no monitoring containers or shared Docker networks.
+# loopback. The NPM primary file already has these bindings; this override
+# remains useful with the generic primary file. No monitoring containers added.
 services:
   api:
     ports: ["127.0.0.1:19090:9090"]

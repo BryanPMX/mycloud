@@ -42,6 +42,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+    ports:
+    - 127.0.0.1:19090:9090
     networks:
       mycloud_internal:
       nginx-proxy-manager_default:
@@ -108,6 +110,8 @@ services:
         condition: service_started
       clamav:
         condition: service_healthy
+    ports:
+    - 127.0.0.1:19091:9090
     networks:
     - mycloud_internal
     restart: unless-stopped
@@ -197,6 +201,9 @@ services:
     - mycloud_internal
     restart: unless-stopped
   minio:
+    extends:
+      file: ${MYCLOUD_MINIO_STORAGE_FILE:-storage/minio-volume.yml}
+      service: minio_storage
     cpus: "${MINIO_CPUS:-1.0}"
     mem_limit: "${MINIO_MEMORY_LIMIT:-1g}"
     pids_limit: 256
@@ -206,8 +213,6 @@ services:
       GOMEMLIMIT: "${MINIO_GO_MEMORY_LIMIT:-768MiB}"
       MINIO_ROOT_USER: "${MINIO_ACCESS_KEY}"
       MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY}"
-    volumes:
-    - minio_data:/data
     ports:
     - 127.0.0.1:9001:9001
     networks:

@@ -26,6 +26,7 @@ storage/
 !deploy/storage/
 !deploy/storage/*.sh
 !deploy/storage/*.env.example
+!deploy/storage/*.yml
 !flutter_app/lib/core/storage/
 !flutter_app/lib/core/storage/**
 uploads/

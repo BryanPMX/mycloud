@@ -12,7 +12,7 @@ GitHub Go CI runs formatting, vet, race tests, the official vulnerability scanne
 
 Go is pinned to patched 1.26.11; core builder/runtime image manifests are pinned. Flutter/Vercel use 3.35.4 and the lockfile. Dependency updates must rerun the checks; see [Go release history](https://go.dev/doc/devel/release) and the [Go vulnerability database](https://pkg.go.dev/vuln/).
 
-Use `deploy/portainer-stack.npm.yml` for production. The optional monitoring override publishes only `127.0.0.1:19090/19091`; the SSD override is separate and gated by [storage.md](storage.md). Do not change the production Compose project name or remove volumes.
+Use `deploy/portainer-stack.npm.yml` for production. This primary file publishes diagnostics only on `127.0.0.1:19090/19091` for the existing host-network Prometheus. It defaults to `MYCLOUD_MINIO_STORAGE_FILE=storage/minio-volume.yml`, preserving the current named volume. SSD selection is separately gated by [storage.md](storage.md). Do not change the production Compose project name or remove volumes.
 
 ## First rollout on the current named volume
 
@@ -20,7 +20,7 @@ Use `deploy/portainer-stack.npm.yml` for production. The optional monitoring ove
 2. Verify independent media backup availability. Pause uploads and let active uploads complete. Count outstanding legacy Redis upload-session keys without printing values. New upload reservations live in PostgreSQL; a legacy Redis-only in-flight upload cannot resume across the cutover. Wait/drain or explicitly cancel it with its owner's knowledge.
 3. Take a maintenance window, stop only MyCloud API/worker, and capture a matched database and media backup. Verify and rehearse restore before considering cloud cancellation. Retain old images/configuration and `mycloud_minio_data`.
 4. Set `IMAGE_TAG=sha-FULL_REVIEWED_COMMIT`; use the **same tag** for API, worker, migrate and backup. Keep MinIO `ghcr.io/bryanpmx/minio:RELEASE.2025-09-07T16-13-09Z`. Set production HTTPS endpoints, a strong JWT secret, CORS origins and trusted NPM proxy address. Re-check NPM's IP after recreation. `MINIO_REGION` defaults to `us-east-1`; it must match the existing MinIO region.
-5. Validate the composed configuration with `docker compose --env-file PRIVATE_ENV -f deploy/portainer-stack.npm.yml -f deploy/portainer-stack.monitoring.yml config --quiet`. This validates without printing credentials. **Do not add the SSD override yet.**
+5. Validate the composed configuration with `docker compose --env-file PRIVATE_ENV -f deploy/portainer-stack.npm.yml config --quiet`. This validates without printing credentials. **Keep `MYCLOUD_MINIO_STORAGE_FILE=storage/minio-volume.yml` for this first rollout.**
 6. Redeploy through the existing Portainer/GHCR model during the window. The one-shot migrator must succeed before new API/worker start. Migrations run transactionally, maintain checksums and hold a PostgreSQL advisory lock. The first ledger bootstrap replays the existing idempotent migrations, then applies the new versions. Keep writers stopped during this first cutover.
 7. Confirm container readiness, HTTPS `/health` and `/health/ready`, successful WebSocket reconnect, a new test photo/video upload, original/preview download, private outsider denial, household invitation/feed, unsharing, trash/restore and test-asset permanent deletion. Check per-user usage and pending cleanup. Never use existing family originals as deletion test fixtures.
 8. Resume family access, monitor worker/DB/storage metrics and logs, and keep rollback copies. Production is accepted only after the owner records these checks and family user acceptance.
@@ -30,6 +30,12 @@ Use `deploy/portainer-stack.npm.yml` for production. The optional monitoring ove
 Proxy only `api.mynube.live` to `mycloud-api:8080` and `minio.mynube.live` to `mycloud-minio:9000`, over public HTTPS. Enable WebSockets for the API. Configure the object proxy for 5 MiB multipart parts (`client_max_body_size 6m`) and sufficient read/send timeouts; do not expose the console through a proxy. Forward/overwrite client-IP headers correctly; Cloudflare client-IP trust requires its known ingress chain, not arbitrary request headers. Never proxy port 9090 or administrative services.
 
 The console remains `127.0.0.1:9001` through SSH/Tailscale. Remove old public console/NPM administrative proxy hosts if present. CORS allows configured application origins; preview deployments use demo data rather than production credentials. Client URLs use path routing; configure the web host to serve `index.html` for `/login`, `/accept`, `/media`, `/feed`, `/albums`, `/profile` and `/admin`. Invitation tokens remain in the URL fragment; previous hash-route bookmarks are accepted. Verify a browser upload/download with actual HTTPS hosts, because local tests do not prove NPM/Cloudflare configuration.
+
+## Portainer storage selection
+
+The inventoried Git-stack editor can change the repository reference and environment but has no additional-files field. The primary NPM Compose file therefore uses standard `extends` to select a versioned storage component from the same Git checkout. This keeps the existing Compose path and project. Leave `MYCLOUD_MINIO_STORAGE_FILE` unset or set it to `storage/minio-volume.yml` until migration. After the verified offline copy, installed host guard and UUID preflight, select `storage/minio-ssd.yml` and supply `MYCLOUD_STORAGE_UUID`. The SSD component refuses a missing UUID and mounts only existing host paths. Do not detach the stack from Git.
+
+The optional `.monitoring.yml` and `.ssd.yml` files remain available for Compose CLI deployments; Portainer’s primary NPM file does not require adding them.
 
 ## Monitoring integration
 
