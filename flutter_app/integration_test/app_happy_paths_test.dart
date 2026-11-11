@@ -13,8 +13,12 @@ void main() {
     await pumpDemoApp(tester, size: const Size(500, 1800));
     await signInAsDemoAdmin(tester);
 
-    expect(find.text('Media library'), findsOneWidget);
+    expect(find.text('Your vault'), findsOneWidget);
 
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('memory-details-media-1')));
+    await tester.tap(find.byKey(const ValueKey('memory-details-media-1')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byKey(const ValueKey<String>('comment-input-media-1')),
     );
@@ -27,6 +31,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Integration test comment'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
 
     await openSection(tester, 'Albums');
     await tester.tap(find.byKey(const ValueKey<String>('create-album-button')));

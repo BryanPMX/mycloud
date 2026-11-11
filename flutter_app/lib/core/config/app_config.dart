@@ -44,7 +44,8 @@ class AppConfig {
       apiBaseUri: _normalizeApiBase(Uri.parse(apiBaseUrl)),
       websocketUri: _normalizeWebsocket(Uri.parse(websocketUrl)),
       environmentLabel: environmentLabel,
-      useDemoData: useDemoData,
+      useDemoData:
+          useDemoData && environmentLabel.toLowerCase() != 'production',
     );
   }
 

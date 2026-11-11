@@ -47,6 +47,9 @@ class AuthProvider extends ChangeNotifier {
   bool get usesDemoData => _config.useDemoData;
 
   void updateCurrentUser(User user) {
+    if (_currentUser?.id != user.id) {
+      _sessionGeneration++;
+    }
     _currentUser = user;
     _status = AuthStatus.signedIn;
     _errorMessage = null;
@@ -54,6 +57,8 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> restore() async {
+    _sessionGeneration++;
+    _currentUser = null;
     _status = AuthStatus.restoring;
     _errorMessage = null;
     notifyListeners();
@@ -78,11 +83,14 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = await _restoreCurrentUser();
       _status = AuthStatus.signedIn;
     } on ApiException catch (error) {
-      await _clearPersistedSession();
-      _clearSessionState();
+      if (error.isUnauthorized) {
+        await _clearPersistedSession();
+        _clearSessionState();
+      }
       _status = AuthStatus.signedOut;
       if (!error.isUnauthorized) {
-        _errorMessage = error.message;
+        _errorMessage =
+            'Unable to restore your session yet. Check your connection and try again.';
       }
     } catch (_) {
       await _clearPersistedSession();
@@ -108,6 +116,7 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
 
+    _sessionGeneration++;
     _status = AuthStatus.signingIn;
     _errorMessage = null;
     notifyListeners();
@@ -143,6 +152,51 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> changePassword(String current, String next) async {
+    if (_config.useDemoData) {
+      throw const ApiException(
+          statusCode: 403,
+          code: 'SAMPLE_VAULT',
+          message: 'Password changes are available in your live vault.');
+    }
+    await withAuthorization((headers) => _transport.postJson(
+            _apiClient.endpoint('/users/me/password'),
+            headers: headers,
+            body: <String, String>{
+              'current_password': current,
+              'new_password': next
+            }));
+    await signOut();
+  }
+
+  Future<void> refreshUser() async {
+    if (_config.useDemoData || !isAuthenticated) return;
+    final id = _currentUser?.id;
+    final response = await withAuthorization((headers) =>
+        _transport.get(_apiClient.currentUserUri(), headers: headers));
+    if (_currentUser?.id == id) {
+      _currentUser = User.fromJson(response.asMap());
+      notifyListeners();
+    }
+  }
+
+  Future<void> acceptInvitation(
+      String token, String displayName, String password) async {
+    final response = await _transport.postJson(_apiClient.acceptInviteUri(),
+        body: {
+          'token': token,
+          'display_name': displayName,
+          'password': password
+        });
+    final payload = response.asMap();
+    _accessToken = payload['access_token'] as String?;
+    _refreshToken = payload['refresh_token'] as String?;
+    await _persistTokens();
+    _currentUser = User.fromJson(payload['user'] as Map<String, dynamic>);
+    _status = AuthStatus.signedIn;
+    notifyListeners();
+  }
+
   Future<void> signInAsDemoMember() {
     return signIn(
       email: 'member@mynube.live',
@@ -155,6 +209,21 @@ class AuthProvider extends ChangeNotifier {
       email: 'admin@mynube.live',
       password: usesDemoData ? 'demo-password' : 'password',
     );
+  }
+
+  Future<void> deleteAccount(String password) async {
+    if (_config.useDemoData) {
+      await signOut();
+      return;
+    }
+    await withAuthorization((headers) => _transport.postJson(
+        _apiClient.endpoint('/users/me/delete'),
+        body: {'password': password, 'confirmation': 'DELETE'},
+        headers: headers));
+    await _clearPersistedSession();
+    _clearSessionState();
+    _status = AuthStatus.signedOut;
+    notifyListeners();
   }
 
   Future<void> signOut() async {
@@ -186,14 +255,29 @@ class AuthProvider extends ChangeNotifier {
   Future<T> withAuthorization<T>(
     Future<T> Function(Map<String, String> headers) action,
   ) async {
+    final generation = _sessionGeneration;
+    final accountId = _currentUser?.id;
+    void requireSession() {
+      if (generation != _sessionGeneration || accountId != _currentUser?.id) {
+        throw const ApiException(
+            statusCode: 409,
+            code: 'SESSION_CHANGED',
+            message: 'Your account changed. Please try again.');
+      }
+    }
+
     try {
-      return await action(_authorizationHeaders());
+      final result = await action(_authorizationHeaders());
+      requireSession();
+      return result;
     } on ApiException catch (error) {
+      requireSession();
       if (!error.isUnauthorized) {
         rethrow;
       }
 
       final refreshed = await _refreshSession();
+      requireSession();
       if (!refreshed) {
         await _clearPersistedSession();
         _clearSessionState();
@@ -202,7 +286,9 @@ class AuthProvider extends ChangeNotifier {
         rethrow;
       }
 
-      return action(_authorizationHeaders());
+      final result = await action(_authorizationHeaders());
+      requireSession();
+      return result;
     }
   }
 
@@ -261,7 +347,17 @@ class AuthProvider extends ChangeNotifier {
     return User.fromJson(response.asMap());
   }
 
-  Future<bool> _refreshSession() async {
+  Future<bool>? _refreshInFlight;
+  int _sessionGeneration = 0;
+
+  Future<bool> _refreshSession() {
+    return _refreshInFlight ??= _performRefresh().whenComplete(() {
+      _refreshInFlight = null;
+    });
+  }
+
+  Future<bool> _performRefresh() async {
+    final generation = _sessionGeneration;
     try {
       final response = await _transport.postJson(
         _apiClient.refreshUri(),
@@ -270,13 +366,17 @@ class AuthProvider extends ChangeNotifier {
             : <String, String>{'refresh_token': _refreshToken!},
         headers: _authorizationHeaders(),
       );
+      if (generation != _sessionGeneration) return false;
       final payload = response.asMap();
       _accessToken = payload['access_token'] as String?;
       _refreshToken = payload['refresh_token'] as String? ?? _refreshToken;
       await _persistTokens();
       return true;
-    } on ApiException {
-      return false;
+    } on ApiException catch (error) {
+      if (error.isUnauthorized) {
+        return false;
+      }
+      rethrow;
     }
   }
 
@@ -342,6 +442,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isBlank(String? value) => value == null || value.trim().isEmpty;
 
   void _clearSessionState() {
+    _sessionGeneration++;
     _currentUser = null;
     _accessToken = null;
     _refreshToken = null;

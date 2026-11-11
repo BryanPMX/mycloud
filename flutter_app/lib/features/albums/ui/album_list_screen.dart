@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/user_avatar.dart';
+import '../../../shared/widgets/vault_ui.dart';
 import '../../../shared/utils/date_formatter.dart';
-import '../../../shared/utils/file_size_formatter.dart';
 import '../../directory/domain/directory_user.dart';
 import '../../directory/providers/family_directory_provider.dart';
 import '../../media/domain/media.dart';
+import '../../feed/providers/feed_provider.dart';
+import '../../feed/ui/media_viewer.dart';
 import '../../media/providers/media_list_provider.dart';
 import '../domain/album.dart';
 import '../domain/album_share.dart';
@@ -20,183 +22,110 @@ class AlbumListScreen extends StatelessWidget {
     required this.mediaProvider,
     required this.familyDirectoryProvider,
     required this.currentUserId,
+    this.feedProvider,
   });
 
   final AlbumProvider albumProvider;
   final MediaListProvider mediaProvider;
   final FamilyDirectoryProvider familyDirectoryProvider;
   final String currentUserId;
+  final FeedProvider? feedProvider;
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[
-        albumProvider,
-        mediaProvider,
-        familyDirectoryProvider,
-      ]),
+  Widget build(BuildContext context) => AnimatedBuilder(
+      animation: Listenable.merge([albumProvider, mediaProvider]),
       builder: (context, _) {
         final theme = Theme.of(context);
-        final ownedAlbums = albumProvider.ownedAlbums;
-        final sharedAlbums = albumProvider.sharedAlbums;
-
+        final owned = albumProvider.ownedAlbums;
+        final shared = albumProvider.sharedAlbums;
+        Widget collection(Album album) => _AlbumCard(
+            album: album,
+            albumProvider: albumProvider,
+            mediaProvider: mediaProvider,
+            canManage: albumProvider.canManage(album),
+            isSaving: albumProvider.isSavingAlbum(album.id),
+            isDeleting: albumProvider.isDeletingAlbum(album.id),
+            onViewItems: () => _showAlbumMediaDialog(context, album: album),
+            onManageShares: () => _showAlbumSharesDialog(context, album: album),
+            onEdit: () => _showAlbumEditorDialog(context,
+                albumProvider: albumProvider, album: album),
+            onDelete: () => _showDeleteAlbumDialog(context,
+                albumProvider: albumProvider, album: album));
+        Widget grid(List<Album> albums) =>
+            LayoutBuilder(builder: (context, constraints) {
+              final columns = constraints.maxWidth < 500
+                  ? 2
+                  : constraints.maxWidth < 900
+                      ? 3
+                      : 4;
+              final width =
+                  (constraints.maxWidth - (columns - 1) * 16) / columns;
+              return Wrap(
+                  spacing: 16,
+                  runSpacing: 24,
+                  children: albums
+                      .map((album) =>
+                          SizedBox(width: width, child: collection(album)))
+                      .toList());
+            });
         return SingleChildScrollView(
-          key: const ValueKey<String>('album-list-screen'),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Live album workspace',
-                        style: theme.textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Owned and shared album collections now come from GET /albums, while album membership and sharing dialogs call the live /albums/:id/media and /albums/:id/shares endpoints.',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: albumProvider.isLoading
-                                ? null
-                                : () {
-                                    albumProvider.load();
-                                  },
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Refresh'),
-                          ),
-                          FilledButton.icon(
-                            key: const ValueKey<String>('create-album-button'),
-                            onPressed: albumProvider.isCreating
-                                ? null
-                                : () {
-                                    _showAlbumEditorDialog(
-                                      context,
-                                      albumProvider: albumProvider,
-                                    );
-                                  },
-                            icon: albumProvider.isCreating
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.add_rounded),
-                            label: Text(
-                              albumProvider.isCreating
-                                  ? 'Creating...'
-                                  : 'New album',
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (albumProvider.errorMessage != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          albumProvider.errorMessage!,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
+            key: const ValueKey<String>('album-list-screen'),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const VaultEyebrow('Keep the good things together'),
+              const SizedBox(height: 8),
+              Text('Collections', style: theme.textTheme.headlineMedium),
+              const SizedBox(height: 8),
+              Text('Little worlds, made by you.',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 24),
+              Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    FilledButton.icon(
+                        key: const ValueKey<String>('create-album-button'),
+                        onPressed: albumProvider.isCreating
+                            ? null
+                            : () => _showAlbumEditorDialog(context,
+                                albumProvider: albumProvider),
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: const Text('New collection')),
+                    IconButton(
+                        tooltip: 'Refresh collections',
+                        onPressed:
+                            albumProvider.isLoading ? null : albumProvider.load,
+                        icon: const Icon(Icons.refresh_rounded, size: 20))
+                  ]),
+              if (albumProvider.errorMessage != null)
+                Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(albumProvider.errorMessage!,
+                        style: TextStyle(color: theme.colorScheme.error))),
+              const SizedBox(height: 30),
               if (albumProvider.isLoading && !albumProvider.hasLoaded)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(),
-                  ),
-                )
-              else ...[
-                Text('Owned by you', style: theme.textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                if (ownedAlbums.isEmpty)
-                  const _AlbumEmptyState(message: 'No owned albums yet.')
-                else
-                  ...ownedAlbums.map(
-                    (album) => _AlbumCard(
-                      album: album,
-                      canManage: albumProvider.canManage(album),
-                      isSaving: albumProvider.isSavingAlbum(album.id),
-                      isDeleting: albumProvider.isDeletingAlbum(album.id),
-                      onViewItems: () {
-                        _showAlbumMediaDialog(
-                          context,
-                          album: album,
-                        );
-                      },
-                      onManageShares: () {
-                        _showAlbumSharesDialog(
-                          context,
-                          album: album,
-                        );
-                      },
-                      onEdit: () {
-                        _showAlbumEditorDialog(
-                          context,
-                          albumProvider: albumProvider,
-                          album: album,
-                        );
-                      },
-                      onDelete: () {
-                        _showDeleteAlbumDialog(
-                          context,
-                          albumProvider: albumProvider,
-                          album: album,
-                        );
-                      },
-                    ),
-                  ),
-                const SizedBox(height: 20),
-                Text('Shared with you', style: theme.textTheme.headlineSmall),
-                const SizedBox(height: 12),
-                if (sharedAlbums.isEmpty)
-                  const _AlbumEmptyState(message: 'No shared albums yet.')
-                else
-                  ...sharedAlbums.map(
-                    (album) => _AlbumCard(
-                      album: album,
-                      canManage: albumProvider.canManage(album),
-                      onViewItems: () {
-                        _showAlbumMediaDialog(
-                          context,
-                          album: album,
-                        );
-                      },
-                      onManageShares: albumProvider.canManage(album)
-                          ? () {
-                              _showAlbumSharesDialog(
-                                context,
-                                album: album,
-                              );
-                            }
-                          : null,
-                    ),
-                  ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
+                const LinearProgressIndicator(),
+              Text('Made by you', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 16),
+              if (owned.isEmpty)
+                const _AlbumEmptyState(
+                    message:
+                        'Gather a few favorites into your first collection.')
+              else
+                grid(owned),
+              const SizedBox(height: 32),
+              Text('Shared with you', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 16),
+              if (shared.isEmpty)
+                const _AlbumEmptyState(
+                    message:
+                        'Collections from your circle will find a home here.')
+              else
+                grid(shared),
+              const SizedBox(height: 36),
+            ]));
+      });
 
   Future<void> _showAlbumEditorDialog(
     BuildContext context, {
@@ -236,6 +165,7 @@ class AlbumListScreen extends StatelessWidget {
         album: album,
         albumProvider: albumProvider,
         mediaProvider: mediaProvider,
+        feedProvider: feedProvider,
       ),
     );
   }
@@ -250,25 +180,28 @@ class AlbumListScreen extends StatelessWidget {
         album: album,
         albumProvider: albumProvider,
         familyDirectoryProvider: familyDirectoryProvider,
+        feedProvider: feedProvider,
         currentUserId: currentUserId,
       ),
     );
   }
 }
 
-class _AlbumCard extends StatelessWidget {
-  const _AlbumCard({
-    required this.album,
-    required this.canManage,
-    this.isSaving = false,
-    this.isDeleting = false,
-    this.onViewItems,
-    this.onManageShares,
-    this.onEdit,
-    this.onDelete,
-  });
-
+class _AlbumCard extends StatefulWidget {
+  const _AlbumCard(
+      {required this.album,
+      required this.albumProvider,
+      required this.mediaProvider,
+      required this.canManage,
+      this.isSaving = false,
+      this.isDeleting = false,
+      this.onViewItems,
+      this.onManageShares,
+      this.onEdit,
+      this.onDelete});
   final Album album;
+  final AlbumProvider albumProvider;
+  final MediaListProvider mediaProvider;
   final bool canManage;
   final bool isSaving;
   final bool isDeleting;
@@ -276,312 +209,411 @@ class _AlbumCard extends StatelessWidget {
   final VoidCallback? onManageShares;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  @override
+  State<_AlbumCard> createState() => _AlbumCardState();
+}
+
+class _AlbumCardState extends State<_AlbumCard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_loadCover());
+    });
+  }
+
+  Future<void> _loadCover() async {
+    final cover = widget.album.coverMediaId;
+    if (cover != null) {
+      await widget.mediaProvider.ensureThumbnailById(cover);
+      return;
+    }
+    await widget.albumProvider.loadAlbumMedia(widget.album.id);
+    if (!mounted) return;
+    final items = widget.albumProvider.mediaForAlbum(widget.album.id);
+    if (items.isNotEmpty) {
+      await widget.mediaProvider.ensureThumbnailLoaded(items.first);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final album = widget.album;
     final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(album.name, style: theme.textTheme.titleLarge),
-                  Chip(
-                    label: Text(
-                      album.isOwnedByCurrentUser ? 'owned' : 'shared',
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    key: ValueKey<String>('album-media-${album.id}'),
-                    onPressed: onViewItems,
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: Text(canManage ? 'Manage items' : 'View items'),
-                  ),
-                  if (canManage)
-                    OutlinedButton.icon(
-                      key: ValueKey<String>('album-share-${album.id}'),
-                      onPressed: onManageShares,
-                      icon: const Icon(Icons.share_outlined),
-                      label: const Text('Share'),
-                    ),
-                  if (canManage)
-                    OutlinedButton.icon(
-                      key: ValueKey<String>('edit-album-${album.id}'),
-                      onPressed: isSaving || isDeleting ? null : onEdit,
-                      icon: isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.edit_rounded),
-                      label: const Text('Edit'),
-                    ),
-                  if (canManage)
-                    TextButton.icon(
-                      key: ValueKey<String>('delete-album-${album.id}'),
-                      onPressed: isSaving || isDeleting ? null : onDelete,
-                      icon: isDeleting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.delete_outline_rounded),
-                      label: const Text('Delete'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                album.description,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 14,
-                runSpacing: 8,
-                children: [
-                  _AlbumMeta(label: '${album.mediaCount} items'),
-                  _AlbumMeta(
-                    label:
-                        'Updated ${DateFormatter.mediumDate(album.updatedAt)}',
-                  ),
-                  if (album.coverMediaId != null)
-                    _AlbumMeta(label: 'Cover ${album.coverMediaId}'),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final colors = theme.colorScheme;
+    final media = widget.albumProvider.mediaForAlbum(album.id);
+    final cover =
+        album.coverMediaId ?? (media.isNotEmpty ? media.first.id : null);
+    return VaultEnter(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Stack(children: [
+        Padding(
+            padding: const EdgeInsets.only(top: 7, right: 7),
+            child: Container(
+                height: 25,
+                decoration: BoxDecoration(
+                    color: colors.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(17)))),
+        Padding(
+            padding: const EdgeInsets.only(top: 3, left: 3, right: 3),
+            child: Container(
+                height: 25,
+                decoration: BoxDecoration(
+                    color: colors.outlineVariant,
+                    borderRadius: BorderRadius.circular(17)))),
+        Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: ClipRRect(
+                borderRadius: BorderRadius.circular(17),
+                child: AspectRatio(
+                    aspectRatio: 1.13,
+                    child: Stack(fit: StackFit.expand, children: [
+                      if (cover != null)
+                        VaultImage(
+                            url: widget.mediaProvider.thumbnailUrlFor(cover),
+                            label: album.name)
+                      else
+                        ColoredBox(
+                            color: colors.surfaceContainerHighest,
+                            child: Center(
+                                child: Icon(Icons.photo_library_outlined,
+                                    color: colors.onSurfaceVariant))),
+                      Positioned.fill(
+                          child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                  key: ValueKey<String>(
+                                      'album-media-${album.id}'),
+                                  onTap: widget.onViewItems,
+                                  child: Semantics(
+                                      label: 'Open ${album.name}',
+                                      button: true,
+                                      child: const SizedBox.expand())))),
+                      Positioned(
+                          left: 10,
+                          bottom: 10,
+                          child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 6),
+                              decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: .5),
+                                  borderRadius: BorderRadius.circular(20)),
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                        album.isOwnedByCurrentUser
+                                            ? Icons.lock_outline_rounded
+                                            : Icons.people_outline_rounded,
+                                        color: Colors.white,
+                                        size: 11),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                        album.isOwnedByCurrentUser
+                                            ? 'Your collection'
+                                            : 'Shared with you',
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 9))
+                                  ]))),
+                    ])))),
+      ]),
+      const SizedBox(height: 12),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(album.name,
+              style: theme.textTheme.titleSmall,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 5),
+          Text(
+              '${album.mediaCount} ${album.mediaCount == 1 ? 'memory' : 'memories'}',
+              style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant))
+        ])),
+        if (widget.canManage)
+          PopupMenuButton<String>(
+              tooltip: 'Collection options',
+              onSelected: (value) {
+                if (value == 'edit') widget.onEdit?.call();
+                if (value == 'delete') widget.onDelete?.call();
+              },
+              itemBuilder: (_) => [
+                    PopupMenuItem(
+                        key: ValueKey('edit-album-${album.id}'),
+                        value: 'edit',
+                        child: const Text('Edit collection')),
+                    PopupMenuItem(
+                        key: ValueKey('delete-album-${album.id}'),
+                        value: 'delete',
+                        child: const Text('Delete collection'))
+                  ]),
+      ]),
+      if (widget.canManage)
+        TextButton.icon(
+            key: ValueKey<String>('album-share-${album.id}'),
+            onPressed: widget.onManageShares,
+            icon: const Icon(Icons.ios_share_rounded, size: 14),
+            label: const Text('Choose who sees it',
+                style: TextStyle(fontSize: 10))),
+    ]));
   }
 }
 
 class _AlbumMediaDialog extends StatefulWidget {
-  const _AlbumMediaDialog({
-    required this.album,
-    required this.albumProvider,
-    required this.mediaProvider,
-  });
-
+  const _AlbumMediaDialog(
+      {required this.album,
+      required this.albumProvider,
+      required this.mediaProvider,
+      this.feedProvider});
   final Album album;
   final AlbumProvider albumProvider;
   final MediaListProvider mediaProvider;
-
+  final FeedProvider? feedProvider;
   @override
   State<_AlbumMediaDialog> createState() => _AlbumMediaDialogState();
 }
 
 class _AlbumMediaDialogState extends State<_AlbumMediaDialog> {
-  final Set<String> _selectedMediaIds = <String>{};
-
+  bool _adding = false;
+  final Set<String> _selected = {};
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(widget.albumProvider.loadAlbumMedia(widget.album.id));
+      if (mounted) {
+        unawaited(widget.albumProvider.loadAlbumMedia(widget.album.id));
+      }
     });
   }
 
+  void _open(Media media) {
+    if (widget.feedProvider == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => MediaViewer(
+            media: media,
+            provider: widget.feedProvider!,
+            onChanged: () async {
+              await widget.albumProvider.loadAlbumMedia(widget.album.id);
+              await widget.mediaProvider.load();
+            })));
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[
-        widget.albumProvider,
-        widget.mediaProvider,
-      ]),
+  Widget build(BuildContext context) => AnimatedBuilder(
+      animation: Listenable.merge([widget.albumProvider, widget.mediaProvider]),
       builder: (context, _) {
         final theme = Theme.of(context);
-        final albumMedia = widget.albumProvider.mediaForAlbum(widget.album.id);
-        final currentIds = albumMedia.map((item) => item.id).toSet();
-        final availableItems = widget.mediaProvider.allItems
-            .where((media) =>
-                media.ownerId == widget.album.ownerId &&
-                !currentIds.contains(media.id))
-            .toList(growable: false)
-          ..sort((left, right) => right.uploadedAt.compareTo(left.uploadedAt));
+        final existing = widget.albumProvider.mediaForAlbum(widget.album.id);
+        final ids = existing.map((m) => m.id).toSet();
+        final available = widget.mediaProvider.allItems
+            .where((m) =>
+                m.ownerId == widget.album.ownerId &&
+                m.status == MediaStatus.ready &&
+                !ids.contains(m.id))
+            .toList();
         final canManage = widget.albumProvider.canManage(widget.album);
-
+        final busy = widget.albumProvider.isMutatingAlbumMedia(widget.album.id);
+        final items = _adding ? available : existing;
         return Dialog(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 680),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${widget.album.name} items',
-                              style: theme.textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Current API endpoint: GET/POST/DELETE /albums/${widget.album.id}/media',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                  if (widget.albumProvider.errorMessage != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      widget.albumProvider.errorMessage!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final useColumns = constraints.maxWidth >= 760;
+            insetPadding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(maxWidth: 980, maxHeight: 800),
+                child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Expanded(
+                                child: Text(widget.album.name,
+                                    style: theme.textTheme.headlineSmall)),
+                            IconButton(
+                                tooltip: 'Close collection',
+                                onPressed: () => Navigator.pop(context),
+                                icon: const Icon(Icons.close_rounded))
+                          ]),
+                          const SizedBox(height: 6),
+                          Text(
+                              'A collection of moments. Originals stay in your vault.',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                          const SizedBox(height: 20),
+                          if (canManage)
+                            Row(children: [
+                              VaultPill('In this collection',
+                                  selected: !_adding,
+                                  onTap: () => setState(() => _adding = false)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                  child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: VaultPill('Add from vault',
+                                          selected: _adding,
+                                          onTap: () =>
+                                              setState(() => _adding = true))))
+                            ]),
+                          if (widget.albumProvider.errorMessage != null)
+                            Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(widget.albumProvider.errorMessage!,
+                                    style: TextStyle(
+                                        color: theme.colorScheme.error))),
+                          const SizedBox(height: 18),
+                          Expanded(
+                              child: items.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                          _adding
+                                              ? 'Add a few memories to your vault first.'
+                                              : 'This collection is waiting for its first memory.',
+                                          textAlign: TextAlign.center))
+                                  : SingleChildScrollView(
+                                      child: MemoryMasonry(
+                                          items: items,
+                                          builder: (media, index) =>
+                                              _CollectionPhoto(
+                                                  media: media,
+                                                  provider:
+                                                      widget.mediaProvider,
+                                                  selected: _adding &&
+                                                      _selected
+                                                          .contains(media.id),
+                                                  selectable: _adding,
+                                                  onTap: () {
+                                                    if (_adding) {
+                                                      setState(() {
+                                                        if (!_selected
+                                                            .add(media.id)) {
+                                                          _selected
+                                                              .remove(media.id);
+                                                        }
+                                                      });
+                                                    } else {
+                                                      _open(media);
+                                                    }
+                                                  },
+                                                  onRemove: !_adding &&
+                                                          canManage &&
+                                                          !busy
+                                                      ? () => widget
+                                                          .albumProvider
+                                                          .removeMediaFromAlbum(
+                                                              albumId: widget
+                                                                  .album.id,
+                                                              mediaId: media.id)
+                                                      : null)))),
+                          if (_adding)
+                            Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton(
+                                        key: ValueKey<String>(
+                                            'album-media-add-${widget.album.id}'),
+                                        onPressed: busy || _selected.isEmpty
+                                            ? null
+                                            : () async {
+                                                final added = await widget
+                                                    .albumProvider
+                                                    .addMediaToAlbum(
+                                                        albumId:
+                                                            widget.album.id,
+                                                        media: available
+                                                            .where((m) =>
+                                                                _selected
+                                                                    .contains(
+                                                                        m.id))
+                                                            .toList());
+                                                if (mounted && added) {
+                                                  setState(() {
+                                                    _selected.clear();
+                                                    _adding = false;
+                                                  });
+                                                }
+                                              },
+                                        child: Text(busy
+                                            ? 'Adding…'
+                                            : 'Add ${_selected.length} ${_selected.length == 1 ? 'memory' : 'memories'}')))),
+                        ]))));
+      });
+}
 
-                        if (!canManage) {
-                          return _AlbumMediaPane(
-                            title: 'Album contents',
-                            isLoading: widget.albumProvider
-                                .isLoadingAlbumMedia(widget.album.id),
-                            isMutating: false,
-                            items: albumMedia,
-                            emptyMessage: 'No visible album items yet.',
-                          );
-                        }
+class _CollectionPhoto extends StatefulWidget {
+  const _CollectionPhoto(
+      {required this.media,
+      required this.provider,
+      required this.onTap,
+      this.onRemove,
+      this.selectable = false,
+      this.selected = false});
+  final Media media;
+  final MediaListProvider provider;
+  final VoidCallback onTap;
+  final VoidCallback? onRemove;
+  final bool selectable;
+  final bool selected;
+  @override
+  State<_CollectionPhoto> createState() => _CollectionPhotoState();
+}
 
-                        final currentPane = _AlbumMediaPane(
-                          title: 'In this album',
-                          isLoading: widget.albumProvider
-                              .isLoadingAlbumMedia(widget.album.id),
-                          isMutating: widget.albumProvider
-                              .isMutatingAlbumMedia(widget.album.id),
-                          items: albumMedia,
-                          emptyMessage: 'No items in this album yet.',
-                          onRemove: (media) async {
-                            await widget.albumProvider.removeMediaFromAlbum(
-                              albumId: widget.album.id,
-                              mediaId: media.id,
-                            );
-                          },
-                          showRemove: true,
-                        );
-                        final availablePane = _AvailableMediaPane(
-                          items: availableItems,
-                          selectedMediaIds: _selectedMediaIds,
-                          onSelectionChanged: (mediaId, selected) {
-                            setState(() {
-                              if (selected) {
-                                _selectedMediaIds.add(mediaId);
-                              } else {
-                                _selectedMediaIds.remove(mediaId);
-                              }
-                            });
-                          },
-                        );
-
-                        if (useColumns) {
-                          return Row(
-                            children: [
-                              Expanded(child: currentPane),
-                              const SizedBox(width: 20),
-                              Expanded(child: availablePane),
-                            ],
-                          );
-                        }
-
-                        return Column(
-                          children: [
-                            Expanded(child: currentPane),
-                            const SizedBox(height: 20),
-                            Expanded(child: availablePane),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Close'),
-                      ),
-                      const Spacer(),
-                      if (canManage)
-                        FilledButton.icon(
-                          key: ValueKey<String>(
-                              'album-media-add-${widget.album.id}'),
-                          onPressed: _selectedMediaIds.isEmpty ||
-                                  widget.albumProvider
-                                      .isMutatingAlbumMedia(widget.album.id)
-                              ? null
-                              : () async {
-                                  final selectedItems = availableItems
-                                      .where(
-                                        (item) =>
-                                            _selectedMediaIds.contains(item.id),
-                                      )
-                                      .toList(growable: false);
-                                  final added = await widget.albumProvider
-                                      .addMediaToAlbum(
-                                    albumId: widget.album.id,
-                                    media: selectedItems,
-                                  );
-                                  if (!mounted || !added) {
-                                    return;
-                                  }
-                                  setState(() {
-                                    _selectedMediaIds.clear();
-                                  });
-                                },
-                          icon: widget.albumProvider
-                                  .isMutatingAlbumMedia(widget.album.id)
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.playlist_add_rounded),
-                          label: const Text('Add selected'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+class _CollectionPhotoState extends State<_CollectionPhoto> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.provider.ensureThumbnailLoaded(widget.media));
   }
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: AspectRatio(
+          aspectRatio: widget.media.aspectRatio.clamp(.65, 1.5),
+          child: Stack(fit: StackFit.expand, children: [
+            VaultImage(
+                url: widget.provider.thumbnailUrlFor(widget.media.id),
+                label: widget.media.filename),
+            Positioned.fill(
+                child: Material(
+                    color: widget.selected
+                        ? Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: .2)
+                        : Colors.transparent,
+                    child: InkWell(
+                        onTap: widget.onTap,
+                        child: Semantics(
+                            label: widget.media.filename,
+                            button: true,
+                            selected: widget.selected,
+                            child: const SizedBox.expand())))),
+            if (widget.selectable)
+              Positioned(
+                  right: 10,
+                  top: 10,
+                  child: IgnorePointer(
+                      child: Icon(
+                          widget.selected
+                              ? Icons.check_circle_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          color: Colors.white,
+                          size: 26))),
+            if (widget.onRemove != null)
+              Positioned(
+                  right: 4,
+                  top: 4,
+                  child: IconButton(
+                      tooltip: 'Remove from collection',
+                      onPressed: widget.onRemove,
+                      style: IconButton.styleFrom(
+                          backgroundColor: Colors.black45,
+                          foregroundColor: Colors.white),
+                      icon: const Icon(Icons.remove_rounded, size: 18))),
+          ])));
 }
 
 class _AlbumSharesDialog extends StatefulWidget {
@@ -590,12 +622,14 @@ class _AlbumSharesDialog extends StatefulWidget {
     required this.albumProvider,
     required this.familyDirectoryProvider,
     required this.currentUserId,
+    this.feedProvider,
   });
 
   final Album album;
   final AlbumProvider albumProvider;
   final FamilyDirectoryProvider familyDirectoryProvider;
   final String currentUserId;
+  final FeedProvider? feedProvider;
 
   @override
   State<_AlbumSharesDialog> createState() => _AlbumSharesDialogState();
@@ -606,11 +640,25 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
   AlbumPermission _permission = AlbumPermission.view;
   DateTime? _expiresAt;
 
+  String _recipientName(AlbumShare share) {
+    if (!share.isFamilyShare) {
+      return share.recipient?.displayName ?? 'Family member';
+    }
+    for (final family in widget.feedProvider?.families ?? []) {
+      if (family.id == share.familyId) return 'Everyone in ${family.name}';
+    }
+    return 'Original family';
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(widget.albumProvider.loadAlbumShares(widget.album.id));
+      if (widget.feedProvider != null &&
+          widget.feedProvider!.families.isEmpty) {
+        unawaited(widget.feedProvider!.loadFamilies());
+      }
       if (!widget.familyDirectoryProvider.hasLoaded &&
           !widget.familyDirectoryProvider.isLoading) {
         unawaited(widget.familyDirectoryProvider.load());
@@ -624,6 +672,7 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
       animation: Listenable.merge(<Listenable>[
         widget.albumProvider,
         widget.familyDirectoryProvider,
+        if (widget.feedProvider != null) widget.feedProvider!,
       ]),
       builder: (context, _) {
         final theme = Theme.of(context);
@@ -656,7 +705,7 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Current API endpoint: GET/POST/DELETE /albums/${widget.album.id}/shares',
+                              'Choose who can view or add to this album. Its contents stay with their owners.',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -709,11 +758,16 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                       labelText: 'Recipient',
                                     ),
                                     items: <DropdownMenuItem<String?>>[
-                                      DropdownMenuItem<String?>(
-                                        value: null,
-                                        child:
-                                            _FamilyRecipientLabel(theme: theme),
-                                      ),
+                                      if (widget.feedProvider == null)
+                                        DropdownMenuItem<String?>(
+                                            value: null,
+                                            child: _FamilyRecipientLabel(
+                                                theme: theme)),
+                                      ...?widget.feedProvider?.families.map(
+                                          (family) => DropdownMenuItem<String?>(
+                                              value: 'family:${family.id}',
+                                              child: Text(
+                                                  'Everyone in ${family.name}'))),
                                       ...candidates.map(
                                         (user) => DropdownMenuItem<String?>(
                                           value: user.id,
@@ -736,8 +790,8 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                     widget.familyDirectoryProvider.isLoading &&
                                             !widget.familyDirectoryProvider
                                                 .hasLoaded
-                                        ? 'Loading family recipients from GET /users/directory...'
-                                        : 'Recipient options come from GET /users/directory, and avatars refresh through GET /users/:id/avatar when a signed URL expires.',
+                                        ? 'Finding your family members…'
+                                        : 'Only the people you choose can access this album.',
                                     style: theme.textTheme.bodyMedium?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
@@ -837,9 +891,11 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                     key: ValueKey<String>(
                                       'album-share-submit-${widget.album.id}',
                                     ),
-                                    onPressed: widget.albumProvider
-                                            .isMutatingAlbumShares(
-                                                widget.album.id)
+                                    onPressed: (widget.feedProvider != null &&
+                                                _selectedRecipientId == null) ||
+                                            widget.albumProvider
+                                                .isMutatingAlbumShares(
+                                                    widget.album.id)
                                         ? null
                                         : () async {
                                             final created = await widget
@@ -847,7 +903,19 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                                 .createShare(
                                               albumId: widget.album.id,
                                               permission: _permission,
-                                              sharedWith: _selectedRecipientId,
+                                              sharedWith: _selectedRecipientId
+                                                          ?.startsWith(
+                                                              'family:') ==
+                                                      true
+                                                  ? null
+                                                  : _selectedRecipientId,
+                                              familyId: _selectedRecipientId
+                                                          ?.startsWith(
+                                                              'family:') ==
+                                                      true
+                                                  ? _selectedRecipientId!
+                                                      .substring(7)
+                                                  : null,
                                               expiresAt: _expiresAt,
                                             );
                                             if (!mounted || !created) {
@@ -952,9 +1020,7 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                                 const SizedBox(width: 12),
                                                 Expanded(
                                                   child: Text(
-                                                    share.recipient
-                                                            ?.displayName ??
-                                                        share.sharedWith,
+                                                    _recipientName(share),
                                                     style: theme
                                                         .textTheme.titleMedium,
                                                   ),
@@ -963,7 +1029,7 @@ class _AlbumSharesDialogState extends State<_AlbumSharesDialog> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '${share.permission.label} permission',
+                                              share.permission.label,
                                               style: theme.textTheme.bodyMedium
                                                   ?.copyWith(
                                                 color: theme.colorScheme
@@ -1101,190 +1167,13 @@ class _FamilyRecipientLabel extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        const Expanded(
+        Expanded(
           child: Text(
-            'Entire family',
+            'Original family',
             overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
-    );
-  }
-}
-
-class _AlbumMediaPane extends StatelessWidget {
-  const _AlbumMediaPane({
-    required this.title,
-    required this.items,
-    required this.emptyMessage,
-    required this.isLoading,
-    required this.isMutating,
-    this.onRemove,
-    this.showRemove = false,
-  });
-
-  final String title;
-  final List<Media> items;
-  final String emptyMessage;
-  final bool isLoading;
-  final bool isMutating;
-  final bool showRemove;
-  final ValueChanged<Media>? onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      color: theme.colorScheme.surfaceContainerLowest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: theme.textTheme.titleLarge),
-            const SizedBox(height: 16),
-            if (isLoading && items.isEmpty)
-              const Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (items.isEmpty)
-              Expanded(
-                child: Center(
-                  child: Text(
-                    emptyMessage,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 20),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item.filename,
-                                style: theme.textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${item.mimeType} · ${FileSizeFormatter.compact(item.sizeBytes)}',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Uploaded ${DateFormatter.mediumDate(item.uploadedAt)}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (showRemove)
-                          IconButton(
-                            onPressed:
-                                isMutating ? null : () => onRemove?.call(item),
-                            icon: isMutating
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.remove_circle_outline),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AvailableMediaPane extends StatelessWidget {
-  const _AvailableMediaPane({
-    required this.items,
-    required this.selectedMediaIds,
-    required this.onSelectionChanged,
-  });
-
-  final List<Media> items;
-  final Set<String> selectedMediaIds;
-  final void Function(String mediaId, bool selected) onSelectionChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      color: theme.colorScheme.surfaceContainerLowest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Add from library', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              'Only items owned by the album owner can be added.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (items.isEmpty)
-              Expanded(
-                child: Center(
-                  child: Text(
-                    'No additional owned media is available right now.',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 20),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    final selected = selectedMediaIds.contains(item.id);
-                    return CheckboxListTile(
-                      value: selected,
-                      onChanged: (value) {
-                        onSelectionChanged(item.id, value ?? false);
-                      },
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(item.filename),
-                      subtitle: Text(
-                        '${item.mimeType} · ${FileSizeFormatter.compact(item.sizeBytes)}',
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1342,7 +1231,7 @@ class _AlbumEditorDialogState extends State<_AlbumEditorDialog> {
             : widget.albumProvider.isCreating;
 
         return AlertDialog(
-          title: Text(_isEditing ? 'Edit album' : 'Create album'),
+          title: Text(_isEditing ? 'Edit collection' : 'Create album'),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -1352,7 +1241,7 @@ class _AlbumEditorDialogState extends State<_AlbumEditorDialog> {
                   key: const ValueKey<String>('album-name-field'),
                   controller: _nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Album name',
+                    labelText: 'Collection name',
                     hintText: 'Weekend in the mountains',
                   ),
                   textInputAction: TextInputAction.next,
@@ -1446,9 +1335,9 @@ class _DeleteAlbumDialog extends StatelessWidget {
         final isDeleting = albumProvider.isDeletingAlbum(album.id);
 
         return AlertDialog(
-          title: const Text('Delete album'),
+          title: const Text('Delete collection'),
           content: Text(
-            'Delete "${album.name}"? The album will disappear, but the media inside it will stay in the library.',
+            'Delete "${album.name}"? The collection will disappear. Your originals will stay in your vault.',
           ),
           actions: [
             TextButton(
@@ -1465,29 +1354,11 @@ class _DeleteAlbumDialog extends StatelessWidget {
                       }
                       Navigator.of(context).pop();
                     },
-              child: Text(isDeleting ? 'Deleting...' : 'Delete album'),
+              child: Text(isDeleting ? 'Deleting...' : 'Delete collection'),
             ),
           ],
         );
       },
-    );
-  }
-}
-
-class _AlbumMeta extends StatelessWidget {
-  const _AlbumMeta({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Text(
-      label,
-      style: theme.textTheme.bodyMedium?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
     );
   }
 }

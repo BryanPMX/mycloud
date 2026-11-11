@@ -20,6 +20,7 @@ class User {
     required this.storageUsed,
     required this.quotaBytes,
     required this.createdAt,
+    this.storageReserved = 0,
     this.avatarUrl,
     this.lastLoginAt,
   });
@@ -29,6 +30,7 @@ class User {
   final String displayName;
   final String? avatarUrl;
   final UserRole role;
+  final int storageReserved;
   final int storageUsed;
   final int quotaBytes;
   final DateTime createdAt;
@@ -52,6 +54,7 @@ class User {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       role: role,
       storageUsed: storageUsed ?? this.storageUsed,
+      storageReserved: storageReserved,
       quotaBytes: quotaBytes ?? this.quotaBytes,
       createdAt: createdAt,
       lastLoginAt: lastLoginAt ?? this.lastLoginAt,
@@ -66,6 +69,7 @@ class User {
       avatarUrl: json['avatar_url'] as String?,
       role: UserRole.fromApi(json['role']),
       storageUsed: _asInt(json['storage_used']),
+      storageReserved: _asInt(json['storage_reserved']),
       quotaBytes: _asInt(json['quota_bytes']),
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),

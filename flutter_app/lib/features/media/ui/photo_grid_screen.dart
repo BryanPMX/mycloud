@@ -6,6 +6,7 @@ import '../../../core/connectivity/connectivity_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/websocket/upload_progress_hub.dart';
 import '../../../shared/widgets/user_avatar.dart';
+import '../../../shared/widgets/vault_ui.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/utils/file_size_formatter.dart';
 import '../../auth/domain/user.dart';
@@ -17,9 +18,11 @@ import '../domain/upload_task.dart';
 import '../providers/media_list_provider.dart';
 import '../providers/media_upload_provider.dart';
 
-class PhotoGridScreen extends StatelessWidget {
+class PhotoGridScreen extends StatefulWidget {
   const PhotoGridScreen({
     super.key,
+    this.onOpen,
+    this.onOpenTrash,
     required this.mediaProvider,
     required this.mediaUploadProvider,
     required this.commentProvider,
@@ -30,6 +33,8 @@ class PhotoGridScreen extends StatelessWidget {
     required this.connectivityService,
   });
 
+  final void Function(Media)? onOpen;
+  final VoidCallback? onOpenTrash;
   final MediaListProvider mediaProvider;
   final MediaUploadProvider mediaUploadProvider;
   final CommentProvider commentProvider;
@@ -40,235 +45,460 @@ class PhotoGridScreen extends StatelessWidget {
   final ConnectivityService connectivityService;
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[
-        mediaProvider,
-        mediaUploadProvider,
-        commentProvider,
-        uploadProgressHub,
-        connectivityService,
+  State<PhotoGridScreen> createState() => _PhotoGridScreenState();
+}
+
+class _PhotoGridScreenState extends State<PhotoGridScreen> {
+  String _filter = 'all';
+  bool _newest = true;
+
+  void _uploads() {
+    showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+            child: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * .85),
+                child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+                    child: AnimatedBuilder(
+                        animation: Listenable.merge([
+                          widget.mediaUploadProvider,
+                          widget.uploadProgressHub,
+                          widget.connectivityService
+                        ]),
+                        builder: (context, _) => _UploadPanel(
+                            mediaUploadProvider: widget.mediaUploadProvider,
+                            uploadProgressHub: widget.uploadProgressHub,
+                            apiClient: widget.apiClient,
+                            connectivityService:
+                                widget.connectivityService))))));
+  }
+
+  void _details(Media media) {
+    widget.mediaProvider.selectMedia(media.id);
+    showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+            child: SizedBox(
+                height: MediaQuery.sizeOf(context).height * .78,
+                child: AnimatedBuilder(
+                    animation: Listenable.merge(
+                        [widget.commentProvider, widget.mediaProvider]),
+                    builder: (context, _) => SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(18, 0, 18,
+                            MediaQuery.viewInsetsOf(context).bottom + 24),
+                        child: _DetailPanel(
+                            media: media,
+                            comments:
+                                widget.commentProvider.commentsFor(media.id),
+                            commentsLoading: widget.commentProvider.isLoading,
+                            commentsError: widget.commentProvider.errorMessage,
+                            apiClient: widget.apiClient,
+                            thumbUrl:
+                                widget.mediaProvider.thumbnailUrlFor(media.id),
+                            commentProvider: widget.commentProvider,
+                            familyDirectoryProvider:
+                                widget.familyDirectoryProvider,
+                            currentUser: widget.currentUser))))));
+  }
+
+  Widget _searchField() => TextField(
+      key: const ValueKey('vault-search'),
+      onChanged: widget.mediaProvider.updateQuery,
+      decoration: const InputDecoration(
+          hintText: 'Search your memories',
+          prefixIcon: Icon(Icons.search_rounded, size: 21)));
+
+  Widget _filterBar() {
+    final provider = widget.mediaProvider;
+    return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (final option in const [
+            ('all', 'All'),
+            ('photos', 'Photos'),
+            ('videos', 'Videos')
+          ]) ...[
+            VaultPill(option.$2,
+                selected: _filter == option.$1 && !provider.favoritesOnly,
+                onTap: () {
+              if (provider.favoritesOnly) provider.toggleFavoritesOnly();
+              setState(() => _filter = option.$1);
+            }),
+            const SizedBox(width: 8)
+          ],
+          VaultPill('Favorites',
+              icon: Icons.favorite_border_rounded,
+              selected: provider.favoritesOnly, onTap: () {
+            provider.toggleFavoritesOnly();
+            setState(() => _filter = 'all');
+          })
+        ]));
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+      animation: Listenable.merge([
+        widget.mediaProvider,
+        widget.mediaUploadProvider,
+        widget.connectivityService
       ]),
       builder: (context, _) {
         final theme = Theme.of(context);
-        final items = mediaProvider.visibleItems;
-        final selectedMedia = mediaProvider.selectedMedia;
-        final activeUploads =
-            mediaUploadProvider.tasks.where((task) => !task.isTerminal).length;
-
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final showDetailPanel =
-                constraints.maxWidth >= 1120 && selectedMedia != null;
-
-            return SingleChildScrollView(
-              key: const ValueKey<String>('photo-grid-screen'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        alignment: WrapAlignment.spaceBetween,
-                        children: [
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 620),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Live media library',
-                                  style: theme.textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'This surface now reads the real /media and /media/search endpoints, keeps favorites in sync, uploads files through the multipart API, and reflects worker processing via /ws/progress.',
-                                  style: theme.textTheme.bodyLarge?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                if (mediaProvider.errorMessage != null) ...[
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    mediaProvider.errorMessage!,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.error,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              _MetricChip(
-                                icon: Icons.task_alt_rounded,
-                                label: '${mediaProvider.readyCount} ready',
-                              ),
-                              _MetricChip(
-                                icon: Icons.hourglass_top_rounded,
-                                label:
-                                    '${mediaProvider.pendingItems.length} processing',
-                              ),
-                              _MetricChip(
-                                icon: mediaProvider.isLoading
-                                    ? Icons.sync_rounded
-                                    : Icons.cloud_done_rounded,
-                                label: mediaProvider.isLoading
-                                    ? 'Refreshing'
-                                    : '$activeUploads uploads',
-                              ),
-                              _MetricChip(
-                                icon: uploadProgressHub.isConnected
-                                    ? Icons.wifi_tethering_rounded
-                                    : Icons.portable_wifi_off_rounded,
-                                label:
-                                    'Progress ${uploadProgressHub.statusLabel}',
-                              ),
-                              _MetricChip(
-                                icon: switch (connectivityService.status) {
-                                  ConnectivityStatus.online =>
-                                    Icons.wifi_rounded,
-                                  ConnectivityStatus.offline =>
-                                    Icons.portable_wifi_off_rounded,
-                                  ConnectivityStatus.unknown =>
-                                    Icons.sync_rounded,
-                                },
-                                label:
-                                    'Network ${connectivityService.statusLabel}',
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 320,
-                        child: TextField(
-                          onChanged: mediaProvider.updateQuery,
-                          decoration: const InputDecoration(
-                            hintText: 'Search filenames or metadata',
-                            prefixIcon: Icon(Icons.search_rounded),
-                          ),
-                        ),
-                      ),
-                      FilterChip(
-                        selected: mediaProvider.favoritesOnly,
-                        onSelected: (_) => mediaProvider.toggleFavoritesOnly(),
-                        label: const Text('Favorites only'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: mediaProvider.isLoading ||
-                                connectivityService.isOffline
-                            ? null
-                            : () {
-                                mediaProvider.load();
-                              },
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Refresh'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  _UploadPanel(
-                    mediaUploadProvider: mediaUploadProvider,
-                    uploadProgressHub: uploadProgressHub,
-                    apiClient: apiClient,
-                    connectivityService: connectivityService,
-                  ),
-                  const SizedBox(height: 20),
-                  if (mediaProvider.isLoading && items.isEmpty)
-                    const _LoadingState()
-                  else if (items.isEmpty)
-                    _EmptyState(errorMessage: mediaProvider.errorMessage)
-                  else if (showDetailPanel)
-                    Row(
+        final colors = theme.colorScheme;
+        final provider = widget.mediaProvider;
+        final all = provider.visibleItems;
+        final items = all
+            .where((m) => _filter == 'photos'
+                ? !m.isVideo
+                : _filter == 'videos'
+                    ? m.isVideo
+                    : true)
+            .toList()
+          ..sort((a, b) => _newest
+              ? b.uploadedAt.compareTo(a.uploadedAt)
+              : a.uploadedAt.compareTo(b.uploadedAt));
+        final active =
+            widget.mediaUploadProvider.tasks.where((t) => !t.isTerminal).length;
+        return LayoutBuilder(builder: (context, constraints) {
+          final mobile = constraints.maxWidth < 600;
+          return RefreshIndicator(
+              onRefresh: provider.load,
+              child: SingleChildScrollView(
+                  key: const ValueKey<String>('photo-grid-screen'),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          flex: 5,
-                          child: _MediaGrid(
-                            items: items,
-                            mediaProvider: mediaProvider,
-                            onSelect: mediaProvider.selectMedia,
-                            onFavoriteToggle: mediaProvider.toggleFavorite,
-                            selectedMediaId: selectedMedia.id,
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          flex: 3,
-                          child: _DetailPanel(
-                            media: selectedMedia,
-                            comments: commentProvider.commentsFor(
-                              selectedMedia.id,
-                            ),
-                            commentsLoading: commentProvider.isLoading &&
-                                commentProvider.activeMediaId ==
-                                    selectedMedia.id,
-                            commentsError: commentProvider.activeMediaId ==
-                                    selectedMedia.id
-                                ? commentProvider.errorMessage
-                                : null,
-                            apiClient: apiClient,
-                            thumbUrl: mediaProvider.thumbnailUrlFor(
-                              selectedMedia.id,
-                            ),
-                            commentProvider: commentProvider,
-                            familyDirectoryProvider: familyDirectoryProvider,
-                            currentUser: currentUser,
-                          ),
-                        ),
-                      ],
-                    )
-                  else ...[
-                    _MediaGrid(
-                      items: items,
-                      mediaProvider: mediaProvider,
-                      onSelect: mediaProvider.selectMedia,
-                      onFavoriteToggle: mediaProvider.toggleFavorite,
-                      selectedMediaId: selectedMedia?.id,
-                    ),
-                    if (selectedMedia != null) ...[
-                      const SizedBox(height: 20),
-                      _DetailPanel(
-                        media: selectedMedia,
-                        comments: commentProvider.commentsFor(selectedMedia.id),
-                        commentsLoading: commentProvider.isLoading &&
-                            commentProvider.activeMediaId == selectedMedia.id,
-                        commentsError:
-                            commentProvider.activeMediaId == selectedMedia.id
-                                ? commentProvider.errorMessage
-                                : null,
-                        apiClient: apiClient,
-                        thumbUrl: mediaProvider.thumbnailUrlFor(
-                          selectedMedia.id,
-                        ),
-                        commentProvider: commentProvider,
-                        familyDirectoryProvider: familyDirectoryProvider,
-                        currentUser: currentUser,
-                      ),
-                    ],
-                  ],
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+                        VaultEnter(
+                            child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                              Expanded(
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                    Text('Your vault',
+                                        style: theme.textTheme.headlineMedium),
+                                    const SizedBox(height: 7),
+                                    Text('Yours to keep. Yours to share.',
+                                        style: TextStyle(
+                                            color: colors.onSurfaceVariant,
+                                            fontSize: mobile ? 12 : 14)),
+                                  ])),
+                              const SizedBox(width: 12),
+                              if (mobile)
+                                IconButton.filled(
+                                    key: const ValueKey('open-upload'),
+                                    tooltip: 'Add memories',
+                                    onPressed: _uploads,
+                                    style: IconButton.styleFrom(
+                                        backgroundColor: colors.primary,
+                                        foregroundColor: colors.onPrimary,
+                                        minimumSize: const Size(48, 48)),
+                                    icon: const Icon(Icons.add_rounded))
+                              else
+                                FilledButton.icon(
+                                    key: const ValueKey('open-upload'),
+                                    onPressed: _uploads,
+                                    style: FilledButton.styleFrom(
+                                        backgroundColor: colors.primary,
+                                        foregroundColor: colors.onPrimary),
+                                    icon:
+                                        const Icon(Icons.add_rounded, size: 19),
+                                    label: const Text('Add memories')),
+                            ])),
+                        const SizedBox(height: 20),
+                        if (mobile) ...[
+                          _searchField(),
+                          const SizedBox(height: 16),
+                          _filterBar()
+                        ] else
+                          Row(children: [
+                            Expanded(child: _filterBar()),
+                            const SizedBox(width: 20),
+                            SizedBox(width: 275, child: _searchField())
+                          ]),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                              child: Text(
+                                  '${items.length} ${items.length == 1 ? 'memory' : 'memories'}',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.onSurfaceVariant))),
+                          PopupMenuButton<bool>(
+                              tooltip: 'Sort memories',
+                              onSelected: (value) =>
+                                  setState(() => _newest = value),
+                              itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                        value: true,
+                                        child: Text('Newest first')),
+                                    PopupMenuItem(
+                                        value: false,
+                                        child: Text('Oldest first'))
+                                  ],
+                              child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(children: [
+                                    Text(
+                                        _newest
+                                            ? 'Newest first'
+                                            : 'Oldest first',
+                                        style: const TextStyle(fontSize: 11)),
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        size: 16)
+                                  ]))),
+                          PopupMenuButton<String>(
+                              tooltip: 'Vault options',
+                              onSelected: (value) {
+                                if (value == 'trash') {
+                                  widget.onOpenTrash?.call();
+                                } else {
+                                  provider.load();
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                        value: 'refresh',
+                                        child: Text('Refresh memories')),
+                                    if (widget.onOpenTrash != null)
+                                      const PopupMenuItem(
+                                          value: 'trash',
+                                          child: Text('Recently deleted'))
+                                  ]),
+                        ]),
+                        if (active > 0)
+                          Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: InkWell(
+                                  onTap: _uploads,
+                                  child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                          color: colors.primaryContainer,
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                      child: Row(children: [
+                                        const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2)),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                            child: Text(
+                                                'Keeping $active ${active == 1 ? 'memory' : 'memories'} safe…',
+                                                style: const TextStyle(
+                                                    fontSize: 12))),
+                                        const Icon(Icons.chevron_right_rounded,
+                                            size: 18)
+                                      ])))),
+                        if (provider.errorMessage != null)
+                          Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Text(provider.errorMessage!,
+                                  style: TextStyle(color: colors.error))),
+                        if (provider.isLoading) const LinearProgressIndicator(),
+                        const SizedBox(height: 8),
+                        if (items.isEmpty && !provider.isLoading)
+                          Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 65, horizontal: 16),
+                              child: Center(
+                                  child: Column(children: [
+                                Icon(Icons.photo_library_outlined,
+                                    size: 42, color: colors.secondary),
+                                const SizedBox(height: 18),
+                                Text(
+                                    all.isEmpty
+                                        ? 'Make room for your moments.'
+                                        : 'Nothing here just yet.',
+                                    style: theme.textTheme.titleLarge,
+                                    textAlign: TextAlign.center),
+                                const SizedBox(height: 8),
+                                Text(
+                                    all.isEmpty
+                                        ? 'Add a few photos or videos. This space is only yours.'
+                                        : 'Try a different filter or search.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        color: colors.onSurfaceVariant)),
+                                if (all.isEmpty) ...[
+                                  const SizedBox(height: 22),
+                                  FilledButton(
+                                      onPressed: _uploads,
+                                      child:
+                                          const Text('Add your first memory'))
+                                ]
+                              ])))
+                        else
+                          MemoryMasonry(
+                              items: items,
+                              builder: (media, index) => _VaultMemoryTile(
+                                  media: media,
+                                  provider: provider,
+                                  onOpen: () {
+                                    provider.selectMedia(media.id);
+                                    if (media.status == MediaStatus.ready) {
+                                      widget.onOpen?.call(media);
+                                    } else {
+                                      _details(media);
+                                    }
+                                  },
+                                  onDetails: () => _details(media))),
+                        if (provider.hasMore)
+                          Center(
+                              child: Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: OutlinedButton(
+                                      onPressed: provider.isLoading
+                                          ? null
+                                          : provider.loadMore,
+                                      child: const Text('More memories')))),
+                        const SizedBox(height: 24),
+                      ])));
+        });
+      });
+}
+
+class _VaultMemoryTile extends StatefulWidget {
+  const _VaultMemoryTile(
+      {required this.media,
+      required this.provider,
+      required this.onOpen,
+      required this.onDetails});
+  final Media media;
+  final MediaListProvider provider;
+  final VoidCallback onOpen;
+  final VoidCallback onDetails;
+  @override
+  State<_VaultMemoryTile> createState() => _VaultMemoryTileState();
+}
+
+class _VaultMemoryTileState extends State<_VaultMemoryTile> {
+  bool _hover = false;
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.provider.ensureThumbnailLoaded(widget.media));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = widget.media;
+    final theme = Theme.of(context);
+    final aspect =
+        media.height > 0 ? (media.width / media.height).clamp(.62, 1.5) : .8;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: AnimatedScale(
+              scale: _hover ? 1.018 : 1,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              child: ClipRRect(
+                  borderRadius: BorderRadius.circular(17),
+                  child: AspectRatio(
+                      aspectRatio: aspect,
+                      child: Stack(fit: StackFit.expand, children: [
+                        VaultImage(
+                            url: widget.provider.thumbnailUrlFor(media.id),
+                            label: media.filename,
+                            onError: () => unawaited(widget.provider
+                                .handleThumbnailLoadError(media))),
+                        Positioned.fill(
+                            child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                    key: ValueKey('open-memory-${media.id}'),
+                                    onTap: widget.onOpen,
+                                    onLongPress: widget.onDetails,
+                                    child: Semantics(
+                                        label: 'Open ${media.filename}',
+                                        button: true,
+                                        child: const SizedBox.expand())))),
+                        if (media.isVideo || media.status != MediaStatus.ready)
+                          Positioned(
+                              left: 10,
+                              top: 10,
+                              child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 9, vertical: 6),
+                                  decoration: BoxDecoration(
+                                      color:
+                                          Colors.black.withValues(alpha: .55),
+                                      borderRadius: BorderRadius.circular(20)),
+                                  child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                            media.isVideo
+                                                ? Icons.play_arrow_rounded
+                                                : Icons.schedule_rounded,
+                                            color: Colors.white,
+                                            size: 13),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                            media.status != MediaStatus.ready
+                                                ? (media.status ==
+                                                        MediaStatus.failed
+                                                    ? 'Try again'
+                                                    : 'Preparing')
+                                                : '${media.durationSecs.ceil()}s',
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700))
+                                      ]))),
+                        Positioned(
+                            right: 6,
+                            top: 6,
+                            child: IconButton(
+                                key: ValueKey('favorite-${media.id}'),
+                                tooltip: media.isFavorite
+                                    ? 'Remove from favorites'
+                                    : 'Save to favorites',
+                                style: IconButton.styleFrom(
+                                    backgroundColor:
+                                        Colors.black.withValues(alpha: .22),
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(44, 44)),
+                                onPressed: () =>
+                                    widget.provider.toggleFavorite(media.id),
+                                icon: Icon(
+                                    media.isFavorite
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    size: 19))),
+                      ]))))),
+      Row(children: [
+        Expanded(
+            child: Text(
+                DateFormatter.mediumDate(media.takenAt ?? media.uploadedAt),
+                style: TextStyle(
+                    fontSize: 10, color: theme.colorScheme.onSurfaceVariant),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis)),
+        IconButton(
+            key: ValueKey('memory-details-${media.id}'),
+            tooltip: 'Details and comments',
+            onPressed: widget.onDetails,
+            icon: const Icon(Icons.more_horiz_rounded, size: 18))
+      ]),
+    ]);
   }
 }
 
@@ -309,12 +539,12 @@ class _UploadPanel extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Multipart uploads',
+                        'Add memories',
                         style: theme.textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Choose files from the browser, stream them directly to storage with presigned part URLs, then wait for the worker to scan and generate thumbnails before the items settle into the library.',
+                        'Choose photos or videos up to 512 MB each. Keep Mynube open until uploading finishes; we’ll prepare previews for you.',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -353,29 +583,29 @@ class _UploadPanel extends StatelessWidget {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
-                    _MetricChip(
-                      icon: Icons.upload_file_rounded,
-                      label: '$activeCount active',
-                    ),
-                    _MetricChip(
-                      icon: uploadProgressHub.isConnected
-                          ? Icons.wifi_tethering_rounded
-                          : Icons.portable_wifi_off_rounded,
-                      label: '/ws/progress ${uploadProgressHub.statusLabel}',
-                    ),
-                    _MetricChip(
-                      icon: Icons.route_rounded,
-                      label: apiClient.uploadInitUri().path,
-                    ),
-                    _MetricChip(
-                      icon: switch (connectivityService.status) {
-                        ConnectivityStatus.online => Icons.wifi_rounded,
-                        ConnectivityStatus.offline =>
-                          Icons.portable_wifi_off_rounded,
-                        ConnectivityStatus.unknown => Icons.sync_rounded,
-                      },
-                      label: connectivityService.statusLabel,
-                    ),
+                    if (activeCount > 0)
+                      _MetricChip(
+                        icon: Icons.upload_file_rounded,
+                        label: '$activeCount active',
+                      ),
+                    if (activeCount > 0 && !uploadProgressHub.isConnected)
+                      _MetricChip(
+                        icon: uploadProgressHub.isConnected
+                            ? Icons.wifi_tethering_rounded
+                            : Icons.portable_wifi_off_rounded,
+                        label: 'Reconnecting updates',
+                      ),
+                    if (connectivityService.status ==
+                        ConnectivityStatus.offline)
+                      _MetricChip(
+                        icon: switch (connectivityService.status) {
+                          ConnectivityStatus.online => Icons.wifi_rounded,
+                          ConnectivityStatus.offline =>
+                            Icons.portable_wifi_off_rounded,
+                          ConnectivityStatus.unknown => Icons.sync_rounded,
+                        },
+                        label: connectivityService.statusLabel,
+                      ),
                   ],
                 ),
               ],
@@ -424,14 +654,7 @@ class _UploadPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            if (tasks.isEmpty)
-              Text(
-                'No uploads started yet.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              )
-            else
+            if (tasks.isNotEmpty)
               ...tasks.map(
                 (task) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -522,7 +745,7 @@ class _UploadTaskRow extends StatelessWidget {
           if (task.totalParts > 0) ...[
             const SizedBox(height: 6),
             Text(
-              '${task.completedParts} of ${task.totalParts} parts uploaded',
+              '${(task.progress * 100).round()}% uploaded',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -538,11 +761,11 @@ class _UploadTaskRow extends StatelessWidget {
       case MediaUploadStage.queued:
         return 'Waiting to start.';
       case MediaUploadStage.initializing:
-        return 'Creating the multipart upload session.';
+        return 'Preparing your upload.';
       case MediaUploadStage.uploading:
-        return 'Uploading file parts directly to storage.';
+        return 'Uploading your file.';
       case MediaUploadStage.processing:
-        return 'Waiting for virus scan, metadata extraction, and thumbnails.';
+        return 'Checking your file and preparing previews.';
       case MediaUploadStage.complete:
         return 'Upload finished and processing is complete.';
       case MediaUploadStage.failed:
@@ -550,343 +773,6 @@ class _UploadTaskRow extends StatelessWidget {
       case MediaUploadStage.cancelled:
         return 'Upload cancelled.';
     }
-  }
-}
-
-class _MediaGrid extends StatelessWidget {
-  const _MediaGrid({
-    required this.items,
-    required this.mediaProvider,
-    required this.onSelect,
-    required this.onFavoriteToggle,
-    required this.selectedMediaId,
-  });
-
-  final List<Media> items;
-  final MediaListProvider mediaProvider;
-  final ValueChanged<String> onSelect;
-  final Future<void> Function(String mediaId) onFavoriteToggle;
-  final String? selectedMediaId;
-
-  @override
-  Widget build(BuildContext context) {
-    final columns = _gridColumns(MediaQuery.sizeOf(context).width);
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.92,
-      ),
-      itemBuilder: (context, index) {
-        final media = items[index];
-        final isSelected = selectedMediaId == media.id;
-        return _MediaCard(
-          media: media,
-          mediaProvider: mediaProvider,
-          thumbnailUrl: mediaProvider.thumbnailUrlFor(media.id),
-          selected: isSelected,
-          onSelect: () => onSelect(media.id),
-          onFavoriteToggle: () {
-            unawaited(onFavoriteToggle(media.id));
-          },
-        );
-      },
-    );
-  }
-
-  int _gridColumns(double width) {
-    if (width >= 1500) {
-      return 4;
-    }
-    if (width >= 1000) {
-      return 3;
-    }
-    if (width >= 680) {
-      return 2;
-    }
-    return 1;
-  }
-}
-
-class _MediaCard extends StatelessWidget {
-  const _MediaCard({
-    required this.media,
-    required this.mediaProvider,
-    required this.thumbnailUrl,
-    required this.selected,
-    required this.onSelect,
-    required this.onFavoriteToggle,
-  });
-
-  final Media media;
-  final MediaListProvider mediaProvider;
-  final String? thumbnailUrl;
-  final bool selected;
-  final VoidCallback onSelect;
-  final VoidCallback onFavoriteToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final statusColor = switch (media.status) {
-      MediaStatus.ready => theme.colorScheme.primary,
-      MediaStatus.pending => theme.colorScheme.secondary,
-      MediaStatus.failed => theme.colorScheme.error,
-    };
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(24),
-      onTap: onSelect,
-      child: Card(
-        shape: RoundedRectangleBorder(
-          side: selected
-              ? BorderSide(color: theme.colorScheme.primary, width: 2)
-              : BorderSide.none,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _MediaPreview(
-                  media: media,
-                  mediaProvider: mediaProvider,
-                  thumbnailUrl: thumbnailUrl,
-                  statusColor: statusColor,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  _TinyBadge(label: FileSizeFormatter.compact(media.sizeBytes)),
-                  _TinyBadge(label: '${media.width}×${media.height}'),
-                  if (media.isVideo)
-                    _TinyBadge(label: '${media.durationSecs.ceil()}s'),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      DateFormatter.relative(media.uploadedAt),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: onFavoriteToggle,
-                    icon: Icon(
-                      media.isFavorite
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MediaPreview extends StatefulWidget {
-  const _MediaPreview({
-    required this.media,
-    required this.mediaProvider,
-    required this.thumbnailUrl,
-    required this.statusColor,
-  });
-
-  final Media media;
-  final MediaListProvider mediaProvider;
-  final String? thumbnailUrl;
-  final Color statusColor;
-
-  @override
-  State<_MediaPreview> createState() => _MediaPreviewState();
-}
-
-class _MediaPreviewState extends State<_MediaPreview> {
-  @override
-  void initState() {
-    super.initState();
-    unawaited(widget.mediaProvider.ensureThumbnailLoaded(widget.media));
-  }
-
-  @override
-  void didUpdateWidget(covariant _MediaPreview oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.media.id != widget.media.id ||
-        oldWidget.thumbnailUrl != widget.thumbnailUrl) {
-      unawaited(widget.mediaProvider.ensureThumbnailLoaded(widget.media));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: widget.thumbnailUrl == null
-            ? LinearGradient(
-                colors: <Color>[
-                  theme.colorScheme.primaryContainer,
-                  theme.colorScheme.secondaryContainer,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-        color: widget.thumbnailUrl == null
-            ? null
-            : theme.colorScheme.surfaceContainerHighest,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (widget.thumbnailUrl != null)
-              Image.network(
-                widget.thumbnailUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
-                  unawaited(
-                    widget.mediaProvider.handleThumbnailLoadError(widget.media),
-                  );
-                  return _PreviewFallback(
-                    media: widget.media,
-                    statusColor: widget.statusColor,
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) {
-                    return child;
-                  }
-
-                  return _PreviewFallback(
-                    media: widget.media,
-                    statusColor: widget.statusColor,
-                  );
-                },
-              )
-            else
-              _PreviewFallback(
-                media: widget.media,
-                statusColor: widget.statusColor,
-              ),
-            Positioned(
-              left: 12,
-              right: 12,
-              top: 12,
-              child: Row(
-                children: [
-                  Icon(
-                    widget.media.isVideo
-                        ? Icons.videocam_rounded
-                        : Icons.photo_camera_back_rounded,
-                    size: 22,
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: widget.statusColor.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      widget.media.status.name,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: widget.statusColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.media.isVideo ? 'Video' : 'Photo',
-                    style: theme.textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.media.filename,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PreviewFallback extends StatelessWidget {
-  const _PreviewFallback({required this.media, required this.statusColor});
-
-  final Media media;
-  final Color statusColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
-      padding: const EdgeInsets.all(18),
-      child: Align(
-        alignment: Alignment.bottomLeft,
-        child: Row(
-          children: [
-            Icon(
-              media.isVideo
-                  ? Icons.videocam_rounded
-                  : Icons.photo_camera_back_rounded,
-              color: statusColor,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                media.status == MediaStatus.ready
-                    ? 'Resolving thumbnail...'
-                    : 'Waiting for processing...',
-                style: theme.textTheme.bodyMedium,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -928,10 +814,9 @@ class _DetailPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
                 child: AspectRatio(
                   aspectRatio: media.aspectRatio,
-                  child: Image.network(
-                    thumbUrl!,
+                  child: VaultImage(
+                    url: thumbUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                   ),
                 ),
               ),
@@ -940,14 +825,14 @@ class _DetailPanel extends StatelessWidget {
             Text(media.filename, style: theme.textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              'Mapped directly to the current API contract, including status, favorites, timestamps, comments, and presigned-read endpoints.',
+              'The story behind this memory.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 20),
             _SpecRow(
-              label: 'Upload',
+              label: 'Added',
               value: DateFormatter.mediumDateTime(media.uploadedAt),
             ),
             _SpecRow(
@@ -956,15 +841,7 @@ class _DetailPanel extends StatelessWidget {
                   ? 'Unknown'
                   : DateFormatter.mediumDateTime(media.takenAt!),
             ),
-            _SpecRow(label: 'Mime', value: media.mimeType),
-            _SpecRow(
-              label: 'Thumb endpoint',
-              value: apiClient.mediaThumbUri(media.id).path,
-            ),
-            _SpecRow(
-              label: 'Download endpoint',
-              value: apiClient.mediaDownloadUri(media.id).path,
-            ),
+            _SpecRow(label: 'File type', value: media.mimeType),
             const SizedBox(height: 20),
             Text('Comments', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
@@ -1175,54 +1052,6 @@ class _CommentComposerState extends State<_CommentComposer> {
 
   void _handleChanged() {
     setState(() {});
-  }
-}
-
-class _LoadingState extends StatelessWidget {
-  const _LoadingState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: const [
-            CircularProgressIndicator(),
-            SizedBox(height: 12),
-            Text('Loading media from the API...'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.errorMessage});
-
-  final String? errorMessage;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const Icon(Icons.photo_library_outlined, size: 40),
-            const SizedBox(height: 12),
-            Text(
-              errorMessage ?? 'No media matched the current filters.',
-              style: theme.textTheme.bodyLarge,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../connectivity/connectivity_service.dart';
+import '../../features/feed/providers/feed_provider.dart';
+import '../../features/feed/ui/feed_screen.dart';
+import '../../features/feed/ui/media_viewer.dart';
+import '../../features/media/ui/trash_screen.dart';
 import '../../features/admin/providers/admin_dashboard_provider.dart';
 import '../../features/admin/ui/admin_dashboard_screen.dart';
 import '../../features/albums/providers/album_provider.dart';
@@ -19,21 +23,26 @@ import '../config/app_config.dart';
 import '../network/api_client.dart';
 import '../websocket/upload_progress_hub.dart';
 
-enum AppSection { media, albums, profile, admin }
+enum AppSection { media, feed, albums, profile, admin }
 
 class AppRoutePath {
-  const AppRoutePath.login()
+  const AppRoutePath.login({this.invitationToken})
       : section = null,
         isLogin = true;
 
-  const AppRoutePath.section(this.section) : isLogin = false;
+  const AppRoutePath.section(this.section)
+      : isLogin = false,
+        invitationToken = null;
 
+  final String? invitationToken;
   final AppSection? section;
   final bool isLogin;
 
   Uri toUri() {
     if (isLogin) {
-      return Uri(path: '/login');
+      return invitationToken == null
+          ? Uri(path: '/login')
+          : Uri(path: '/accept', fragment: invitationToken);
     }
 
     return Uri(path: '/${_segmentForSection(section ?? AppSection.media)}');
@@ -41,6 +50,8 @@ class AppRoutePath {
 
   static String _segmentForSection(AppSection section) {
     switch (section) {
+      case AppSection.feed:
+        return 'feed';
       case AppSection.media:
         return 'media';
       case AppSection.albums:
@@ -65,12 +76,19 @@ class AppRouteInformationParser extends RouteInformationParser<AppRoutePath> {
       case '':
       case 'media':
         return const AppRoutePath.section(AppSection.media);
+      case 'feed':
+        return const AppRoutePath.section(AppSection.feed);
       case 'albums':
         return const AppRoutePath.section(AppSection.albums);
       case 'profile':
         return const AppRoutePath.section(AppSection.profile);
       case 'admin':
         return const AppRoutePath.section(AppSection.admin);
+      case 'accept':
+        return AppRoutePath.login(
+            invitationToken: uri.fragment.isNotEmpty
+                ? uri.fragment
+                : uri.queryParameters['token']);
       case 'login':
         return const AppRoutePath.login();
       default:
@@ -87,6 +105,7 @@ class AppRouteInformationParser extends RouteInformationParser<AppRoutePath> {
 class AppRouter extends RouterDelegate<AppRoutePath>
     with ChangeNotifier, PopNavigatorRouterDelegateMixin<AppRoutePath> {
   AppRouter({
+    required this.feedProvider,
     required this.appConfig,
     required this.apiClient,
     required this.authProvider,
@@ -103,6 +122,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
     authProvider.addListener(_handleAuthChanged);
   }
 
+  final FeedProvider feedProvider;
   final AppConfig appConfig;
   final ApiClient apiClient;
   final AuthProvider authProvider;
@@ -139,7 +159,8 @@ class AppRouter extends RouterDelegate<AppRoutePath>
     }
 
     if (!authProvider.isAuthenticated) {
-      return const AppRoutePath.login();
+      return AppRoutePath.login(
+          invitationToken: _requestedPath.invitationToken);
     }
 
     return AppRoutePath.section(_selectedSection);
@@ -160,6 +181,9 @@ class AppRouter extends RouterDelegate<AppRoutePath>
   }
 
   void goToSection(AppSection section) {
+    if (section == AppSection.profile) {
+      authProvider.refreshUser().catchError((_) {});
+    }
     _requestedPath = AppRoutePath.section(section);
     _selectedSection = _coerceSection(section);
     notifyListeners();
@@ -167,6 +191,9 @@ class AppRouter extends RouterDelegate<AppRoutePath>
 
   void _handleAuthChanged() {
     if (authProvider.isAuthenticated) {
+      if (_requestedPath.invitationToken != null) {
+        _requestedPath = const AppRoutePath.section(AppSection.media);
+      }
       _selectedSection = _coerceSection(
         _requestedPath.section ?? AppSection.media,
       );
@@ -206,6 +233,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
             : MaterialPage<void>(
                 key: const ValueKey<String>('login'),
                 child: LoginScreen(
+                  invitationToken: _requestedPath.invitationToken,
                   authProvider: authProvider,
                   apiClient: apiClient,
                   config: appConfig,
@@ -223,6 +251,20 @@ class AppRouter extends RouterDelegate<AppRoutePath>
     switch (_selectedSection) {
       case AppSection.media:
         return PhotoGridScreen(
+          onOpenTrash: () async {
+            await navigatorKey.currentState?.push(MaterialPageRoute<void>(
+                builder: (_) =>
+                    TrashScreen(repository: feedProvider.mediaRepository)));
+            await mediaProvider.load();
+          },
+          onOpen: (media) {
+            navigatorKey.currentState?.push(MaterialPageRoute<void>(
+                fullscreenDialog: true,
+                builder: (_) => MediaViewer(
+                    media: media,
+                    provider: feedProvider,
+                    onChanged: mediaProvider.load)));
+          },
           mediaProvider: mediaProvider,
           mediaUploadProvider: mediaUploadProvider,
           commentProvider: commentProvider,
@@ -232,8 +274,11 @@ class AppRouter extends RouterDelegate<AppRoutePath>
           currentUser: authProvider.currentUser,
           connectivityService: connectivityService,
         );
+      case AppSection.feed:
+        return FeedScreen(provider: feedProvider, mediaProvider: mediaProvider);
       case AppSection.albums:
         return AlbumListScreen(
+          feedProvider: feedProvider,
           albumProvider: albumProvider,
           mediaProvider: mediaProvider,
           familyDirectoryProvider: familyDirectoryProvider,
