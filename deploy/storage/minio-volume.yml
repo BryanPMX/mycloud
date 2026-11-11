@@ -1,0 +1,5 @@
+# Default: preserve the existing Compose-project named volume.
+services:
+  minio_storage:
+    volumes:
+    - minio_data:/data

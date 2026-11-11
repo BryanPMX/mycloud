@@ -1,0 +1,21 @@
+# Select only after the write-paused copy, UUID preflight and guard installation.
+services:
+  minio_storage:
+    environment:
+      MYCLOUD_STORAGE_UUID: ${MYCLOUD_STORAGE_UUID:?Prepared data filesystem UUID is required}
+    entrypoint: ["/bin/sh", "/mycloud-storage-guard.sh"]
+    volumes:
+    - type: bind
+      source: ${MYCLOUD_DATA_MOUNT:-/srv/mycloud-data}/minio
+      target: /data
+      bind: {create_host_path: false}
+    - type: bind
+      source: ${MYCLOUD_DATA_MOUNT:-/srv/mycloud-data}/.mycloud-volume
+      target: /storage-identity
+      read_only: true
+      bind: {create_host_path: false}
+    - type: bind
+      source: ${MYCLOUD_STORAGE_GUARD_PATH:-/etc/mycloud/minio-entrypoint.sh}
+      target: /mycloud-storage-guard.sh
+      read_only: true
+      bind: {create_host_path: false}
