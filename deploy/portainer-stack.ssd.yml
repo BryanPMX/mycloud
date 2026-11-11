@@ -1,0 +1,22 @@
+# OPT-IN OVERRIDE. Apply only AFTER the migration runbook passes verification.
+# Keep the original minio_data volume for rollback. Never run compose down -v.
+services:
+  minio:
+    environment:
+      MYCLOUD_STORAGE_UUID: ${MYCLOUD_STORAGE_UUID:?Prepared data filesystem UUID is required}
+    entrypoint: ["/bin/sh", "/mycloud-storage-guard.sh"]
+    volumes:
+      - type: bind
+        source: ${MYCLOUD_DATA_MOUNT:-/srv/mycloud-data}/minio
+        target: /data
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${MYCLOUD_DATA_MOUNT:-/srv/mycloud-data}/.mycloud-volume
+        target: /storage-identity
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${MYCLOUD_STORAGE_GUARD_PATH:-/etc/mycloud/minio-entrypoint.sh}
+        target: /mycloud-storage-guard.sh
+        read_only: true
+        bind: {create_host_path: false}

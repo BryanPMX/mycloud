@@ -23,6 +23,6 @@ export APP_ENV="${APP_ENV:-production}"
 export USE_DEMO_DATA="${USE_DEMO_DATA:-false}"
 
 cd "$ROOT_DIR/flutter_app"
-flutter --suppress-analytics --no-version-check pub get
+flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
 
 sh "$ROOT_DIR/scripts/deploy-web.sh"

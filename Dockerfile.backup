@@ -1,0 +1,18 @@
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /bin/media-backup ./cmd/media-backup && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /bin/reconcile-storage ./cmd/reconcile-storage && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /bin/bootstrap-admin ./cmd/bootstrap-admin && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /bin/account-setup ./cmd/account-setup
+FROM postgres:16-alpine
+COPY --from=builder /bin/media-backup /usr/local/bin/media-backup
+COPY --from=builder /bin/reconcile-storage /usr/local/bin/reconcile-storage
+COPY --from=builder /bin/bootstrap-admin /usr/local/bin/bootstrap-admin
+COPY --from=builder /bin/account-setup /usr/local/bin/account-setup
+COPY scripts/backup-postgres.sh /usr/local/bin/backup-postgres
+COPY scripts/backup-minio.sh /usr/local/bin/backup-minio
+COPY scripts/restore-postgres.sh /usr/local/bin/restore-postgres
+RUN chmod +x /usr/local/bin/backup-postgres /usr/local/bin/backup-minio /usr/local/bin/restore-postgres
+CMD ["media-backup"]

@@ -1,0 +1,7 @@
+# server-hp's existing Prometheus uses host networking. Publish metrics ONLY on
+# loopback. This adds no monitoring containers or shared Docker networks.
+services:
+  api:
+    ports: ["127.0.0.1:19090:9090"]
+  worker:
+    ports: ["127.0.0.1:19091:9090"]

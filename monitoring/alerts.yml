@@ -1,1 +1,51 @@
-groups: []
+groups:
+  - name: mycloud
+    rules:
+      - alert: MyCloudServiceDown
+        expr: up{job=~"mycloud-api|mycloud-worker"} == 0
+        for: 3m
+        labels: {severity: critical, service: mycloud}
+        annotations:
+          summary: MyCloud application metrics are unavailable
+      - alert: MyCloudHTTPErrorRate
+        expr: sum(rate(mycloud_http_requests_total{status_class="5xx"}[5m])) / clamp_min(sum(rate(mycloud_http_requests_total[5m])),0.01) > 0.05
+        for: 5m
+        labels: {severity: warning, service: mycloud}
+        annotations:
+          summary: MyCloud HTTP errors exceed five percent
+      - alert: MyCloudProcessingExhausted
+        expr: max(mycloud_jobs_exhausted) > 0
+        for: 5m
+        labels: {severity: warning, service: mycloud}
+        annotations:
+          summary: MyCloud media jobs exhausted automatic retries
+      - alert: MyCloudDeletionStalled
+        expr: max(mycloud_deletions_pending) > 0
+        for: 1h
+        labels: {severity: warning, service: mycloud}
+        annotations:
+          summary: MyCloud object deletions have remained pending for an hour
+      - alert: MyCloudDatabasePoolSaturated
+        expr: mycloud_db_connections_in_use / mycloud_db_connections_max > 0.9
+        for: 10m
+        labels: {severity: warning, service: mycloud}
+        annotations:
+          summary: MyCloud database pool is saturated
+      - alert: MyCloudBackupOverdue
+        expr: time() - mycloud_backup_last_success_unixtime > 36 * 3600
+        for: 15m
+        labels: {severity: critical, service: mycloud}
+        annotations:
+          summary: MyCloud has no recent successful independent backup
+      - alert: MyCloudBackupNotConfigured
+        expr: absent(mycloud_backup_last_success_unixtime)
+        for: 1h
+        labels: {severity: warning, service: mycloud}
+        annotations:
+          summary: MyCloud backup success metric is missing
+      - alert: MyCloudDependencyUnavailable
+        expr: mycloud_ready == 0
+        for: 3m
+        labels: {severity: critical, service: mycloud}
+        annotations:
+          summary: MyCloud reports an unavailable database, queue, scanner or object store
