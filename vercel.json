@@ -6,6 +6,14 @@
   "outputDirectory": "flutter_app/build/web",
   "rewrites": [
     {
+      "source": "/accept",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/feed",
+      "destination": "/index.html"
+    },
+    {
       "source": "/login",
       "destination": "/index.html"
     },

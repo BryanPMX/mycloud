@@ -5,7 +5,7 @@
 - Baseline Go tests and Flutter analysis passed before changes.
 - Real isolated PostgreSQL tests passed for private-media ownership/recipient/expiration boundaries, concurrent quota reservations, derivative accounting, trash accounting, durable deletion during a simulated storage outage, atomic job claims and crash-window recovery.
 - Household/feed SQL tests passed for outsider/global-admin denial, email-bound and replay-proof invitations, ownership, unsharing and membership revocation. Account-deletion tests verified identity removal and retained object cleanup state.
-- Twenty-eight Flutter tests passed, including responsive iOS/Android/desktop/tablet/320px layouts, light/dark themes, larger text, reduced motion, existing account/collection/comment/profile smoke tests and tests preventing queued files from continuing under a different account and preserving sessions through transient refresh failure.
+- Thirty-one Flutter tests passed, including responsive iOS/Android/desktop/tablet/320px layouts, light/dark themes, larger text, reduced motion, existing account/collection/comment/profile smoke tests and tests preventing queued files from continuing under a different account and preserving sessions through transient refresh failure.
 - Go race tests passed after fixing pre-existing test races caused by parallel mutation of Gin's global mode. JWT tests cover algorithm/identity rejection and quota tests cover overflow/negative inputs.
 - Media snapshots were created/restored against real local MinIO, with byte, MIME and user-metadata verification; corruption, undeclared buckets and nonempty restore targets were rejected.
 - Script regressions verified failed database dumps do not report success and missing/mismatched SSD identity refuses MinIO startup.
@@ -33,7 +33,7 @@
 ## Final local verification
 
 - `go vet ./...` and `go test -race ./...` passed; final real-dependency integration race tests passed, including scoped sharing and credential-version migration.
-- Flutter analysis found no issues; all 28 tests passed. Production web, unsigned iOS release and Android release APK builds passed. Physical device/signing is still pending.
+- Flutter analysis found no issues; all 31 tests passed. Production web, unsigned iOS release and Android release APK builds passed. Physical device/signing is still pending.
 - All 12 migrations applied and the repeat run passed without changes. API, worker, migration and backup Docker images built successfully.
 - A paired backup from the isolated acceptance stack restored PostgreSQL into a new empty database: 4 synthetic users, 3 real processed media assets, 11 migrations. Media snapshots restored into separate buckets with byte/content-type/metadata verification. This proves the recovery tooling locally, not production disaster readiness.
 - Final `govulncheck` on Go 1.26.11 reported zero reachable vulnerabilities, with one unused package and two unused module findings. This is not an OS/image audit.
@@ -51,3 +51,5 @@ Physical iPhone/Android hardware, real Photos selection, production HTTPS media 
 The owner verified that the currently running API, worker and ClamAV have Docker memory/CPU limits set to zero (unlimited). The new limits in the deployment files are not active until rollout. Public HTTPS `/health` returned 200 via Cloudflare, while the initial public Python login returned 403 and direct private login returned 401 for the requested temporary credential. A public curl request subsequently returned the normal JSON 401 authentication response, confirming route reachability from that client. Account setup and public login acceptance remain pending; no password is stored in this repository.
 
 The completed local E2E test additionally verified wrong-current-password rejection, successful password change, rejection of previous access/refresh tokens, and successful login with the replacement password. Account helper creation, repeat verification and guarded password reset passed using synthetic local accounts.
+
+Cold-start route regression tests verify fragment-based invitation links, direct Profile links after sign-in and previous hash bookmarks. The web entry point uses path URLs with preserved fragments; Vercel rewrites cover `/accept` and `/feed`. The immutable backend images for `c39bde465b9a01771b6cab5d06e392cc5a01fde2` passed GitHub validation and published for amd64/arm64 without triggering Portainer. The subsequent routing commit changes only the client, host rewrites and this evidence.

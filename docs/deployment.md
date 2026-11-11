@@ -29,7 +29,7 @@ Use `deploy/portainer-stack.npm.yml` for production. The optional monitoring ove
 
 Proxy only `api.mynube.live` to `mycloud-api:8080` and `minio.mynube.live` to `mycloud-minio:9000`, over public HTTPS. Enable WebSockets for the API. Configure the object proxy for 5 MiB multipart parts (`client_max_body_size 6m`) and sufficient read/send timeouts; do not expose the console through a proxy. Forward/overwrite client-IP headers correctly; Cloudflare client-IP trust requires its known ingress chain, not arbitrary request headers. Never proxy port 9090 or administrative services.
 
-The console remains `127.0.0.1:9001` through SSH/Tailscale. Remove old public console/NPM administrative proxy hosts if present. CORS allows configured application origins; preview deployments use demo data rather than production credentials. Verify a browser upload/download with actual HTTPS hosts, because local tests do not prove NPM/Cloudflare configuration.
+The console remains `127.0.0.1:9001` through SSH/Tailscale. Remove old public console/NPM administrative proxy hosts if present. CORS allows configured application origins; preview deployments use demo data rather than production credentials. Client URLs use path routing; configure the web host to serve `index.html` for `/login`, `/accept`, `/media`, `/feed`, `/albums`, `/profile` and `/admin`. Invitation tokens remain in the URL fragment; previous hash-route bookmarks are accepted. Verify a browser upload/download with actual HTTPS hosts, because local tests do not prove NPM/Cloudflare configuration.
 
 ## Monitoring integration
 

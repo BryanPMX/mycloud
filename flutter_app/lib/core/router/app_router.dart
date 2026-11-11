@@ -69,7 +69,12 @@ class AppRouteInformationParser extends RouteInformationParser<AppRoutePath> {
   Future<AppRoutePath> parseRouteInformation(
     RouteInformation routeInformation,
   ) async {
-    final uri = routeInformation.uri;
+    final incoming = routeInformation.uri;
+    // Preserve bookmarks created before the switch from hash to path URLs.
+    final uri =
+        incoming.pathSegments.isEmpty && incoming.fragment.startsWith('/')
+            ? Uri.parse(incoming.fragment)
+            : incoming;
     final firstSegment = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
 
     switch (firstSegment) {
@@ -142,7 +147,10 @@ class AppRouter extends RouterDelegate<AppRoutePath>
   late final RouterConfig<AppRoutePath> routerConfig =
       RouterConfig<AppRoutePath>(
     routeInformationProvider: PlatformRouteInformationProvider(
-      initialRouteInformation: RouteInformation(uri: Uri(path: '/media')),
+      initialRouteInformation: RouteInformation(
+        uri: Uri.parse(
+            WidgetsBinding.instance.platformDispatcher.defaultRouteName),
+      ),
     ),
     routeInformationParser: AppRouteInformationParser(),
     routerDelegate: this,
