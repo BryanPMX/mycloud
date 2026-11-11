@@ -61,11 +61,11 @@ func (h *LoginHandler) Execute(ctx context.Context, command LoginCommand) (*Logi
 		return nil, domain.ErrInvalidCredentials
 	}
 
-	accessToken, err := h.tokenService.GenerateAccessToken(user.ID, string(user.Role))
+	accessToken, err := h.tokenService.GenerateAccessToken(user.ID, string(user.Role), user.AuthVersion)
 	if err != nil {
 		return nil, err
 	}
-	refreshToken, err := h.tokenService.GenerateRefreshToken(user.ID)
+	refreshToken, err := h.tokenService.GenerateRefreshToken(user.ID, user.AuthVersion)
 	if err != nil {
 		return nil, err
 	}

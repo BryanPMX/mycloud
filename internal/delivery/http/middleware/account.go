@@ -15,7 +15,9 @@ func RequireActiveAccount(users domain.UserRepository) gin.HandlerFunc {
 			return
 		}
 		user, err := users.FindByID(c.Request.Context(), id)
-		if err != nil || !user.Active {
+		version, _ := c.Get(contextAuthVersionKey)
+		currentVersion, _ := version.(int64)
+		if err != nil || !user.Active || user.AuthVersion != currentVersion {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "inactive account", "code": "UNAUTHORIZED"})
 			return
 		}

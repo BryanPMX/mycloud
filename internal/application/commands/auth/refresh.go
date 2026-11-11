@@ -57,15 +57,15 @@ func (h *RefreshHandler) Execute(ctx context.Context, command RefreshCommand) (*
 	if err != nil {
 		return nil, err
 	}
-	if !user.Active {
+	if !user.Active || user.AuthVersion != claims.AuthVersion {
 		return nil, domain.ErrUnauthorized
 	}
 
-	accessToken, err := h.tokenService.GenerateAccessToken(user.ID, string(user.Role))
+	accessToken, err := h.tokenService.GenerateAccessToken(user.ID, string(user.Role), user.AuthVersion)
 	if err != nil {
 		return nil, err
 	}
-	refreshToken, err := h.tokenService.GenerateRefreshToken(user.ID)
+	refreshToken, err := h.tokenService.GenerateRefreshToken(user.ID, user.AuthVersion)
 	if err != nil {
 		return nil, err
 	}

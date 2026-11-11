@@ -17,6 +17,7 @@ import (
 )
 
 type Dependencies struct {
+	ChangePassword gin.HandlerFunc
 	DeleteAccount  gin.HandlerFunc
 	FamilyHandler  *handlers.FamilyHandler
 	Metrics        *observability.Metrics
@@ -139,6 +140,11 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		}), deps.DeleteAccount)
 	}
 	protected.GET("/users/me", deps.UserHandler.GetMe)
+	if deps.ChangePassword != nil {
+		protected.POST("/users/me/password", middleware.NewRateLimiter(middleware.RateLimitConfig{
+			Name: "password_change", Limit: 5, Window: 15 * time.Minute, KeyFunc: middleware.UserIDOrIPKey,
+		}), deps.ChangePassword)
+	}
 	protected.PATCH("/users/me", deps.UserHandler.UpdateMe)
 	protected.PUT("/users/me/avatar", deps.UserHandler.UpdateAvatar)
 	protected.GET("/users/directory", deps.UserHandler.ListDirectory)

@@ -191,9 +191,10 @@ func main() {
 	go observability.ServePrivate(runCtx, ":9090", metrics, ready)
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		DeleteAccount: handlers.DeleteAccount(usercmd.NewDeleteAccountHandler(userRepo, userRepo, sessionStore)),
-		FamilyHandler: handlers.NewFamilyHandler(postgres.NewFamilyRepository(db)),
-		Metrics:       metrics, Ready: ready,
+		ChangePassword: handlers.ChangePassword(usercmd.NewChangePasswordHandler(userRepo, userRepo, sessionStore)),
+		DeleteAccount:  handlers.DeleteAccount(usercmd.NewDeleteAccountHandler(userRepo, userRepo, sessionStore)),
+		FamilyHandler:  handlers.NewFamilyHandler(postgres.NewFamilyRepository(db)),
+		Metrics:        metrics, Ready: ready,
 		Users: userRepo, TrustedProxies: cfg.TrustedProxies,
 		AppName:        cfg.AppName,
 		AppEnv:         cfg.AppEnv,

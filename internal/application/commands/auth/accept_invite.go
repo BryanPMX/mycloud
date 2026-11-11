@@ -95,11 +95,11 @@ func (h *AcceptInviteHandler) Execute(ctx context.Context, command AcceptInviteC
 		return nil, err
 	}
 
-	accessToken, err := h.tokenService.GenerateAccessToken(acceptedUser.ID, string(acceptedUser.Role))
+	accessToken, err := h.tokenService.GenerateAccessToken(acceptedUser.ID, string(acceptedUser.Role), acceptedUser.AuthVersion)
 	if err != nil {
 		return nil, err
 	}
-	refreshToken, err := h.tokenService.GenerateRefreshToken(acceptedUser.ID)
+	refreshToken, err := h.tokenService.GenerateRefreshToken(acceptedUser.ID, acceptedUser.AuthVersion)
 	if err != nil {
 		return nil, err
 	}

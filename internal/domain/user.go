@@ -15,6 +15,7 @@ const (
 
 // User is the core account entity.
 type User struct {
+	AuthVersion     int64
 	ID              uuid.UUID
 	Email           string
 	DisplayName     string

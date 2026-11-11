@@ -24,7 +24,7 @@ func NewAdminRepository(db *pgxpool.Pool) *AdminRepository {
 func (r *AdminRepository) ListUsers(ctx context.Context) ([]*domain.User, error) {
 	const query = `
 		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
-		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		FROM users
 		ORDER BY created_at DESC, id DESC
 	`
@@ -53,6 +53,7 @@ func (r *AdminRepository) ListUsers(ctx context.Context) ([]*domain.User, error)
 			&record.CreatedAt,
 			&record.UpdatedAt,
 			&record.LastLoginAt,
+			&record.AuthVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -75,7 +76,7 @@ func (r *AdminRepository) CreateOrRefreshInvite(
 
 	const selectQuery = `
 		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
-		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		FROM users
 		WHERE lower(email) = lower($1)
 	`
@@ -101,7 +102,7 @@ func (r *AdminRepository) CreateOrRefreshInvite(
 			)
 			VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8, $9, $9)
 			RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
-			          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+			          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		`
 
 		invited, err = scanUser(tx.QueryRow(
@@ -131,7 +132,7 @@ func (r *AdminRepository) CreateOrRefreshInvite(
 			    updated_at = $6
 			WHERE id = $1
 			RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
-			          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+			          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		`
 
 		invited, err = scanUser(tx.QueryRow(
@@ -166,7 +167,7 @@ func (r *AdminRepository) CreateOrRefreshInvite(
 func (r *AdminRepository) FindInviteByTokenHash(ctx context.Context, tokenHash string) (*domain.User, error) {
 	const query = `
 		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
-		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		FROM users
 		WHERE invite_token = $1
 	`
@@ -200,7 +201,7 @@ func (r *AdminRepository) AcceptInvite(
 		  AND invite_token_expires_at > NOW()
 		  AND active = false
 		RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
-		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 	`
 
 	user, err := scanUser(tx.QueryRow(
@@ -301,7 +302,7 @@ func (r *AdminRepository) UpdateUser(
 		    updated_at = NOW()
 		WHERE id = $1
 		RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
-		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 	`
 
 	user, err := scanUser(tx.QueryRow(

@@ -93,3 +93,27 @@ func TestJWTRejectsOtherHMACAlgorithmsAndInvalidIdentity(t *testing.T) {
 		t.Fatal("accepted mismatched subject")
 	}
 }
+
+func TestCredentialVersionRoundTrip(t *testing.T) {
+	service, err := NewJWTService("validation-only-secret-longer-than-32-bytes", "validation", time.Minute, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.New()
+	access, err := service.GenerateAccessToken(id, "member", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	details, err := service.ValidateAccessToken(access)
+	if err != nil || details.AuthVersion != 7 {
+		t.Fatal("access credential version lost", err)
+	}
+	refresh, err := service.GenerateRefreshToken(id, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	details, err = service.ValidateRefreshToken(refresh)
+	if err != nil || details.AuthVersion != 7 {
+		t.Fatal("refresh credential version lost", err)
+	}
+}

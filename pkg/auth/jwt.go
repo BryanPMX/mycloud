@@ -16,24 +16,26 @@ const (
 )
 
 type Claims struct {
-	UserID uuid.UUID `json:"uid"`
-	Role   string    `json:"role,omitempty"`
-	Type   TokenType `json:"typ"`
+	AuthVersion int64     `json:"av,omitempty"`
+	UserID      uuid.UUID `json:"uid"`
+	Role        string    `json:"role,omitempty"`
+	Type        TokenType `json:"typ"`
 	jwt.RegisteredClaims
 }
 
 type TokenDetails struct {
-	UserID    uuid.UUID
-	Role      string
-	Type      TokenType
-	ID        string
-	IssuedAt  time.Time
-	ExpiresAt time.Time
+	AuthVersion int64
+	UserID      uuid.UUID
+	Role        string
+	Type        TokenType
+	ID          string
+	IssuedAt    time.Time
+	ExpiresAt   time.Time
 }
 
 type Service interface {
-	GenerateAccessToken(userID uuid.UUID, role string) (string, error)
-	GenerateRefreshToken(userID uuid.UUID) (string, error)
+	GenerateAccessToken(userID uuid.UUID, role string, version ...int64) (string, error)
+	GenerateRefreshToken(userID uuid.UUID, version ...int64) (string, error)
 	ValidateAccessToken(token string) (*TokenDetails, error)
 	ValidateRefreshToken(token string) (*TokenDetails, error)
 }
@@ -64,12 +66,13 @@ func NewJWTService(secret, issuer string, accessTTL, refreshTTL time.Duration) (
 	}, nil
 }
 
-func (s *service) GenerateAccessToken(userID uuid.UUID, role string) (string, error) {
+func (s *service) GenerateAccessToken(userID uuid.UUID, role string, version ...int64) (string, error) {
 	now := time.Now().UTC()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
-		UserID: userID,
-		Role:   role,
-		Type:   TokenTypeAccess,
+		UserID:      userID,
+		AuthVersion: tokenVersion(version),
+		Role:        role,
+		Type:        TokenTypeAccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.issuer,
 			Subject:   userID.String(),
@@ -81,11 +84,12 @@ func (s *service) GenerateAccessToken(userID uuid.UUID, role string) (string, er
 	return token.SignedString(s.secret)
 }
 
-func (s *service) GenerateRefreshToken(userID uuid.UUID) (string, error) {
+func (s *service) GenerateRefreshToken(userID uuid.UUID, version ...int64) (string, error) {
 	now := time.Now().UTC()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
-		UserID: userID,
-		Type:   TokenTypeRefresh,
+		UserID:      userID,
+		AuthVersion: tokenVersion(version),
+		Type:        TokenTypeRefresh,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
 			Issuer:    s.issuer,
@@ -128,7 +132,7 @@ func (s *service) validate(raw string, expected TokenType) (*TokenDetails, error
 	if claims.Issuer != s.issuer {
 		return nil, errors.New("unexpected token issuer")
 	}
-	if claims.UserID == uuid.Nil || claims.Subject != claims.UserID.String() || (expected == TokenTypeRefresh && claims.ID == "") {
+	if claims.AuthVersion < 0 || claims.UserID == uuid.Nil || claims.Subject != claims.UserID.String() || (expected == TokenTypeRefresh && claims.ID == "") {
 		return nil, errors.New("invalid token identity")
 	}
 	if claims.ExpiresAt == nil || claims.IssuedAt == nil {
@@ -136,11 +140,19 @@ func (s *service) validate(raw string, expected TokenType) (*TokenDetails, error
 	}
 
 	return &TokenDetails{
-		UserID:    claims.UserID,
-		Role:      claims.Role,
-		Type:      claims.Type,
-		ID:        claims.ID,
-		IssuedAt:  claims.IssuedAt.Time,
-		ExpiresAt: claims.ExpiresAt.Time,
+		UserID:      claims.UserID,
+		AuthVersion: claims.AuthVersion,
+		Role:        claims.Role,
+		Type:        claims.Type,
+		ID:          claims.ID,
+		IssuedAt:    claims.IssuedAt.Time,
+		ExpiresAt:   claims.ExpiresAt.Time,
 	}, nil
+}
+
+func tokenVersion(values []int64) int64 {
+	if len(values) > 0 {
+		return values[0]
+	}
+	return 0
 }
