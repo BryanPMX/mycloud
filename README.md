@@ -18,7 +18,7 @@ Public HTTPS hosts are `api.mynube.live` and `minio.mynube.live`; the Flutter we
 
 Production uses `deploy/portainer-stack.npm.yml`. The MinIO image remains **`ghcr.io/bryanpmx/minio:RELEASE.2025-09-07T16-13-09Z`**. The SSD and private monitoring overrides are optional, separately documented changes. Current production storage is retained as `mycloud_minio_data`; changing a mount is not a migration.
 
-For local development, copy `.env.example` into a private `.env`, set actual development credentials/HTTPS choices, and run `docker compose up -d --build`. Its services bind to loopback and migrations run through a version ledger. A new empty installation can use the documented `bootstrap-admin` helper; existing deployments must never bootstrap/reset accounts.
+For local development, copy `.env.example` into a private `.env`, set actual development credentials/HTTPS choices, and run `docker compose up -d --build`. Its services bind to loopback and migrations run through a version ledger. A new empty installation can use the documented `bootstrap-admin` helper. Existing deployments skip bootstrap; authorized password resets use the guarded account procedure in the deployment runbook.
 
 Validation:
 

@@ -38,7 +38,7 @@
 - A paired backup from the isolated acceptance stack restored PostgreSQL into a new empty database: 4 synthetic users, 3 real processed media assets, 11 migrations. Media snapshots restored into separate buckets with byte/content-type/metadata verification. This proves the recovery tooling locally, not production disaster readiness.
 - Final `govulncheck` on Go 1.26.11 reported zero reachable vulnerabilities, with one unused package and two unused module findings. This is not an OS/image audit.
 - Gitleaks scanned 34 existing commits and the staged source. Its only historical match is the public RFC 6455 example nonce in a WebSocket test; that exact fingerprint is documented as a false positive. No production credential finding was found.
-- Local script checks rejected a failed PostgreSQL dump and missing/mismatched SSD identity.
+- Local script checks rejected a failed PostgreSQL dump and missing/mismatched SSD identity. A real pinned-MinIO rehearsal also reached healthy startup with valid storage, rejected missing bind sources without creating fallback paths, and exited after an identity change followed by container restart. The disposable container and its synthetic files were removed.
 
 No unexecuted server, device or production action is marked passed.
 

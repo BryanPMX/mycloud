@@ -45,6 +45,8 @@ jobs:
         run: go test -tags=e2e -timeout=4m ./tests/e2e
       - name: Backup failure and storage guard regression checks
         run: sh tests/scripts_test.sh
+      - name: Real MinIO storage startup and restart guards
+        run: sh tests/storage_guard_test.sh
       - name: Clean isolated dependencies
         if: always()
         run: docker compose -f tests/integration/compose.yml down -v
