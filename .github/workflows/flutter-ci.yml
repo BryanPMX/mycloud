@@ -1,11 +1,24 @@
 name: Flutter CI
-
 on:
   push:
   pull_request:
-
+  workflow_call:
+permissions:
+  contents: read
 jobs:
-  placeholder:
+  test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
     steps:
-      - run: echo "Add Flutter CI steps when client implementation begins."
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.4'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build web --release --dart-define=USE_DEMO_DATA=false

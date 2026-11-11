@@ -1,0 +1,71 @@
+name: mycloud-validation
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: validation
+      POSTGRES_PASSWORD: validation-only-local
+      POSTGRES_DB: mycloud_validation
+    ports: ["127.0.0.1:55439:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U validation -d mycloud_validation"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:56389:6379"]
+  minio:
+    image: ghcr.io/bryanpmx/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: validation
+      MINIO_ROOT_PASSWORD: validation-only-local
+    ports: ["127.0.0.1:59039:9000"]
+  migrate:
+    image: postgres:16-alpine
+    environment:
+      DATABASE_URL: postgres://validation:validation-only-local@postgres:5432/mycloud_validation?sslmode=disable
+      MIGRATIONS_DIR: /migrations
+    entrypoint: ["sh", "/scripts/migrate.sh"]
+    volumes:
+      - ../../migrations:/migrations:ro
+      - ../../scripts:/scripts:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+  clamav:
+    image: clamav/clamav-debian:stable@sha256:76a9c3b63764b78178dc68fa7efcceca0cde2c8c9d4f925a8e697cb4511f8fdc
+    environment:
+      CLAMAV_NO_FRESHCLAMD: 'true'
+      CLAMD_CONF_StreamMaxLength: 512M
+      CLAMD_CONF_MaxFileSize: 512M
+      CLAMD_CONF_MaxScanSize: 768M
+      CLAMD_CONF_AlertExceedsMax: 'yes'
+      CLAMD_CONF_MaxThreads: '2'
+      CLAMD_CONF_ConcurrentDatabaseReload: 'no'
+    ports: ["127.0.0.1:53319:3310"]
+  api:
+    build: {context: ../.., dockerfile: Dockerfile.api}
+    env_file: [validation.env]
+    ports: ["127.0.0.1:58039:8080", "127.0.0.1:59049:9090"]
+    user: '10001:10001'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+  worker:
+    build: {context: ../.., dockerfile: Dockerfile.worker}
+    env_file: [validation.env]
+    ports: ["127.0.0.1:59059:9090"]
+    user: '10001:10001'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=640m,mode=1777"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      clamav: {condition: service_healthy}
