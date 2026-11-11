@@ -97,10 +97,10 @@ class ApiTransport {
     } on ApiException {
       rethrow;
     } on Exception {
-      _onUnreachable?.call('Unable to reach the API.');
+      _onUnreachable?.call('Couldn’t connect to your vault. Please try again.');
       throw const ApiException(
         statusCode: 0,
-        message: 'Unable to reach the API.',
+        message: 'Couldn’t connect to your vault. Please try again.',
       );
     }
   }
@@ -115,10 +115,10 @@ class ApiTransport {
     } on ApiException {
       rethrow;
     } on Exception {
-      _onUnreachable?.call('Unable to reach the API.');
+      _onUnreachable?.call('Couldn’t connect to your vault. Please try again.');
       throw const ApiException(
         statusCode: 0,
-        message: 'Unable to reach the API.',
+        message: 'Couldn’t connect to your vault. Please try again.',
       );
     }
   }
