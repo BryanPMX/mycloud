@@ -10,7 +10,7 @@ Observed deployment: project `mycloud`, containers `mycloud-api-1`, `mycloud-wor
 
 GitHub Go CI runs formatting, vet, race tests, the official vulnerability scanner and real dependency-backed integration tests. Flutter CI runs locked dependency resolution, analysis, tests and a production web build. Publishing waits for both reusable workflows, builds API/worker/migrate/backup for amd64/arm64 and pushes immutable `sha-FULL_COMMIT` tags to GHCR. The existing main-branch Portainer webhook remains, but do not merge this rollout until the backup/maintenance plan is ready. A configured `latest` deployment may redeploy immediately after merge.
 
-Go is pinned to patched 1.26.10; core builder/runtime image manifests are pinned. Flutter/Vercel use 3.35.4 and the lockfile. Dependency updates must rerun the checks; see [Go release history](https://go.dev/doc/devel/release) and the [Go vulnerability database](https://pkg.go.dev/vuln/).
+Go is pinned to patched 1.26.11; core builder/runtime image manifests are pinned. Flutter/Vercel use 3.35.4 and the lockfile. Dependency updates must rerun the checks; see [Go release history](https://go.dev/doc/devel/release) and the [Go vulnerability database](https://pkg.go.dev/vuln/).
 
 Use `deploy/portainer-stack.npm.yml` for production. The optional monitoring override publishes only `127.0.0.1:19090/19091`; the SSD override is separate and gated by [storage.md](storage.md). Do not change the production Compose project name or remove volumes.
 
