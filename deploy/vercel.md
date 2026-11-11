@@ -22,7 +22,7 @@ The web client relies on:
 
 That means:
 
-- production should use `https://mynube.live` on Vercel
+- production uses the owned `https://mynube.live` / `https://www.mynube.live` domains on Vercel
 - the API should stay at `https://api.mynube.live`
 - preview deployments on `*.vercel.app` should normally set `USE_DEMO_DATA=true`
 
@@ -54,9 +54,9 @@ Preview:
 On the API deployment:
 
 - `APP_BASE_URL=https://mynube.live`
-- `ALLOWED_ORIGINS=https://mynube.live`
+- `ALLOWED_ORIGINS=https://mynube.live,https://www.mynube.live`
 
-If you later add more trusted browser origins, include them in `ALLOWED_ORIGINS`, but remember that cross-site preview domains still do not match the current Strict-cookie plus browser-websocket auth design.
+The production apex currently redirects to `www`. Both exact origins must be allowed; otherwise the browser rejects login before checking credentials. Avoid wildcard origins or arbitrary preview domains. If you later add more trusted browser origins, include them in `ALLOWED_ORIGINS`, but remember that cross-site preview domains still do not match the current Strict-cookie plus browser-websocket auth design.
 
 ## Deploy flow
 
@@ -65,5 +65,5 @@ If you later add more trusted browser origins, include them in `ALLOWED_ORIGINS`
 3. Add the production environment variables above.
 4. Attach the custom domain `mynube.live` to the Vercel project.
 5. Deploy.
-6. Confirm `/`, `/login`, `/media`, `/albums`, `/profile`, and `/admin` all load the Flutter app.
-7. Confirm the API allows `https://mynube.live` in `ALLOWED_ORIGINS`.
+6. Confirm `/`, `/login`, `/accept`, `/media`, `/feed`, `/albums`, `/profile`, and `/admin` all load the Flutter app.
+7. Confirm the API allows both `https://mynube.live` and `https://www.mynube.live` in `ALLOWED_ORIGINS`, including the actual hostname after redirects.

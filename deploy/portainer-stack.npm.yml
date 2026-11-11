@@ -30,7 +30,7 @@ services:
       JWT_ACCESS_TTL_MINUTES: "${JWT_ACCESS_TTL_MINUTES}"
       JWT_REFRESH_TTL_DAYS: "${JWT_REFRESH_TTL_DAYS}"
       CLEANUP_INTERVAL_MINUTES: "${CLEANUP_INTERVAL_MINUTES}"
-      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://mynube.live}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://mynube.live,https://www.mynube.live}"
       TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
       MINIO_REGION: "${MINIO_REGION:-us-east-1}"
     depends_on:
