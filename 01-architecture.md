@@ -1,3 +1,5 @@
+> Historical design reference. Current implementation and safe operating procedures are in [docs/](docs/architecture.md). Administrative consoles must remain private; never follow a historical public-console example.
+
 # 01 — System Architecture & Design Patterns
 
 ---

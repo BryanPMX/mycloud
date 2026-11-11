@@ -1,74 +1,40 @@
-# MyCloud
+# Mynube
 
-This repository now contains both the design set and the current implemented backend plus the current live Flutter integration slices for MyCloud.
+A private personal vault: individual accounts and quotas, private photo/video libraries, selective album sharing and chronological household feeds. Go API/worker, Flutter for iPhone/Android/web, PostgreSQL metadata, Redis sessions/dispatch and private MinIO media.
 
-Current deployment domain plan:
-- `https://mynube.live` for the future Flutter web app
-- `https://api.mynube.live` for the Go API
-- `https://minio.mynube.live` for MinIO presigned upload/download traffic
-- `https://console.mynube.live` for the MinIO console/admin surface
+This branch implements product completion and production hardening. **Production deployment, guarded SSD migration, independent backup installation and family/device acceptance remain explicit release gates.** Local tests do not certify live data safety. Keep existing paid storage and cloud originals until production migration, independent backups and an actual production restore test succeed.
 
-Current implemented slices:
-- PostgreSQL schema for `users`, `media`, `albums`, `album_media`, `shares`, `comments`, `favorites`, `jobs`, and `audit_log`
-- JWT access/refresh auth with Redis-backed refresh session rotation and invite acceptance
-- MinIO wiring for direct multipart uploads
-- split internal/public MinIO endpoint support so server-side object operations stay on the Docker network while presigned URLs can target the public object host
-- Redis-backed `process_media` and scheduled `cleanup` jobs, with worker-side scan, thumbnail generation, metadata extraction, and promotion flow
-- self-service profile reads/writes via `GET/PATCH /api/v1/users/me`, signed avatar reads via `GET /api/v1/users/:id/avatar`, and avatar uploads via `PUT /api/v1/users/me/avatar`
-- fixed-window API rate limiting plus response security headers in the Go middleware stack
-- configurable API CORS handling for `mynube.live`-style web clients via `ALLOWED_ORIGINS`
-- Redis-backed worker progress events plus authenticated `GET /ws/progress`
-- SMTP-backed admin invite delivery when SMTP is configured, while still returning `invite_url` in the response
-- admin user list/invite/update/deactivate endpoints and admin system stats
-- album list/create/detail/update/delete, album-media add/remove with contributor-owned additions on shared albums, and album share management
-- non-admin family directory reads via `GET /api/v1/users/directory`
-- comment persistence plus media comment list/create/delete endpoints
-- media favorites on `GET /media` and `GET /albums/:id/media`, plus favorite/unfavorite endpoints
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/invite/accept`
-- `GET /api/v1/users/me`
-- `PATCH /api/v1/users/me`
-- `PUT /api/v1/users/me/avatar`
-- `GET /api/v1/users/:id/avatar`
-- `GET /api/v1/users/directory`
-- `GET /api/v1/media`
-- `POST /api/v1/media/:id/favorite`
-- `DELETE /api/v1/media/:id/favorite`
-- `GET /api/v1/albums`
-- `POST /api/v1/albums`
-- `GET /api/v1/albums/:id`
-- `PATCH /api/v1/albums/:id`
-- `DELETE /api/v1/albums/:id`
-- `GET /api/v1/albums/:id/media`
-- `POST /api/v1/albums/:id/media`
-- `DELETE /api/v1/albums/:id/media/:mediaId`
-- `GET /api/v1/albums/:id/shares`
-- `POST /api/v1/albums/:id/shares`
-- `DELETE /api/v1/albums/:id/shares/:shareId`
-- `GET /api/v1/media/:id/comments`
-- `POST /api/v1/media/:id/comments`
-- `DELETE /api/v1/media/:id/comments/:commentId`
-- `GET /api/v1/admin/users`
-- `POST /api/v1/admin/users/invite`
-- `PATCH /api/v1/admin/users/:id`
-- `DELETE /api/v1/admin/users/:id`
-- `GET /api/v1/admin/stats`
-- `POST /api/v1/media/upload/init`
-- `POST /api/v1/media/upload/:id/part-url`
-- `POST /api/v1/media/upload/:id/complete`
-- `DELETE /api/v1/media/upload/:id`
-- `GET /health`
-- Flutter `MaterialApp.router` shell with live auth/session restore, secure native token persistence, live media/albums/comments/admin reads and writes, browser multipart uploads, `/ws/progress` reconciliation, presigned thumbnail resolution, demo fallback mode, and environment-aware endpoint config
-- Flutter release metadata and mobile identifiers normalized for production: `version: 1.0.0+1`, consumer-facing `Mynube` branding, `live.mynube.app` bundle/application ids, Android `key.properties` signing scaffold, and local Xcode team id `55BP75778A`
-- validated Flutter tooling pass with `flutter analyze` and `flutter test`
-- validated Flutter release build pass with `scripts/deploy-web.sh`, `flutter build ios --release --no-codesign`, and `flutter build appbundle --release`
-- validated backend tooling pass with `go test ./...`
+Start with [the audit](docs/audit.md), [implementation plan](docs/implementation-plan.md) and [validation record](docs/validation.md). Operational documentation:
 
-Use the numbered design docs for architecture and implementation status:
-- [00-README.md](/Users/bryanpmx/Documents/Projects/mycloud/00-README.md) for the document index and status summary
-- [03-api-reference.md](/Users/bryanpmx/Documents/Projects/mycloud/03-api-reference.md) for API status
-- [04-database.md](/Users/bryanpmx/Documents/Projects/mycloud/04-database.md) for schema status
-- [06-auth-security.md](/Users/bryanpmx/Documents/Projects/mycloud/06-auth-security.md) for auth/security status
-- [09-subsystems-file-architecture.md](/Users/bryanpmx/Documents/Projects/mycloud/09-subsystems-file-architecture.md) for implementation order and current subsystem state
+- [Architecture and media lifecycle](docs/architecture.md)
+- [Authorization, sessions and privacy](docs/security.md)
+- [Account permissions, storage quotas and RAM/CPU limits](docs/permissions-and-limits.md)
+- [Storage, quotas and SSD migration](docs/storage.md)
+- [Backup and verified restore](docs/backup-restore.md)
+- [Deployment, monitoring and iPhone acceptance](docs/deployment.md)
+- [Disaster recovery](docs/disaster-recovery.md)
+
+Public HTTPS hosts are `api.mynube.live` and `minio.mynube.live`; the Flutter web app uses `mynube.live`. The MinIO console and all administration stay on localhost/SSH/Tailscale. Never expose a console proxy or make buckets anonymous.
+
+Production uses `deploy/portainer-stack.npm.yml`. The MinIO image remains **`ghcr.io/bryanpmx/minio:RELEASE.2025-09-07T16-13-09Z`**. The SSD and private monitoring overrides are optional, separately documented changes. Current production storage is retained as `mycloud_minio_data`; changing a mount is not a migration.
+
+For local development, copy `.env.example` into a private `.env`, set actual development credentials/HTTPS choices, and run `docker compose up -d --build`. Its services bind to loopback and migrations run through a version ledger. A new empty installation can use the documented `bootstrap-admin` helper; existing deployments must never bootstrap/reset accounts.
+
+Validation:
+
+```sh
+go test -race ./...
+go vet ./...
+sh tests/scripts_test.sh
+cd flutter_app
+flutter pub get --enforce-lockfile
+flutter analyze
+flutter test
+flutter build web --release --dart-define=USE_DEMO_DATA=false
+```
+
+Real PostgreSQL/Redis/MinIO/ClamAV and complete upload/feed tests use the isolated `tests/integration/compose.yml` stack; see its README. CI gates publishing of API, worker, migration and backup images. Use one reviewed immutable `sha-FULL_COMMIT` tag for rollout and preserve rollback copies.
+
+Native uploads are chunked and limited to 512 MiB per file. Keep the app open during transfer; OS-managed background backup/resume after termination and App Store submission are not yet accepted production capabilities. The existing numbered design documents remain historical references; `docs/` describes the current operational design.
+
+The consumer client is branded **Mynube**, a private personal vault: a photographic library, collections and a deliberately small shared circle. See [the design system](docs/design-system.md) for branding, reusable components, responsive layouts and accessibility behavior. The Flutter implementation supports desktop web, iOS and Android without changing the existing API/storage architecture.
