@@ -47,6 +47,8 @@ jobs:
         run: sh tests/scripts_test.sh
       - name: Real MinIO storage startup and restart guards
         run: sh tests/storage_guard_test.sh
+      - name: Original-schema upgrade and legacy/current PostgreSQL restore
+        run: sh tests/postgres_restore_test.sh
       - name: Clean isolated dependencies
         if: always()
         run: docker compose -f tests/integration/compose.yml down -v
