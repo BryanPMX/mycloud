@@ -1,10 +1,21 @@
 #!/bin/sh
 # Original-schema upgrade and restore rehearsal in a fresh disposable PostgreSQL.
 set -eu
+exec 3>&2
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/mycloud-postgres-restore.XXXXXX")
 container="mycloud-postgres-restore-$(basename "$work" | tr '[:upper:]' '[:lower:]')"
 cleanup() {
+  result=$?
+  if [ "$result" -ne 0 ]; then
+    # These logs contain only the synthetic fixture, never server configuration.
+    for log in "$work"/*.log; do
+      [ -f "$log" ] || continue
+      printf 'Restore fixture diagnostic: %s\n' "$(basename "$log")" >&3
+      tail -n 25 "$log" >&3
+    done
+    docker logs --tail 30 "$container" >&3 2>&3 || true
+  fi
   docker rm -f "$container" >/dev/null 2>&1 || true
   rm -rf "$work"
 }
@@ -12,11 +23,16 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
+# Hold the image's temporary Unix-socket-only initialization server open long
+# enough to exercise the distinction between bootstrap and final TCP readiness.
+printf 'SELECT pg_sleep(5);\n' > "$work/init.sql"
+chmod 644 "$work/init.sql"
 docker run -d --rm --name "$container" --network none --memory 256m --cpus 0.5 \
+  --mount "type=bind,src=$work/init.sql,dst=/docker-entrypoint-initdb.d/010-restore-readiness.sql,readonly" \
   -e POSTGRES_USER=validation -e POSTGRES_PASSWORD=validation-only-local \
   -e POSTGRES_DB=mycloud_validation postgres:16-alpine >/dev/null
 attempt=0
-until docker exec "$container" pg_isready -U validation -d mycloud_validation >/dev/null 2>&1; do
+until docker exec "$container" pg_isready -h 127.0.0.1 -U validation -d mycloud_validation >/dev/null 2>&1; do
   attempt=$((attempt + 1))
   [ "$attempt" -lt 45 ] || { echo 'Restore fixture database did not become ready.' >&2; exit 1; }
   sleep 1

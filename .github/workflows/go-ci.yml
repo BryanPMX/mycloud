@@ -33,7 +33,7 @@ jobs:
           MYCLOUD_TEST_DATABASE_URL: postgres://validation:validation-only-local@127.0.0.1:55439/mycloud_validation?sslmode=disable
           MYCLOUD_TEST_REDIS_URL: redis://127.0.0.1:56389/0
           MYCLOUD_TEST_MINIO_ENDPOINT: 127.0.0.1:59039
-        run: go test -race -tags=integration ./internal/infrastructure/...
+        run: go test -count=1 -race -tags=integration ./internal/infrastructure/...
       - name: Build application and start real antivirus
         run: docker compose -f tests/integration/compose.yml up -d --build --wait --wait-timeout 240 api worker
       - name: Prepare video fixture tooling
@@ -42,7 +42,7 @@ jobs:
         env:
           MYCLOUD_E2E: isolated-local-stack
           MYCLOUD_TEST_DATABASE_URL: postgres://validation:validation-only-local@127.0.0.1:55439/mycloud_validation?sslmode=disable
-        run: go test -tags=e2e -timeout=4m ./tests/e2e
+        run: go test -count=1 -tags=e2e -timeout=4m ./tests/e2e
       - name: Backup failure and storage guard regression checks
         run: sh tests/scripts_test.sh
       - name: Real MinIO storage startup and restart guards
