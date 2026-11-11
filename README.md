@@ -2,7 +2,7 @@
 
 A private personal vault: individual accounts and quotas, private photo/video libraries, selective album sharing and chronological household feeds. Go API/worker, Flutter for iPhone/Android/web, PostgreSQL metadata, Redis sessions/dispatch and private MinIO media.
 
-This branch implements product completion and production hardening. **Production deployment, guarded SSD migration, independent backup installation and family/device acceptance remain explicit release gates.** Local tests do not certify live data safety. Keep existing paid storage and cloud originals until production migration, independent backups and an actual production restore test succeed.
+This branch implements product completion and production hardening. **The application release and 12-migration upgrade are deployed with verified readiness and resource limits. Guarded SSD migration, independent backup installation, media recovery and family/device acceptance remain explicit release gates.** Local tests do not certify live data safety. Keep existing paid storage and cloud originals until production migration, independent backups and an actual production restore test succeed.
 
 Start with [the audit](docs/audit.md), [implementation plan](docs/implementation-plan.md) and [validation record](docs/validation.md). Operational documentation:
 
