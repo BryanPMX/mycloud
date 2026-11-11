@@ -59,6 +59,9 @@ class MediaUploadProvider extends ChangeNotifier {
   bool _hasRecoveredLostFiles = false;
   String? _errorMessage;
   int _taskSequence = 0;
+  int _generation = 0;
+  bool _disposed = false;
+  Future<void> _uploadTail = Future<void>.value();
 
   List<MediaUploadTask> get tasks => List<MediaUploadTask>.unmodifiable(_tasks);
 
@@ -76,7 +79,7 @@ class MediaUploadProvider extends ChangeNotifier {
 
   String get pickerHint {
     if (_config.useDemoData) {
-      return 'Demo mode keeps multipart uploads disabled.';
+      return 'This is a sample vault. Add your own memories in the live app.';
     }
     if (!_authProvider.isAuthenticated) {
       return 'Sign in with the live backend to start uploads.';
@@ -97,11 +100,19 @@ class MediaUploadProvider extends ChangeNotifier {
       return;
     }
 
+    final generation = _generation;
+    final ownerId = _authProvider.currentUser?.id;
     _isPickingFiles = true;
     notifyListeners();
 
     try {
-      await queueUploads(await _uploadFilesPicker());
+      final files = await _uploadFilesPicker();
+      if (generation != _generation ||
+          ownerId != _authProvider.currentUser?.id ||
+          _disposed) {
+        return;
+      }
+      await queueUploads(files);
     } on UnsupportedError catch (error) {
       _errorMessage = error.message;
       notifyListeners();
@@ -115,8 +126,21 @@ class MediaUploadProvider extends ChangeNotifier {
   }
 
   Future<void> queueUploads(List<SelectedUploadFile> files) async {
+    final generation = _generation;
+    final ownerId = _authProvider.currentUser?.id;
+    if (ownerId == null) return;
     for (final file in files) {
       final sizeBytes = await file.loadSizeBytes();
+      if (generation != _generation ||
+          ownerId != _authProvider.currentUser?.id ||
+          _disposed) {
+        return;
+      }
+      if (sizeBytes <= 0 || sizeBytes > 512 * 1024 * 1024) {
+        _errorMessage = 'Choose a photo or video no larger than 512 MB.';
+        notifyListeners();
+        continue;
+      }
       final task = MediaUploadTask(
         localId: 'upload-${_taskSequence++}',
         filename: file.name,
@@ -128,7 +152,15 @@ class MediaUploadProvider extends ChangeNotifier {
       );
       _tasks.insert(0, task);
       notifyListeners();
-      unawaited(_uploadFile(task.localId, file, sizeBytes: sizeBytes));
+      _uploadTail = _uploadTail.then((_) async {
+        if (generation != _generation ||
+            ownerId != _authProvider.currentUser?.id ||
+            _disposed) {
+          return;
+        }
+        await _uploadFile(task.localId, file,
+            sizeBytes: sizeBytes, generation: generation, ownerId: ownerId);
+      }).catchError((_) {});
     }
   }
 
@@ -206,7 +238,7 @@ class MediaUploadProvider extends ChangeNotifier {
           task.copyWith(
             stage: MediaUploadStage.processing,
             progress: 1,
-            message: 'Worker started scanning and generating thumbnails.',
+            message: 'Checking your file and preparing previews.',
           ),
         );
       case UploadProgressEventType.processingComplete:
@@ -233,6 +265,8 @@ class MediaUploadProvider extends ChangeNotifier {
   }
 
   void reset() {
+    _generation++;
+    _uploadTail = Future<void>.value();
     _tasks.clear();
     _taskIdByMediaId.clear();
     _cancelRequestedTaskIds.clear();
@@ -243,16 +277,29 @@ class MediaUploadProvider extends ChangeNotifier {
   }
 
   Future<void> _uploadFile(String localId, SelectedUploadFile file,
-      {required int sizeBytes}) async {
+      {required int sizeBytes,
+      required int generation,
+      required String ownerId}) async {
     String? mediaId;
     var shouldAbortRemoteUpload = false;
 
+    bool current() =>
+        generation == _generation &&
+        ownerId == _authProvider.currentUser?.id &&
+        !_disposed &&
+        _taskFor(localId) != null;
+    void check() {
+      if (!current()) throw const _UploadCancelled();
+      _throwIfCancellationRequested(localId);
+    }
+
     try {
+      check();
       _replaceTask(
         localId,
         _taskFor(localId)!.copyWith(
           stage: MediaUploadStage.initializing,
-          message: 'Creating multipart upload session...',
+          message: 'Preparing your upload…',
         ),
       );
 
@@ -267,6 +314,7 @@ class MediaUploadProvider extends ChangeNotifier {
           },
         ),
       );
+      check();
       final initSession = _UploadInitSession.fromJson(initPayload.asMap());
       final uploadMediaId = initSession.mediaId;
       final activeUploadId = initSession.uploadId;
@@ -290,12 +338,13 @@ class MediaUploadProvider extends ChangeNotifier {
 
       final parts = <_CompletedUploadPart>[];
       for (var partNumber = 1; partNumber <= totalParts; partNumber++) {
-        _throwIfCancellationRequested(localId);
+        check();
 
         final start = (partNumber - 1) * initSession.partSizeBytes;
         final end = math.min(sizeBytes, start + initSession.partSizeBytes);
         final chunk = await file.readChunk(start, end);
 
+        check();
         final presignPayload = await _authProvider.withAuthorization(
           (headers) => _transport.postJson(
             _apiClient.uploadPartUri(uploadMediaId),
@@ -306,6 +355,7 @@ class MediaUploadProvider extends ChangeNotifier {
             },
           ),
         );
+        check();
         final partUrl = _requiredString(
           presignPayload.asMap(),
           key: 'url',
@@ -316,6 +366,7 @@ class MediaUploadProvider extends ChangeNotifier {
           Uri.parse(partUrl),
           body: chunk,
         );
+        check();
         final etag = _etagFromHeaders(storageResponse.headers);
         if (etag == null) {
           throw StateError(
@@ -341,7 +392,7 @@ class MediaUploadProvider extends ChangeNotifier {
         );
       }
 
-      _throwIfCancellationRequested(localId);
+      check();
 
       final completePayload = await _authProvider.withAuthorization(
         (headers) => _transport.postJson(
@@ -358,12 +409,12 @@ class MediaUploadProvider extends ChangeNotifier {
           },
         ),
       );
+      check();
       final completedUpload = _UploadCompleteResult.fromJson(
         completePayload.asMap(),
       );
 
       shouldAbortRemoteUpload = false;
-      final ownerId = _authProvider.currentUser?.id ?? '';
       _mediaProvider.insertPendingUpload(
         mediaId: completedUpload.mediaId,
         ownerId: ownerId,
@@ -377,13 +428,15 @@ class MediaUploadProvider extends ChangeNotifier {
           stage: MediaUploadStage.processing,
           progress: 1,
           mediaId: completedUpload.mediaId,
-          message: 'Upload complete. Waiting for virus scan and thumbnails...',
+          message: 'Upload complete. Preparing your previews…',
         ),
       );
     } on _UploadCancelled {
+      if (!current()) return;
       if (shouldAbortRemoteUpload && mediaId != null) {
         await _abortUpload(mediaId);
       }
+      if (!current()) return;
 
       _replaceTask(
         localId,
@@ -393,9 +446,11 @@ class MediaUploadProvider extends ChangeNotifier {
         ),
       );
     } on ApiException catch (error) {
+      if (!current()) return;
       if (shouldAbortRemoteUpload && mediaId != null) {
         await _abortUpload(mediaId);
       }
+      if (!current()) return;
 
       _errorMessage = error.message;
       _replaceTask(
@@ -406,9 +461,11 @@ class MediaUploadProvider extends ChangeNotifier {
         ),
       );
     } on FormatException catch (error) {
+      if (!current()) return;
       if (shouldAbortRemoteUpload && mediaId != null) {
         await _abortUpload(mediaId);
       }
+      if (!current()) return;
 
       final message = error.message;
       _errorMessage = message;
@@ -420,9 +477,11 @@ class MediaUploadProvider extends ChangeNotifier {
         ),
       );
     } on StateError catch (error) {
+      if (!current()) return;
       if (shouldAbortRemoteUpload && mediaId != null) {
         await _abortUpload(mediaId);
       }
+      if (!current()) return;
 
       _errorMessage = error.message;
       _replaceTask(
@@ -433,11 +492,14 @@ class MediaUploadProvider extends ChangeNotifier {
         ),
       );
     } catch (_) {
+      if (!current()) return;
       if (shouldAbortRemoteUpload && mediaId != null) {
         await _abortUpload(mediaId);
       }
+      if (!current()) return;
 
-      const message = 'Unable to finish the multipart upload right now.';
+      const message =
+          'Unable to finish the upload right now. Please choose the file again to retry.';
       _errorMessage = message;
       _replaceTask(
         localId,
@@ -474,6 +536,7 @@ class MediaUploadProvider extends ChangeNotifier {
   }
 
   void _replaceTask(String localId, MediaUploadTask updatedTask) {
+    if (_disposed) return;
     final index = _tasks.indexWhere((task) => task.localId == localId);
     if (index == -1) {
       return;
@@ -490,7 +553,16 @@ class MediaUploadProvider extends ChangeNotifier {
   }
 
   @override
+  void notifyListeners() {
+    if (!_disposed) {
+      super.notifyListeners();
+    }
+  }
+
+  @override
   void dispose() {
+    _disposed = true;
+    _generation++;
     _objectTransport.dispose();
     super.dispose();
   }

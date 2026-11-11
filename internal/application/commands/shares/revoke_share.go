@@ -46,7 +46,7 @@ func (h *RevokeShareHandler) Execute(ctx context.Context, command RevokeShareCom
 	if err != nil {
 		return err
 	}
-	if album.OwnerID != user.ID && !user.IsAdmin() {
+	if album.OwnerID != user.ID {
 		return domain.ErrForbidden
 	}
 

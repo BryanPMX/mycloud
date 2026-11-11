@@ -6,6 +6,14 @@ import (
 	"github.com/google/uuid"
 )
 
+const MaxUploadSizeBytes int64 = 512 * 1024 * 1024
+const DerivativeBudgetBytes int64 = 8 * 1024 * 1024
+
+type UploadInfo struct {
+	SizeBytes int64
+	Header    []byte
+}
+
 type MediaStatus string
 
 const (
@@ -25,22 +33,23 @@ type ThumbKeys struct {
 
 // Media represents a photo or video stored by the platform.
 type Media struct {
-	ID           uuid.UUID
-	OwnerID      uuid.UUID
-	Filename     string
-	MimeType     string
-	SizeBytes    int64
-	Width        int
-	Height       int
-	DurationSecs float64
-	OriginalKey  string
-	ThumbKeys    ThumbKeys
-	Status       MediaStatus
-	IsFavorite   bool
-	TakenAt      *time.Time
-	UploadedAt   time.Time
-	DeletedAt    *time.Time
-	Metadata     map[string]any
+	ID              uuid.UUID
+	OwnerID         uuid.UUID
+	Filename        string
+	MimeType        string
+	SizeBytes       int64
+	DerivativeBytes int64
+	Width           int
+	Height          int
+	DurationSecs    float64
+	OriginalKey     string
+	ThumbKeys       ThumbKeys
+	Status          MediaStatus
+	IsFavorite      bool
+	TakenAt         *time.Time
+	UploadedAt      time.Time
+	DeletedAt       *time.Time
+	Metadata        map[string]any
 }
 
 type ListMediaOptions struct {
@@ -83,12 +92,13 @@ type UploadSession struct {
 }
 
 type MediaProcessingResult struct {
-	Width        int
-	Height       int
-	DurationSecs float64
-	TakenAt      *time.Time
-	ThumbKeys    ThumbKeys
-	Metadata     map[string]any
+	DerivativeBytes int64
+	Width           int
+	Height          int
+	DurationSecs    float64
+	TakenAt         *time.Time
+	ThumbKeys       ThumbKeys
+	Metadata        map[string]any
 }
 
 func (m Media) PurgesAt() *time.Time {

@@ -23,6 +23,9 @@ data/
 !flutter_app/lib/**/data/
 !flutter_app/lib/**/data/**
 storage/
+!deploy/storage/
+!deploy/storage/*.sh
+!deploy/storage/*.env.example
 !flutter_app/lib/core/storage/
 !flutter_app/lib/core/storage/**
 uploads/

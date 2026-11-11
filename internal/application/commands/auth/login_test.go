@@ -100,3 +100,7 @@ func TestLoginHandlerExecute(t *testing.T) {
 		t.Fatal("Execute() did not update last login")
 	}
 }
+
+func (s *fakeSessionStore) RotateRefreshToken(context.Context, uuid.UUID, string, string, time.Duration) (bool, error) {
+	return true, nil
+}

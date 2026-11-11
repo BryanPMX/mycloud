@@ -22,6 +22,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 type userRow struct {
+	AuthVersion  int64
 	ID           uuid.UUID
 	Email        string
 	DisplayName  string
@@ -41,18 +42,25 @@ type userRow struct {
 func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	const query = `
 		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
-		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		FROM users
 		WHERE id = $1
 	`
 
-	return scanUser(r.db.QueryRow(ctx, query, id))
+	user, err := scanUser(r.db.QueryRow(ctx, query, id))
+	if err != nil {
+		return nil, err
+	}
+	if err = r.db.QueryRow(ctx, `SELECT COALESCE(sum(s.reserved_bytes),0) FROM upload_sessions s WHERE owner_id=$1 AND NOT EXISTS(SELECT 1 FROM media m WHERE m.id=s.media_id)`, id).Scan(&user.StorageReserved); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
 	const query = `
 		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
-		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		FROM users
 		WHERE lower(email) = lower($1)
 	`
@@ -78,16 +86,16 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID, last
 	return nil
 }
 
-func (r *UserRepository) ListActiveUsers(ctx context.Context) ([]*domain.User, error) {
+func (r *UserRepository) ListActiveUsers(ctx context.Context, viewerID uuid.UUID) ([]*domain.User, error) {
 	const query = `
 		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
-		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 		FROM users
-		WHERE active = true
+		WHERE active = true AND (id=$1 OR users_share_family(id,$1))
 		ORDER BY lower(display_name), id
 	`
 
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +119,7 @@ func (r *UserRepository) ListActiveUsers(ctx context.Context) ([]*domain.User, e
 			&record.CreatedAt,
 			&record.UpdatedAt,
 			&record.LastLoginAt,
+			&record.AuthVersion,
 		); err != nil {
 			return nil, err
 		}
@@ -127,7 +136,7 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, id uuid.UUID, displa
 		SET display_name = $2, updated_at = now()
 		WHERE id = $1
 		RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
-		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 	`
 
 	return scanUser(r.db.QueryRow(ctx, query, id, strings.TrimSpace(displayName)))
@@ -139,7 +148,7 @@ func (r *UserRepository) UpdateAvatarKey(ctx context.Context, id uuid.UUID, avat
 		SET avatar_key = $2, updated_at = now()
 		WHERE id = $1
 		RETURNING id, email, display_name, avatar_key, role, password_hash, storage_used,
-		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
+		          quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at, auth_version
 	`
 
 	var value *string
@@ -167,6 +176,7 @@ func (r userRow) toDomain() *domain.User {
 		AvatarKey:    avatarKey,
 		Role:         domain.UserRole(r.Role),
 		PasswordHash: r.PasswordHash,
+		AuthVersion:  r.AuthVersion,
 		StorageUsed:  r.StorageUsed,
 		QuotaBytes:   r.QuotaBytes,
 		Active:       r.Active,
@@ -195,6 +205,7 @@ func scanUser(row pgx.Row) (*domain.User, error) {
 		&record.CreatedAt,
 		&record.UpdatedAt,
 		&record.LastLoginAt,
+		&record.AuthVersion,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
@@ -204,4 +215,9 @@ func scanUser(row pgx.Row) (*domain.User, error) {
 	}
 
 	return record.toDomain(), nil
+}
+
+func (r *UserRepository) FindVisibleProfile(ctx context.Context, targetID, viewerID uuid.UUID) (*domain.User, error) {
+	const query = `SELECT id,email,display_name,avatar_key,role,password_hash,storage_used,quota_bytes,active,invite_token,invite_token_expires_at,created_at,updated_at,last_login_at,auth_version FROM users WHERE id=$1 AND active AND (id=$2 OR users_share_family(id,$2) OR EXISTS(SELECT 1 FROM users viewer WHERE viewer.id=$2 AND viewer.active AND viewer.role='admin'))`
+	return scanUser(r.db.QueryRow(ctx, query, targetID, viewerID))
 }

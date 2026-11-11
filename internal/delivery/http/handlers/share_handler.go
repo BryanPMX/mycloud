@@ -86,6 +86,7 @@ func (h *ShareHandler) Create(c *gin.Context) {
 	}
 
 	var request struct {
+		FamilyID   *uuid.UUID `json:"family_id"`
 		SharedWith *string    `json:"shared_with"`
 		Permission string     `json:"permission"`
 		ExpiresAt  *time.Time `json:"expires_at"`
@@ -106,6 +107,7 @@ func (h *ShareHandler) Create(c *gin.Context) {
 	}
 
 	share, err := h.createHandler.Execute(c.Request.Context(), sharecmd.CreateShareCommand{
+		FamilyID:   request.FamilyID,
 		UserID:     userID,
 		AlbumID:    albumID,
 		SharedWith: sharedWithID,

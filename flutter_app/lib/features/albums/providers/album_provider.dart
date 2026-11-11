@@ -262,8 +262,7 @@ class AlbumProvider extends ChangeNotifier {
   bool isMutatingAlbumShares(String albumId) =>
       _mutatingAlbumShareIds.contains(albumId);
 
-  bool canManage(Album album) =>
-      album.isOwnedByCurrentUser || _authProvider.canAccessAdmin;
+  bool canManage(Album album) => album.isOwnedByCurrentUser;
 
   List<Media> mediaForAlbum(String albumId) =>
       List<Media>.unmodifiable(_albumMedia[albumId] ?? const <Media>[]);
@@ -707,6 +706,7 @@ class AlbumProvider extends ChangeNotifier {
   }
 
   Future<bool> createShare({
+    String? familyId,
     required String albumId,
     required AlbumPermission permission,
     String? sharedWith,
@@ -748,6 +748,7 @@ class AlbumProvider extends ChangeNotifier {
                   _apiClient.albumSharesUri(albumId),
                   headers: headers,
                   body: <String, Object>{
+                    if (familyId != null) 'family_id': familyId,
                     if (sharedWith != null && sharedWith.trim().isNotEmpty)
                       'shared_with': sharedWith,
                     'permission': permission.apiValue,

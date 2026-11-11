@@ -13,7 +13,6 @@ import (
 func TestRateLimiterBlocksAfterLimit(t *testing.T) {
 	t.Parallel()
 
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(NewRateLimiter(RateLimitConfig{
 		Name:   "test_login",
@@ -47,7 +46,6 @@ func TestRateLimiterBlocksAfterLimit(t *testing.T) {
 func TestUserIDOrIPKeyPrefersAuthenticatedUser(t *testing.T) {
 	t.Parallel()
 
-	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
 	context.Request = httptest.NewRequest(http.MethodGet, "/", nil)
@@ -63,7 +61,6 @@ func TestUserIDOrIPKeyPrefersAuthenticatedUser(t *testing.T) {
 func TestSecurityHeadersAddsExpectedDefaults(t *testing.T) {
 	t.Parallel()
 
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(SecurityHeaders(true))
 	router.GET("/", func(c *gin.Context) {

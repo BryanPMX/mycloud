@@ -12,7 +12,7 @@ import (
 func TestComputeAcceptKeyMatchesRFC6455Example(t *testing.T) {
 	t.Parallel()
 
-	const key = "dGhlIHNhbXBsZSBub25jZQ=="
+	const key = "dGhlIHNhbXBsZSBub25jZQ==" // gitleaks:allow -- public RFC 6455 example nonce
 	const want = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
 
 	if got := computeAcceptKey(key); got != want {

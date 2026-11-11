@@ -1,13 +1,16 @@
-# `migrations`
+# Schema migrations
 
-Database schema migrations live here.
+Migrations are applied in filename order by `scripts/migrate.sh`, using one PostgreSQL connection and advisory lock. Each migration commits its SQL and SHA-256 ledger entry in the same transaction. A repeat run skips matching entries and rejects a changed applied file. An existing installation without a ledger first replays the idempotent original migrations with application writers paused.
 
-Current migration set on March 14, 2026:
-- `001_initial_schema` creates `users`, `media`, `albums`, `album_media`, `shares`, and `jobs`, plus the storage/accounting and album visibility triggers
-- `002_comments` adds soft-deletable media comments
-- `003_favorites` adds per-user media favorites
-- `004_media_search_extensions` adds invite-token columns, `pg_trgm`, `search_vector`, and the media search/timeline indexes
-- `005_audit_log` adds append-only audit storage for invite and admin actions
-- the `mycloud-migrate` image copies this folder into its working directory so the one-shot Portainer migration job can apply the same SQL set in production
+| Versions | Change |
+| --- | --- |
+| `001`–`005` | Original users/media/albums/shares/jobs, comments, favorites, invitations/search and audit log. These applied files remain unchanged. |
+| `006` | Durable upload reservations, derivative accounting and deletion outbox. |
+| `007` | Durable job claims and recovery leases. |
+| `008` | Families, membership, email-bound invitations and chronological feed. |
+| `009` | Account-deletion cleanup state. |
+| `010` | Quota reconciliation and delayed cleanup for in-flight processing. |
+| `011` | Recipient/family-scoped album grants. |
+| `012` | Credential versions to invalidate sessions after password changes. |
 
-Keep migrations versioned, append-only, and paired with rollback files where possible.
+The migration image packages the exact SQL set for the reviewed release. Preserve applied migrations; add a new migration for later changes. Do not use destructive down migrations on production. Save a matched database/media backup before upgrading, and use the reviewed restore procedure for rollback when necessary. See [deployment](../docs/deployment.md) and [disaster recovery](../docs/disaster-recovery.md).

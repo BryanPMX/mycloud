@@ -58,7 +58,7 @@ Future<void> signInToDemoWorkspace(
   required String email,
   required String password,
 }) async {
-  expect(find.text('Sign in to Mynube'), findsOneWidget);
+  expect(find.text('Welcome home.'), findsOneWidget);
 
   await tester.enterText(
     find.byKey(const ValueKey<String>('login-email')),
@@ -78,7 +78,13 @@ Future<void> signInToDemoWorkspace(
 }
 
 Future<void> openSection(WidgetTester tester, String label) async {
-  await tester.ensureVisible(find.text(label));
-  await tester.tap(find.text(label));
+  final destination = {
+        'Library': 'Vault',
+        'Albums': 'Collections',
+        'Family': 'Shared'
+      }[label] ??
+      label;
+  await tester.ensureVisible(find.text(destination).last);
+  await tester.tap(find.text(destination).last);
   await tester.pumpAndSettle();
 }

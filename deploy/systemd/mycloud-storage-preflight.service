@@ -1,0 +1,13 @@
+[Unit]
+Description=Verify the MyCloud data filesystem before a storage rollout
+RequiresMountsFor=/srv/mycloud-data
+After=local-fs.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/mycloud/storage.env
+ExecStart=/usr/local/sbin/mycloud-storage-preflight
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

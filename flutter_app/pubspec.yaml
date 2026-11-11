@@ -1,7 +1,7 @@
 name: familycloud
-description: Flutter foundation shell for MyCloud.
+description: A private family home for photos, videos, and shared moments.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -9,10 +9,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   cupertino_icons: ^1.0.8
   flutter_secure_storage: ^10.0.0
   http: ^1.2.1
   image_picker: ^1.2.1
+  video_player: ^2.10.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -23,3 +27,23 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/demo/
+    - assets/fonts/OFL-Manrope.txt
+    - assets/fonts/OFL-DMSerifDisplay.txt
+  fonts:
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope-400.ttf
+          weight: 400
+        - asset: assets/fonts/Manrope-500.ttf
+          weight: 500
+        - asset: assets/fonts/Manrope-600.ttf
+          weight: 600
+        - asset: assets/fonts/Manrope-700.ttf
+          weight: 700
+        - asset: assets/fonts/Manrope-800.ttf
+          weight: 800
+    - family: DMSerifDisplay
+      fonts:
+        - asset: assets/fonts/DMSerifDisplay.ttf

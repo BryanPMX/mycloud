@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	contextUserIDKey = "auth.user_id"
-	contextRoleKey   = "auth.role"
+	contextUserIDKey      = "auth.user_id"
+	contextRoleKey        = "auth.role"
+	contextAuthVersionKey = "auth.version"
 )
 
 func RequireAuth(tokenService pkgauth.Service) gin.HandlerFunc {
@@ -37,6 +38,7 @@ func RequireAuth(tokenService pkgauth.Service) gin.HandlerFunc {
 
 		c.Set(contextUserIDKey, details.UserID)
 		c.Set(contextRoleKey, details.Role)
+		c.Set(contextAuthVersionKey, details.AuthVersion)
 		c.Next()
 	}
 }

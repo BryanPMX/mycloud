@@ -53,31 +53,19 @@ func (h *RefreshHandler) Execute(ctx context.Context, command RefreshCommand) (*
 		return nil, domain.ErrInvalidToken
 	}
 
-	valid, err := h.sessionStore.ValidateRefreshToken(ctx, claims.UserID, claims.ID)
-	if err != nil {
-		return nil, err
-	}
-	if !valid {
-		return nil, domain.ErrInactiveSession
-	}
-
 	user, err := h.userRepo.FindByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if !user.Active {
+	if !user.Active || user.AuthVersion != claims.AuthVersion {
 		return nil, domain.ErrUnauthorized
 	}
 
-	if err := h.sessionStore.RevokeRefreshToken(ctx, claims.UserID, claims.ID); err != nil {
-		return nil, err
-	}
-
-	accessToken, err := h.tokenService.GenerateAccessToken(user.ID, string(user.Role))
+	accessToken, err := h.tokenService.GenerateAccessToken(user.ID, string(user.Role), user.AuthVersion)
 	if err != nil {
 		return nil, err
 	}
-	refreshToken, err := h.tokenService.GenerateRefreshToken(user.ID)
+	refreshToken, err := h.tokenService.GenerateRefreshToken(user.ID, user.AuthVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +74,12 @@ func (h *RefreshHandler) Execute(ctx context.Context, command RefreshCommand) (*
 	if err != nil {
 		return nil, err
 	}
-	if err := h.sessionStore.StoreRefreshToken(ctx, user.ID, refreshDetails.ID, h.refreshTTL); err != nil {
+	rotated, err := h.sessionStore.RotateRefreshToken(ctx, user.ID, claims.ID, refreshDetails.ID, h.refreshTTL)
+	if err != nil {
 		return nil, err
+	}
+	if !rotated {
+		return nil, domain.ErrInactiveSession
 	}
 
 	return &RefreshResult{

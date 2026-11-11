@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/vault_ui.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../providers/auth_provider.dart';
+import 'accept_invite_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
+    this.invitationToken,
     required this.authProvider,
     required this.apiClient,
     required this.config,
   });
 
+  final String? invitationToken;
   final AuthProvider authProvider;
   final ApiClient apiClient;
   final AppConfig config;
@@ -21,6 +25,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  bool _showPassword = false;
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
 
@@ -30,9 +36,31 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController = TextEditingController(
       text: widget.config.useDemoData ? 'member@mynube.live' : '',
     );
+    if (widget.invitationToken != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showAcceptInviteDialog(context, widget.authProvider,
+              initialToken: widget.invitationToken);
+        }
+      });
+    }
     _passwordController = TextEditingController(
       text: widget.config.useDemoData ? 'demo-password' : '',
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant LoginScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.invitationToken != null &&
+        oldWidget.invitationToken != widget.invitationToken) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showAcceptInviteDialog(context, widget.authProvider,
+              initialToken: widget.invitationToken);
+        }
+      });
+    }
   }
 
   @override
@@ -42,304 +70,277 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  void _submit() {
+    if (_formKey.currentState?.validate() != true) return;
+    widget.authProvider.signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text);
+  }
 
-    return AnimatedBuilder(
+  Widget _form(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return AutofillGroup(
+        child: Form(
+            key: _formKey,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const VaultEyebrow('Your personal vault'),
+                  const SizedBox(height: 12),
+                  Text('Welcome home.', style: theme.textTheme.headlineMedium),
+                  const SizedBox(height: 10),
+                  Text('A little space for everything that matters.',
+                      style: TextStyle(
+                          color: colors.onSurfaceVariant, height: 1.6)),
+                  const SizedBox(height: 32),
+                  TextFormField(
+                      key: const ValueKey<String>('login-email'),
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [
+                        AutofillHints.username,
+                        AutofillHints.email
+                      ],
+                      autocorrect: false,
+                      validator: (value) =>
+                          value == null || !value.contains('@')
+                              ? 'Enter your email address.'
+                              : null,
+                      decoration: const InputDecoration(
+                          labelText: 'Email address',
+                          hintText: 'you@example.com')),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                      key: const ValueKey<String>('login-password'),
+                      controller: _passwordController,
+                      obscureText: !_showPassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
+                      onFieldSubmitted: (_) => _submit(),
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Enter your password.'
+                          : null,
+                      decoration: InputDecoration(
+                          labelText: 'Password',
+                          suffixIcon: IconButton(
+                              tooltip: _showPassword
+                                  ? 'Hide password'
+                                  : 'Show password',
+                              onPressed: () => setState(
+                                  () => _showPassword = !_showPassword),
+                              icon: Icon(
+                                  _showPassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20)))),
+                  if (widget.authProvider.errorMessage != null)
+                    Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Semantics(
+                            liveRegion: true,
+                            child: Text(widget.authProvider.errorMessage!,
+                                style: TextStyle(color: colors.error)))),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                      key: const ValueKey<String>('login-submit'),
+                      onPressed: widget.authProvider.isBusy ? null : _submit,
+                      child: widget.authProvider.isBusy
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                  Text('Sign in'),
+                                  SizedBox(width: 12),
+                                  Icon(Icons.arrow_forward_rounded, size: 18)
+                                ])),
+                  const SizedBox(height: 20),
+                  Center(
+                      child: TextButton(
+                          onPressed: widget.authProvider.isBusy
+                              ? null
+                              : () => showAcceptInviteDialog(
+                                  context, widget.authProvider),
+                          child: const Text(
+                              'Have an invitation? Join your space',
+                              style: TextStyle(fontSize: 12)))),
+                  if (widget.config.useDemoData) ...[
+                    const Divider(height: 32),
+                    const Center(child: VaultEyebrow('Explore a sample vault')),
+                    const SizedBox(height: 12),
+                    Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          OutlinedButton(
+                              onPressed: widget.authProvider.isBusy
+                                  ? null
+                                  : widget.authProvider.signInAsDemoMember,
+                              child: const Text('Use demo member')),
+                          TextButton(
+                              onPressed: widget.authProvider.isBusy
+                                  ? null
+                                  : widget.authProvider.signInAsDemoAdmin,
+                              child: const Text('Use demo admin'))
+                        ])
+                  ],
+                  const SizedBox(height: 32),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.lock_outline_rounded,
+                        size: 13, color: colors.secondary),
+                    const SizedBox(width: 7),
+                    Flexible(
+                        child: Text('Only you decide what gets shared.',
+                            style: TextStyle(
+                                fontSize: 10, color: colors.onSurfaceVariant)))
+                  ]),
+                ])));
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
       animation: widget.authProvider,
       builder: (context, _) {
-        return Scaffold(
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  theme.colorScheme.primary.withValues(alpha: 0.25),
-                  theme.scaffoldBackgroundColor,
-                  theme.colorScheme.secondary.withValues(alpha: 0.22),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: SafeArea(
+        final theme = Theme.of(context);
+        return Scaffold(body:
+            SafeArea(child: LayoutBuilder(builder: (context, constraints) {
+          final desktop = constraints.maxWidth >= 900;
+          if (desktop) {
+            return Row(children: [
+              Expanded(
+                  child: Padding(
+                      padding: const EdgeInsets.fromLTRB(52, 32, 40, 28),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const VaultLogo(),
+                            const Spacer(),
+                            VaultEnter(
+                                child: Text('Your life.\nIn your keeping.',
+                                    style: TextStyle(
+                                        fontFamily: 'DMSerifDisplay',
+                                        fontSize: constraints.maxWidth > 1250
+                                            ? 62
+                                            : 48,
+                                        height: 1.06,
+                                        letterSpacing: -1.6,
+                                        color: theme.colorScheme.onSurface))),
+                            const SizedBox(height: 18),
+                            ConstrainedBox(
+                                constraints:
+                                    const BoxConstraints(maxWidth: 380),
+                                child: Text(
+                                    'The big adventures. The everyday magic. A private home for all of it.',
+                                    style: TextStyle(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
+                                        height: 1.7))),
+                            const SizedBox(height: 28),
+                            const Flexible(flex: 6, child: _WelcomeMosaic()),
+                            const Spacer(),
+                            Row(children: [
+                              const VaultEyebrow(
+                                  'Made for memories. Kept by you.'),
+                              const Spacer(),
+                              Icon(Icons.favorite_border_rounded,
+                                  size: 15, color: theme.colorScheme.primary)
+                            ]),
+                          ]))),
+              Container(
+                  width: constraints.maxWidth > 1250 ? 500 : 430,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      border: Border(
+                          left: BorderSide(
+                              color: theme.colorScheme.outlineVariant))),
+                  child: Center(
+                      child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 52, vertical: 40),
+                          child: VaultEnter(child: _form(context))))),
+            ]);
+          }
+          return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
               child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1100),
-                    child: Wrap(
-                      spacing: 24,
-                      runSpacing: 24,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 420,
-                          child: _IntroPanel(config: widget.config),
-                        ),
-                        SizedBox(
-                          width: 420,
-                          child: Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(28),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Sign in to ${widget.config.appName}',
-                                    style: theme.textTheme.headlineMedium,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    widget.config.useDemoData
-                                        ? 'Demo mode keeps the seeded app shell available for smoke tests and offline UI work.'
-                                        : 'This client now targets the live auth endpoints and restores browser sessions before showing protected routes.',
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  TextField(
-                                    key: const ValueKey<String>('login-email'),
-                                    controller: _emailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Email',
-                                      prefixIcon: Icon(
-                                        Icons.mail_outline_rounded,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  TextField(
-                                    key: const ValueKey<String>(
-                                        'login-password'),
-                                    controller: _passwordController,
-                                    obscureText: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Password',
-                                      prefixIcon: Icon(
-                                        Icons.lock_outline_rounded,
-                                      ),
-                                    ),
-                                  ),
-                                  if (widget.authProvider.errorMessage !=
-                                      null) ...[
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      widget.authProvider.errorMessage!,
-                                      style:
-                                          theme.textTheme.bodyMedium?.copyWith(
-                                        color: theme.colorScheme.error,
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 20),
-                                  FilledButton.icon(
-                                    key: const ValueKey<String>('login-submit'),
-                                    onPressed: widget.authProvider.isBusy
-                                        ? null
-                                        : () {
-                                            widget.authProvider.signIn(
-                                              email: _emailController.text,
-                                              password:
-                                                  _passwordController.text,
-                                            );
-                                          },
-                                    icon: widget.authProvider.isBusy
-                                        ? const SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.login_rounded),
-                                    label: const Text('Enter workspace'),
-                                  ),
-                                  if (widget.config.useDemoData) ...[
-                                    const SizedBox(height: 12),
-                                    Wrap(
-                                      spacing: 12,
-                                      runSpacing: 12,
-                                      children: [
-                                        OutlinedButton(
-                                          onPressed: widget.authProvider.isBusy
-                                              ? null
-                                              : () {
-                                                  widget.authProvider
-                                                      .signInAsDemoMember();
-                                                },
-                                          child: const Text('Use demo member'),
-                                        ),
-                                        OutlinedButton(
-                                          onPressed: widget.authProvider.isBusy
-                                              ? null
-                                              : () {
-                                                  widget.authProvider
-                                                      .signInAsDemoAdmin();
-                                                },
-                                          child: const Text('Use demo admin'),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                  const SizedBox(height: 20),
-                                  const Divider(),
-                                  const SizedBox(height: 12),
-                                  _EndpointRow(
-                                    label: 'Login endpoint',
-                                    value:
-                                        widget.apiClient.loginUri().toString(),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _EndpointRow(
-                                    label: 'Restore session',
-                                    value: widget.apiClient
-                                        .currentUserUri()
-                                        .toString(),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _EndpointRow(
-                                    label: 'Progress socket',
-                                    value:
-                                        widget.config.websocketUri.toString(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const VaultLogo(),
+                            const SizedBox(height: 28),
+                            const SizedBox(
+                                height: 190, child: _WelcomeMosaic()),
+                            const SizedBox(height: 32),
+                            VaultEnter(child: _form(context))
+                          ]))));
+        })));
+      });
 }
 
-class _IntroPanel extends StatelessWidget {
-  const _IntroPanel({required this.config});
-
-  final AppConfig config;
-
+class _WelcomeMosaic extends StatelessWidget {
+  const _WelcomeMosaic();
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Chip(
-              avatar: const Icon(Icons.construction_rounded, size: 18),
-              label: Text('${config.environmentLabel} foundation slice'),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'A route-aware Flutter shell for the live backend.',
-              style: theme.textTheme.displaySmall,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              config.useDemoData
-                  ? 'Demo mode mirrors the live contracts while keeping the app deterministic for local walkthroughs and tests.'
-                  : 'Recent repository logs show the backend is ready for client auth, media reads, albums, comments, admin stats, uploads, and worker progress. This client now exercises those live reads plus the browser multipart upload path.',
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const _CheckItem(
-              title: 'Router-backed web shell',
-              detail:
-                  'Address-bar sync is ready for media, albums, profile, and admin sections.',
-            ),
-            const _CheckItem(
-              title: 'Adaptive navigation',
-              detail:
-                  'The UI switches between NavigationBar and NavigationRail based on available width.',
-            ),
-            const _CheckItem(
-              title: 'Latest delivery',
-              detail:
-                  'Browser multipart uploads and worker progress are now wired; the next step is finishing profile, album, comment, and admin write flows.',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CheckItem extends StatelessWidget {
-  const _CheckItem({required this.title, required this.detail});
-
-  final String title;
-  final String detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: theme.textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  detail,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EndpointRow extends StatelessWidget {
-  const _EndpointRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 2),
-        SelectableText(value),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => LayoutBuilder(
+      builder: (context, constraints) => ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(
+                flex: 6,
+                child: Stack(fit: StackFit.expand, children: [
+                  const VaultImage(url: 'asset:assets/demo/memory-5.jpg'),
+                  const DecoratedBox(
+                      decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                        Colors.transparent,
+                        Color(0x55000000)
+                      ]))),
+                  Positioned(
+                      left: 18,
+                      bottom: 18,
+                      child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .92),
+                              borderRadius: BorderRadius.circular(30)),
+                          child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.lock_outline_rounded,
+                                    size: 12, color: Color(0xFF252923)),
+                                SizedBox(width: 6),
+                                Text('A world of your own',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF252923)))
+                              ]))),
+                ])),
+            const SizedBox(width: 8),
+            const Expanded(
+                flex: 4,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                          child: VaultImage(
+                              url: 'asset:assets/demo/memory-4.jpg')),
+                      SizedBox(height: 8),
+                      Expanded(
+                          child:
+                              VaultImage(url: 'asset:assets/demo/memory-2.jpg'))
+                    ])),
+          ])));
 }

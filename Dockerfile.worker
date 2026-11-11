@@ -1,21 +1,23 @@
-FROM golang:1.25-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.11-alpine@sha256:ae52b5bc6ed045a9ed26ab03dc19327a802a9cc9aa8b27ed57f5c6b60579b0bb AS builder
 
 WORKDIR /app
 RUN apk add --no-cache git
 
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /bin/mycloud-worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -o /bin/mycloud-worker ./cmd/worker
 
-FROM alpine:3.20
+FROM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 
-RUN apk add --no-cache ca-certificates tzdata ffmpeg
+RUN apk add --no-cache ca-certificates tzdata ffmpeg libheif-tools
+RUN addgroup -S -g 10001 mycloud && adduser -S -D -H -u 10001 -G mycloud mycloud
 WORKDIR /app
+USER 10001:10001
 
 COPY --from=builder /bin/mycloud-worker /bin/mycloud-worker
 

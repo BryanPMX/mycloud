@@ -31,15 +31,6 @@ func requireReadableAlbum(
 		return nil, nil, err
 	}
 
-	if user.IsAdmin() {
-		album, err := albumRepo.FindByID(ctx, albumID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return user, album, nil
-	}
-
 	album, err := albumRepo.FindByIDVisibleToUser(ctx, albumID, userID)
 	if err != nil {
 		return nil, nil, err

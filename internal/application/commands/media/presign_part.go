@@ -58,6 +58,9 @@ func (h *PresignUploadPartHandler) Execute(ctx context.Context, command PresignU
 	if session.OwnerID != command.UserID {
 		return nil, domain.ErrForbidden
 	}
+	if command.PartNumber > 10000 || (session.SizeBytes > 0 && int64(command.PartNumber) > (session.SizeBytes+DefaultPartSizeBytes-1)/DefaultPartSizeBytes) {
+		return nil, domain.ErrInvalidInput
+	}
 	if session.UploadID != command.UploadID {
 		return nil, domain.ErrInvalidInput
 	}

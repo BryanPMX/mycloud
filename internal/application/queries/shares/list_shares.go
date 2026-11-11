@@ -48,7 +48,7 @@ func (h *ListSharesHandler) Execute(ctx context.Context, query ListSharesQuery) 
 	if err != nil {
 		return nil, err
 	}
-	if album.OwnerID != user.ID && !user.IsAdmin() {
+	if album.OwnerID != user.ID {
 		return nil, domain.ErrForbidden
 	}
 

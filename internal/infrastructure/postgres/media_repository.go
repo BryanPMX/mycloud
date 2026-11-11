@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yourorg/mycloud/internal/domain"
@@ -41,11 +41,11 @@ func (r *MediaRepository) Create(ctx context.Context, media *domain.Media) error
 		INSERT INTO media (
 			id, owner_id, filename, mime_type, size_bytes, width, height, duration_secs,
 			original_key, thumb_small_key, thumb_medium_key, thumb_large_key, thumb_poster_key,
-			status, taken_at, uploaded_at, deleted_at, metadata
+			status, taken_at, uploaded_at, deleted_at, metadata, derivative_bytes
 		) VALUES (
 			$1, $2, $3, $4, $5, NULLIF($6, 0), NULLIF($7, 0), NULLIF($8, 0),
 			$9, NULLIF($10, ''), NULLIF($11, ''), NULLIF($12, ''), NULLIF($13, ''),
-			$14, $15, $16, $17, $18
+			$14, $15, $16, $17, $18, $19
 		)
 	`
 
@@ -67,13 +67,16 @@ func (r *MediaRepository) Create(ctx context.Context, media *domain.Media) error
 		media.TakenAt,
 		media.UploadedAt,
 		media.DeletedAt,
-		metadata,
+		metadata, media.DerivativeBytes,
 	)
 	if err == nil {
 		return nil
 	}
 
 	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.ConstraintName == "user_storage_quota" {
+		return domain.ErrQuotaExceeded
+	}
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return domain.ErrConflict
 	}
@@ -108,23 +111,7 @@ func (r *MediaRepository) FindOwnedByUserIncludingDeleted(ctx context.Context, i
 }
 
 func (r *MediaRepository) FindByIDForUser(ctx context.Context, id, userID uuid.UUID) (*domain.Media, error) {
-	return r.findOne(ctx, `
-		SELECT `+mediaSelectColumns+`
-		FROM media m
-		WHERE m.id = $1
-		  AND m.deleted_at IS NULL
-		  AND (
-		    m.owner_id = $2
-		    OR EXISTS (
-		      SELECT 1
-		      FROM album_media am
-		      JOIN shares s ON s.album_id = am.album_id
-		      WHERE am.media_id = m.id
-		        AND s.shared_with IN ($2, $3)
-		        AND (s.expires_at IS NULL OR s.expires_at > now())
-		    )
-		  )
-	`, id, userID, uuid.Nil)
+	return r.findOne(ctx, `SELECT `+mediaSelectColumns+` FROM media m WHERE m.id=$1 AND can_view_media($2,m.id)`, id, userID)
 }
 
 func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUID, opts domain.ListMediaOptions) (domain.MediaPage, error) {
@@ -144,7 +131,7 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 		      FROM album_media am
 		      JOIN shares s ON s.album_id = am.album_id
 		      WHERE am.media_id = m.id
-		        AND s.shared_with IN ($1, $2)
+		        AND share_applies_to($1,s.id) AND $2::uuid IS NOT NULL
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
@@ -172,7 +159,7 @@ func (r *MediaRepository) ListVisibleToUser(ctx context.Context, userID uuid.UUI
 		      FROM album_media am
 		      JOIN shares s ON s.album_id = am.album_id
 		      WHERE am.media_id = m.id
-		        AND s.shared_with IN ($1, $2)
+		        AND share_applies_to($1,s.id) AND $2::uuid IS NOT NULL
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
@@ -219,7 +206,7 @@ func (r *MediaRepository) SearchVisibleToUser(ctx context.Context, userID uuid.U
 		      FROM album_media am
 		      JOIN shares s ON s.album_id = am.album_id
 		      WHERE am.media_id = m.id
-		        AND s.shared_with IN ($1, $2)
+		        AND share_applies_to($1,s.id) AND $2::uuid IS NOT NULL
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
@@ -242,7 +229,7 @@ func (r *MediaRepository) SearchVisibleToUser(ctx context.Context, userID uuid.U
 		      FROM album_media am
 		      JOIN shares s ON s.album_id = am.album_id
 		      WHERE am.media_id = m.id
-		        AND s.shared_with IN ($1, $2)
+		        AND share_applies_to($1,s.id) AND $2::uuid IS NOT NULL
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
@@ -440,7 +427,7 @@ func (r *MediaRepository) ApplyProcessingResult(ctx context.Context, id uuid.UUI
 
 	const query = `
 		UPDATE media
-		SET status = $2,
+		SET status = $2, derivative_bytes = $12,
 		    width = CASE WHEN $3 > 0 THEN $3 ELSE width END,
 		    height = CASE WHEN $4 > 0 THEN $4 ELSE height END,
 		    duration_secs = CASE WHEN $5 > 0 THEN $5 ELSE duration_secs END,
@@ -465,7 +452,7 @@ func (r *MediaRepository) ApplyProcessingResult(ctx context.Context, id uuid.UUI
 		result.ThumbKeys.Large,
 		result.ThumbKeys.Poster,
 		metadata,
-		result.TakenAt,
+		result.TakenAt, result.DerivativeBytes,
 	)
 	if err != nil {
 		return err
@@ -690,4 +677,11 @@ func derefString(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+// ReleaseRejectedUpload releases the charge only after quarantine deletion was
+// confirmed. Keep a failed entry so the owner still sees the rejected upload.
+func (r *MediaRepository) ReleaseRejectedUpload(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `UPDATE media SET size_bytes=0,derivative_bytes=0 WHERE id=$1 AND status='failed'`, id)
+	return err
 }

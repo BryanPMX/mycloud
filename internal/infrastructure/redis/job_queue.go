@@ -23,12 +23,13 @@ func NewJobQueue(client *goredis.Client) *JobQueue {
 }
 
 func (q *JobQueue) Enqueue(ctx context.Context, job *domain.Job) error {
-	payload, err := json.Marshal(job)
+	payload, err := json.Marshal(&domain.Job{ID: job.ID})
 	if err != nil {
 		return fmt.Errorf("marshal job payload: %w", err)
 	}
 
-	if err := q.client.LPush(ctx, jobQueueKey, payload).Err(); err != nil {
+	if err := q.client.Eval(ctx, `if redis.call('LPOS', KEYS[1], ARGV[1]) then return 0 end
+ return redis.call('LPUSH', KEYS[1], ARGV[1])`, []string{jobQueueKey}, payload).Err(); err != nil {
 		return fmt.Errorf("enqueue job: %w", err)
 	}
 

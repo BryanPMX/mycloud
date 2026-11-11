@@ -1,11 +1,54 @@
 name: Go CI
-
 on:
   push:
   pull_request:
-
+  workflow_call:
+permissions:
+  contents: read
 jobs:
-  placeholder:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Add Go CI steps when backend implementation begins."
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Formatting
+        run: test -z "$(gofmt -l cmd internal pkg)"
+      - run: go vet ./...
+      - run: go test -race ./...
+      - name: Scan source for secrets
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.1 dir /repo --redact
+      - name: Reachable vulnerability scan
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Start isolated dependencies
+        run: docker compose -f tests/integration/compose.yml up -d --wait postgres redis minio
+      - name: Migrate and verify repeatability
+        run: |
+          docker compose -f tests/integration/compose.yml run --rm migrate
+          docker compose -f tests/integration/compose.yml run --rm migrate
+      - name: SQL authorization, quotas, refresh replay and media restore
+        env:
+          MYCLOUD_TEST_DATABASE_URL: postgres://validation:validation-only-local@127.0.0.1:55439/mycloud_validation?sslmode=disable
+          MYCLOUD_TEST_REDIS_URL: redis://127.0.0.1:56389/0
+          MYCLOUD_TEST_MINIO_ENDPOINT: 127.0.0.1:59039
+        run: go test -count=1 -race -tags=integration ./internal/infrastructure/...
+      - name: Build application and start real antivirus
+        run: docker compose -f tests/integration/compose.yml up -d --build --wait --wait-timeout 240 api worker
+      - name: Prepare video fixture tooling
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Complete private family cloud acceptance test
+        env:
+          MYCLOUD_E2E: isolated-local-stack
+          MYCLOUD_TEST_DATABASE_URL: postgres://validation:validation-only-local@127.0.0.1:55439/mycloud_validation?sslmode=disable
+        run: go test -count=1 -tags=e2e -timeout=4m ./tests/e2e
+      - name: Backup failure and storage guard regression checks
+        run: sh tests/scripts_test.sh
+      - name: Real MinIO storage startup and restart guards
+        run: sh tests/storage_guard_test.sh
+      - name: Original-schema upgrade and legacy/current PostgreSQL restore
+        run: sh tests/postgres_restore_test.sh
+      - name: Clean isolated dependencies
+        if: always()
+        run: docker compose -f tests/integration/compose.yml down -v

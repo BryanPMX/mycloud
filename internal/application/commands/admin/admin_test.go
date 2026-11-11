@@ -144,7 +144,7 @@ func TestInviteUserHandlerExecuteCreatesInviteURLAndHashedToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse(invite_url) error = %v", err)
 	}
-	token := parsed.Query().Get("token")
+	token := parsed.Fragment
 	if token == "" {
 		t.Fatal("Execute() returned invite URL without token")
 	}
@@ -224,4 +224,8 @@ func TestUpdateUserHandlerExecuteRejectsSelfDeactivation(t *testing.T) {
 	if err != domain.ErrForbidden {
 		t.Fatalf("Execute() error = %v, want %v", err, domain.ErrForbidden)
 	}
+}
+
+func (s *fakeAdminSessionStore) RotateRefreshToken(context.Context, uuid.UUID, string, string, time.Duration) (bool, error) {
+	return true, nil
 }

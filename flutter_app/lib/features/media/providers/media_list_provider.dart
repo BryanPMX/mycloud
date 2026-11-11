@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import '../../../core/config/demo_assets.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_service.dart';
@@ -33,12 +34,36 @@ class MediaListProvider extends ChangeNotifier {
           clock: clock,
         ),
         _items = List<Media>.of(
-          config.useDemoData ? _seedItems : const <Media>[],
+          config.useDemoData ? _demoItems : const <Media>[],
         ) {
     if (_items.isNotEmpty) {
       _selectedMediaId = _items.first.id;
     }
   }
+
+  static final List<Media> _demoItems = [
+    ..._seedItems,
+    for (var i = 6; i <= 9; i++)
+      Media(
+          id: 'media-$i',
+          ownerId: 'user-member',
+          filename: [
+            'Dinner with friends.jpg',
+            'The quiet way home.jpg',
+            'Under a sky of stars.jpg',
+            'Slow Sunday.jpg'
+          ][i - 6],
+          mimeType: 'image/jpeg',
+          sizeBytes: 3400000,
+          width: 900,
+          height: [1100, 1400, 700, 1200][i - 6],
+          durationSecs: 0,
+          status: MediaStatus.ready,
+          thumbUrls: const ThumbUrls(),
+          isFavorite: i == 7,
+          uploadedAt: DateTime.utc(2026, 11, 10, 12, i),
+          takenAt: DateTime.utc(2026, 11, 9, 12, i))
+  ];
 
   final AppConfig _config;
   final ApiClient _apiClient;
@@ -146,6 +171,10 @@ class MediaListProvider extends ChangeNotifier {
   final SignedUrlCache _thumbnailCache;
   final Set<String> _thumbnailLoadsInFlight = <String>{};
 
+  String _nextCursor = '';
+  bool get hasMore => _nextCursor.isNotEmpty;
+  Future<void> loadMore() => load(more: true);
+
   String _query = '';
   bool _favoritesOnly = false;
   String? _selectedMediaId;
@@ -206,9 +235,12 @@ class MediaListProvider extends ChangeNotifier {
   int get readyCount =>
       _items.where((item) => item.status == MediaStatus.ready).length;
 
-  String? thumbnailUrlFor(String mediaId) => _thumbnailCache.urlFor(mediaId);
+  String? thumbnailUrlFor(String mediaId) => _config.useDemoData
+      ? demoMemoryAsset(mediaId)
+      : _thumbnailCache.urlFor(mediaId);
 
-  Future<void> load() async {
+  Future<void> load({bool more = false}) async {
+    if (more && _isLoading) return;
     if (_config.useDemoData) {
       _hasLoaded = true;
       notifyListeners();
@@ -231,6 +263,7 @@ class MediaListProvider extends ChangeNotifier {
               '/media',
               queryParameters: <String, String>{
                 'limit': '50',
+                if (more && _nextCursor.isNotEmpty) 'cursor': _nextCursor,
                 if (_favoritesOnly) 'favorites': 'true',
               },
             )
@@ -239,6 +272,7 @@ class MediaListProvider extends ChangeNotifier {
               queryParameters: <String, String>{
                 'q': _query.trim(),
                 'limit': '50',
+                if (more && _nextCursor.isNotEmpty) 'cursor': _nextCursor,
               },
             );
 
@@ -257,9 +291,12 @@ class MediaListProvider extends ChangeNotifier {
           .where((media) => !_favoritesOnly || media.isFavorite)
           .toList(growable: false);
 
-      _items
-        ..clear()
-        ..addAll(items);
+      if (!more) {
+        _items.clear();
+      }
+      final known = _items.map((m) => m.id).toSet();
+      _items.addAll(items.where((m) => !known.contains(m.id)));
+      _nextCursor = payload['next_cursor'] as String? ?? '';
       _thumbnailLoadsInFlight.clear();
       _syncSelectedMedia();
       _hasLoaded = true;
@@ -365,21 +402,27 @@ class MediaListProvider extends ChangeNotifier {
   }
 
   Future<void> ensureThumbnailLoaded(Media media) async {
+    if (media.status != MediaStatus.ready) return;
+    await ensureThumbnailById(media.id,
+        size: media.isVideo ? 'poster' : 'medium');
+  }
+
+  Future<void> ensureThumbnailById(String mediaId,
+      {String size = 'medium'}) async {
     if (_config.useDemoData ||
-        media.status != MediaStatus.ready ||
-        _thumbnailLoadsInFlight.contains(media.id) ||
+        _thumbnailLoadsInFlight.contains(mediaId) ||
         _connectivityService.isOffline ||
-        !_thumbnailCache.needsRefresh(media.id)) {
+        !_thumbnailCache.needsRefresh(mediaId)) {
       return;
     }
 
-    _thumbnailLoadsInFlight.add(media.id);
+    _thumbnailLoadsInFlight.add(mediaId);
     try {
       final response = await _authProvider.withAuthorization(
         (headers) => _transport.get(
           _apiClient.mediaThumbUri(
-            media.id,
-            size: media.isVideo ? 'poster' : 'medium',
+            mediaId,
+            size: size,
           ),
           headers: headers,
         ),
@@ -389,13 +432,13 @@ class MediaListProvider extends ChangeNotifier {
       final expiresAt =
           DateTime.tryParse(payload['expires_at'] as String? ?? '')?.toUtc() ??
               _clock().toUtc().add(_defaultThumbnailTtl);
-      if (_thumbnailCache.remember(media.id, url, expiresAt: expiresAt)) {
+      if (_thumbnailCache.remember(mediaId, url, expiresAt: expiresAt)) {
         notifyListeners();
       }
     } catch (_) {
-      // Keep the gradient fallback if thumb reads fail.
+      // Keep a neutral placeholder if thumb reads fail.
     } finally {
-      _thumbnailLoadsInFlight.remove(media.id);
+      _thumbnailLoadsInFlight.remove(mediaId);
     }
   }
 
@@ -496,6 +539,7 @@ class MediaListProvider extends ChangeNotifier {
   }
 
   void reset() {
+    _nextCursor = '';
     _searchDebounce?.cancel();
     _query = '';
     _favoritesOnly = false;
@@ -507,7 +551,7 @@ class MediaListProvider extends ChangeNotifier {
     _requestSequence++;
     _items
       ..clear()
-      ..addAll(_config.useDemoData ? _seedItems : const <Media>[]);
+      ..addAll(_config.useDemoData ? _demoItems : const <Media>[]);
     _selectedMediaId = _items.isEmpty ? null : _items.first.id;
     notifyListeners();
   }

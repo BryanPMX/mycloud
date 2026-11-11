@@ -1,0 +1,11 @@
+[Unit]
+Description=Coordinated MyCloud backup to independent mounted storage
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/mycloud/backup-schedule.env
+ExecStart=/opt/mycloud/scripts/backup-all.sh
+TimeoutStartSec=12h
+UMask=0077

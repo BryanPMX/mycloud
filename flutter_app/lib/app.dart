@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'core/config/app_config.dart';
 import 'core/connectivity/connectivity_service.dart';
@@ -11,6 +12,7 @@ import 'core/storage/secure_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'core/websocket/upload_progress_hub.dart';
 import 'features/admin/providers/admin_dashboard_provider.dart';
+import 'features/feed/providers/feed_provider.dart';
 import 'features/albums/providers/album_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/comments/providers/comment_provider.dart';
@@ -78,6 +80,7 @@ class _AppState extends State<App> {
   late final ProfileProvider _profileProvider;
   late final UploadProgressHub _uploadProgressHub;
   late final AppRouter _router;
+  late final FeedProvider _feedProvider;
 
   String? _bootstrappedUserId;
   String? _observedMediaId;
@@ -85,7 +88,10 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
-    _connectivityService = ConnectivityService();
+    _connectivityService = ConnectivityService(
+      initialPlatformOnline: widget.config.useDemoData ? true : null,
+      registerPlatformListener: widget.config.useDemoData ? (_) => null : null,
+    );
     _transport = ApiTransport(
       onReachable: _connectivityService.markReachable,
       onUnreachable: _connectivityService.markUnreachable,
@@ -162,7 +168,13 @@ class _AppState extends State<App> {
       mediaUploadProvider: _mediaUploadProvider,
       uploadProgressHub: _uploadProgressHub,
     );
+    _feedProvider = FeedProvider(
+        config: widget.config,
+        api: _apiClient,
+        transport: _transport,
+        auth: _authProvider);
     _router = AppRouter(
+      feedProvider: _feedProvider,
       appConfig: widget.config,
       apiClient: _apiClient,
       authProvider: _authProvider,
@@ -186,6 +198,7 @@ class _AppState extends State<App> {
     _mediaProvider.removeListener(_handleSelectedMediaChanged);
     _authProvider.removeListener(_handleAuthChanged);
     _router.dispose();
+    _feedProvider.dispose();
     _uploadProgressHub.dispose();
     _profileProvider.dispose();
     _familyDirectoryProvider.dispose();
@@ -207,7 +220,20 @@ class _AppState extends State<App> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: switch (const String.fromEnvironment('APP_THEME')) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system
+      },
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+          value: (Theme.of(context).brightness == Brightness.dark
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark)
+              .copyWith(
+                  statusBarColor: Colors.transparent,
+                  systemNavigationBarColor:
+                      Theme.of(context).scaffoldBackgroundColor),
+          child: child ?? const SizedBox.shrink()),
       restorationScopeId: 'mycloud',
       routerConfig: _router.routerConfig,
     );
@@ -216,6 +242,8 @@ class _AppState extends State<App> {
   void _handleAuthChanged() {
     final user = _authProvider.currentUser;
     if (user == null) {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
       _bootstrappedUserId = null;
       _observedMediaId = null;
       _mediaUploadProvider.reset();

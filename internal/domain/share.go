@@ -21,6 +21,7 @@ type ShareRecipient struct {
 
 // Share grants album access to another user or the whole family.
 type Share struct {
+	FamilyID   *uuid.UUID
 	ID         uuid.UUID
 	AlbumID    uuid.UUID
 	SharedBy   uuid.UUID

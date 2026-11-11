@@ -6,7 +6,8 @@ enum AlbumPermission {
 
   final String apiValue;
 
-  String get label => apiValue;
+  String get label =>
+      this == AlbumPermission.view ? 'Can view' : 'Can add memories';
 
   static AlbumPermission fromApi(Object? value) {
     return value == 'contribute'
@@ -45,6 +46,7 @@ class AlbumShare {
     required this.sharedWith,
     required this.permission,
     required this.createdAt,
+    this.familyId,
     this.recipient,
     this.expiresAt,
   });
@@ -52,6 +54,7 @@ class AlbumShare {
   static const String familyRecipientId =
       '00000000-0000-0000-0000-000000000000';
 
+  final String? familyId;
   final String id;
   final String albumId;
   final String sharedBy;
@@ -68,6 +71,7 @@ class AlbumShare {
     final recipientJson = json['recipient'] as Map<String, dynamic>?;
 
     return AlbumShare(
+      familyId: json['family_id'] as String?,
       id: json['id'] as String? ?? '',
       albumId: json['album_id'] as String? ?? '',
       sharedBy: json['shared_by'] as String? ?? '',

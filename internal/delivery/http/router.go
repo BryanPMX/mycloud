@@ -1,10 +1,14 @@
 package httpapi
 
 import (
+	"context"
+	"github.com/yourorg/mycloud/internal/infrastructure/observability"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yourorg/mycloud/internal/domain"
 
 	"github.com/yourorg/mycloud/internal/delivery/http/handlers"
 	"github.com/yourorg/mycloud/internal/delivery/http/middleware"
@@ -13,6 +17,13 @@ import (
 )
 
 type Dependencies struct {
+	ChangePassword gin.HandlerFunc
+	DeleteAccount  gin.HandlerFunc
+	FamilyHandler  *handlers.FamilyHandler
+	Metrics        *observability.Metrics
+	Ready          func(context.Context) error
+	Users          domain.UserRepository
+	TrustedProxies []string
 	AppName        string
 	AppEnv         string
 	AllowedOrigins []string
@@ -33,7 +44,22 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	}
 
 	router := gin.New()
-	router.Use(gin.Recovery())
+	if err := router.SetTrustedProxies(deps.TrustedProxies); err != nil {
+		panic("invalid trusted proxy configuration")
+	}
+	router.Use(middleware.BodyLimit(5 * 1024 * 1024))
+	router.Use(func(c *gin.Context) {
+		defer func() {
+			if recover() != nil {
+				slog.Error("http_panic")
+				c.AbortWithStatus(http.StatusInternalServerError)
+			}
+		}()
+		c.Next()
+	})
+	if deps.Metrics != nil {
+		router.Use(deps.Metrics.Middleware())
+	}
 	router.Use(middleware.RequestID())
 	router.Use(middleware.CORS(deps.AllowedOrigins))
 	router.Use(middleware.SecurityHeaders(deps.AppEnv == "production"))
@@ -76,8 +102,23 @@ func NewRouter(deps Dependencies) *gin.Engine {
 			"service": deps.AppName,
 		})
 	})
+	router.GET("/health/ready", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+		defer cancel()
+		if deps.Ready != nil && deps.Ready(ctx) != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
+
 	if deps.ProgressHub != nil {
-		router.GET("/ws/progress", middleware.RequireAuth(deps.TokenService), deps.ProgressHub.Handle)
+		chain := []gin.HandlerFunc{middleware.RequireAuth(deps.TokenService)}
+		if deps.Users != nil {
+			chain = append(chain, middleware.RequireActiveAccount(deps.Users))
+		}
+		chain = append(chain, deps.ProgressHub.Handle)
+		router.GET("/ws/progress", chain...)
 	}
 
 	v1 := router.Group("/api/v1")
@@ -85,12 +126,25 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	authGroup.POST("/login", loginRateLimit, deps.AuthHandler.Login)
 	authGroup.POST("/refresh", refreshRateLimit, deps.AuthHandler.Refresh)
 	authGroup.POST("/logout", deps.AuthHandler.Logout)
-	authGroup.POST("/invite/accept", deps.AuthHandler.AcceptInvite)
+	authGroup.POST("/invite/accept", loginRateLimit, deps.AuthHandler.AcceptInvite)
 
 	protected := v1.Group("/")
 	protected.Use(middleware.RequireAuth(deps.TokenService))
+	if deps.Users != nil {
+		protected.Use(middleware.RequireActiveAccount(deps.Users))
+	}
 	protected.Use(protectedRateLimit)
+	if deps.DeleteAccount != nil {
+		protected.POST("/users/me/delete", middleware.NewRateLimiter(middleware.RateLimitConfig{
+			Name: "account_delete", Limit: 5, Window: 15 * time.Minute, KeyFunc: middleware.UserIDOrIPKey,
+		}), deps.DeleteAccount)
+	}
 	protected.GET("/users/me", deps.UserHandler.GetMe)
+	if deps.ChangePassword != nil {
+		protected.POST("/users/me/password", middleware.NewRateLimiter(middleware.RateLimitConfig{
+			Name: "password_change", Limit: 5, Window: 15 * time.Minute, KeyFunc: middleware.UserIDOrIPKey,
+		}), deps.ChangePassword)
+	}
 	protected.PATCH("/users/me", deps.UserHandler.UpdateMe)
 	protected.PUT("/users/me/avatar", deps.UserHandler.UpdateAvatar)
 	protected.GET("/users/directory", deps.UserHandler.ListDirectory)
@@ -125,6 +179,20 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	protected.GET("/media/:id/comments", deps.CommentHandler.List)
 	protected.POST("/media/:id/comments", deps.CommentHandler.Create)
 	protected.DELETE("/media/:id/comments/:commentId", deps.CommentHandler.Delete)
+
+	if h := deps.FamilyHandler; h != nil {
+		protected.GET("/families", h.List)
+		protected.POST("/families", h.Create)
+		protected.POST("/families/invitations/accept", middleware.NewRateLimiter(middleware.RateLimitConfig{
+			Name: "family_invitation_accept", Limit: 5, Window: 15 * time.Minute, KeyFunc: middleware.UserIDOrIPKey,
+		}), h.Accept)
+		protected.GET("/families/:familyID/members", h.Members)
+		protected.DELETE("/families/:familyID/members/:userID", h.RemoveMember)
+		protected.POST("/families/:familyID/invitations", uploadInitRateLimit, h.Invite)
+		protected.GET("/families/:familyID/posts", h.Feed)
+		protected.POST("/families/:familyID/posts", h.Post)
+		protected.DELETE("/families/:familyID/posts/:postID", h.Unshare)
+	}
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole("admin"))

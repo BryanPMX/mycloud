@@ -9,6 +9,7 @@ import (
 )
 
 type SessionStore interface {
+	RotateRefreshToken(ctx context.Context, userID uuid.UUID, oldJTI, newJTI string, ttl time.Duration) (bool, error)
 	StoreRefreshToken(ctx context.Context, userID uuid.UUID, jti string, ttl time.Duration) error
 	ValidateRefreshToken(ctx context.Context, userID uuid.UUID, jti string) (bool, error)
 	RevokeRefreshToken(ctx context.Context, userID uuid.UUID, jti string) error
@@ -16,6 +17,7 @@ type SessionStore interface {
 }
 
 type StorageService interface {
+	InspectUpload(ctx context.Context, key string) (UploadInfo, error)
 	InitiateUpload(ctx context.Context, key, mimeType string) (string, error)
 	PresignUploadPart(ctx context.Context, key, uploadID string, partNum int, ttl time.Duration) (string, error)
 	CompleteUpload(ctx context.Context, key, uploadID string, parts []CompletedPart) error

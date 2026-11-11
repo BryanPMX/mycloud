@@ -44,6 +44,13 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 			}
 		}
 
+		if origin != "" {
+			if _, ok := allowed[origin]; !ok {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
+		}
+
 		if c.Request.Method == http.MethodOptions {
 			if origin == "" {
 				c.AbortWithStatus(http.StatusNoContent)

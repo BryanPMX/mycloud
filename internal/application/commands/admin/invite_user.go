@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/mail"
 	"net/netip"
-	"net/url"
 	"strings"
 	"time"
 
@@ -160,5 +159,5 @@ func buildInviteURL(baseURL, token string) string {
 		baseURL = "http://localhost:8080"
 	}
 
-	return baseURL + "/accept?token=" + url.QueryEscape(token)
+	return baseURL + "/accept#" + token
 }

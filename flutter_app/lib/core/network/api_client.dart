@@ -44,7 +44,7 @@ class ApiClient {
     );
   }
 
-  Uri mediaDownloadUri(String mediaId, {int ttlSeconds = 3600}) {
+  Uri mediaDownloadUri(String mediaId, {int ttlSeconds = 300}) {
     return endpoint(
       '/media/$mediaId/url',
       queryParameters: {'ttl': '$ttlSeconds'},

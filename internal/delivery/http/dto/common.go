@@ -7,16 +7,17 @@ import (
 )
 
 type UserResponse struct {
-	ID          string     `json:"id"`
-	Email       string     `json:"email"`
-	DisplayName string     `json:"display_name"`
-	AvatarURL   *string    `json:"avatar_url"`
-	Role        string     `json:"role"`
-	StorageUsed int64      `json:"storage_used"`
-	QuotaBytes  int64      `json:"quota_bytes"`
-	StoragePct  float64    `json:"storage_pct"`
-	CreatedAt   time.Time  `json:"created_at"`
-	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	StorageReserved int64      `json:"storage_reserved"`
+	ID              string     `json:"id"`
+	Email           string     `json:"email"`
+	DisplayName     string     `json:"display_name"`
+	AvatarURL       *string    `json:"avatar_url"`
+	Role            string     `json:"role"`
+	StorageUsed     int64      `json:"storage_used"`
+	QuotaBytes      int64      `json:"quota_bytes"`
+	StoragePct      float64    `json:"storage_pct"`
+	CreatedAt       time.Time  `json:"created_at"`
+	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
 }
 
 type AvatarURLResponse struct {
@@ -141,6 +142,7 @@ type ShareRecipientResponse struct {
 }
 
 type ShareResponse struct {
+	FamilyID   *string                 `json:"family_id,omitempty"`
 	ID         string                  `json:"id"`
 	AlbumID    string                  `json:"album_id"`
 	SharedBy   string                  `json:"shared_by"`
@@ -166,16 +168,17 @@ type CommentResponse struct {
 
 func ToUserResponse(user *domain.User) UserResponse {
 	return UserResponse{
-		ID:          user.ID.String(),
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		AvatarURL:   stringPtr(user.AvatarKey),
-		Role:        string(user.Role),
-		StorageUsed: user.StorageUsed,
-		QuotaBytes:  user.QuotaBytes,
-		StoragePct:  user.StoragePercent(),
-		CreatedAt:   user.CreatedAt,
-		LastLoginAt: user.LastLoginAt,
+		StorageReserved: user.StorageReserved,
+		ID:              user.ID.String(),
+		Email:           user.Email,
+		DisplayName:     user.DisplayName,
+		AvatarURL:       stringPtr(user.AvatarKey),
+		Role:            string(user.Role),
+		StorageUsed:     user.StorageUsed,
+		QuotaBytes:      user.QuotaBytes,
+		StoragePct:      user.StoragePercent(),
+		CreatedAt:       user.CreatedAt,
+		LastLoginAt:     user.LastLoginAt,
 	}
 }
 
@@ -287,7 +290,13 @@ func ToShareResponse(share *domain.Share) ShareResponse {
 		}
 	}
 
+	var familyID *string
+	if share.FamilyID != nil {
+		value := share.FamilyID.String()
+		familyID = &value
+	}
 	return ShareResponse{
+		FamilyID:   familyID,
 		ID:         share.ID.String(),
 		AlbumID:    share.AlbumID.String(),
 		SharedBy:   share.SharedBy.String(),

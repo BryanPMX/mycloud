@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	DefaultDownloadURLTTL = time.Hour
-	MaxDownloadURLTTL     = 24 * time.Hour
+	DefaultDownloadURLTTL = 5 * time.Minute
+	MaxDownloadURLTTL     = 15 * time.Minute
 )
 
 type GetMediaDownloadURLQuery struct {

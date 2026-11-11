@@ -86,7 +86,7 @@ func TestRunCleanupHandlerExecutePurgesExpiredMediaAndShares(t *testing.T) {
 	}
 }
 
-func TestRunCleanupHandlerExecuteReturnsCleanerErrors(t *testing.T) {
+func TestRunCleanupHandlerExecuteDefersCleanerErrorsToDurableOutbox(t *testing.T) {
 	t.Parallel()
 
 	handler := NewRunCleanupHandler(
@@ -95,7 +95,7 @@ func TestRunCleanupHandlerExecuteReturnsCleanerErrors(t *testing.T) {
 		&fakeMediaCleaner{err: errors.New("delete object")},
 	)
 
-	if _, err := handler.Execute(context.Background()); err == nil {
-		t.Fatal("Execute() error = nil, want cleanup failure")
+	if _, err := handler.Execute(context.Background()); err != nil {
+		t.Fatalf("metadata cleanup should succeed while object deletion is retried: %v", err)
 	}
 }

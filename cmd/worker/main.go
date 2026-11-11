@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"github.com/yourorg/mycloud/internal/infrastructure/observability"
 	"log"
+	"log/slog"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -17,6 +20,7 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
@@ -30,13 +34,13 @@ func main() {
 
 	db, err := postgres.NewPool(bootCtx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("connect postgres: %v", err)
+		log.Fatal("PostgreSQL connection failed")
 	}
 	defer db.Close()
 
 	redisClient, err := redisinfra.NewClient(cfg.RedisURL)
 	if err != nil {
-		log.Fatalf("connect redis: %v", err)
+		log.Fatal("Redis connection failed")
 	}
 	defer redisClient.Close()
 
@@ -52,7 +56,7 @@ func main() {
 		cfg.MinIOAvatarsBuck,
 	)
 	if err != nil {
-		log.Fatalf("connect minio: %v", err)
+		log.Fatal("MinIO connection or privacy verification failed")
 	}
 
 	jobQueue := redisinfra.NewJobQueue(redisClient)
@@ -68,9 +72,29 @@ func main() {
 	scheduler := worker.NewCleanupScheduler(jobRepo, jobQueue, cfg.CleanupInterval)
 
 	go scheduler.Run(ctx)
+	go postgres.RunMaintenance(ctx, jobRepo, mediaRepo, postgres.NewUploadSessionStore(db), storage, jobQueue)
 
 	runner := worker.NewJobRunner(jobQueue, jobRepo, mediaRepo, storage, scanner, progressBus, processor, cleanupHandler, 5*time.Second)
 
+	metrics := observability.New(db, redisClient)
+	runner.Observe = func(kind, outcome string) { metrics.Jobs.WithLabelValues(kind, outcome).Inc() }
+	go observability.ServePrivate(ctx, ":9090", metrics, func(ctx context.Context) error {
+		if err := db.Ping(ctx); err != nil {
+			return err
+		}
+		if err := redisClient.Ping(ctx).Err(); err != nil {
+			return err
+		}
+		if err := scanner.Ping(ctx); err != nil {
+			return err
+		}
+		for _, bucket := range []string{cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck} {
+			if _, err := minioCore.BucketExists(ctx, bucket); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	log.Printf("%s worker started", cfg.AppName)
 	runner.Run(ctx)
 }

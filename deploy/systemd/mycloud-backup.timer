@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly MyCloud backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 America/Denver
+Persistent=true
+RandomizedDelaySec=10m
+Unit=mycloud-backup.service
+
+[Install]
+WantedBy=timers.target

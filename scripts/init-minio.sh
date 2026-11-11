@@ -49,6 +49,7 @@ for bucket in \
 do
   echo "Ensuring bucket ${bucket}"
   "$MC_BIN" mb --ignore-existing "${MINIO_ALIAS}/${bucket}" >/dev/null
+  "$MC_BIN" anonymous set none "${MINIO_ALIAS}/${bucket}" >/dev/null
 done
 
 echo "Enabling versioning on ${MINIO_ORIGINALS_BUCKET}"
