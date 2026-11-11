@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -64,5 +65,31 @@ func TestJWTServiceRejectsWrongTokenType(t *testing.T) {
 
 	if _, err := service.ValidateAccessToken(token); err == nil {
 		t.Fatal("ValidateAccessToken() error = nil, want wrong token type failure")
+	}
+}
+
+func TestJWTRejectsOtherHMACAlgorithmsAndInvalidIdentity(t *testing.T) {
+	secret := "12345678901234567890123456789012"
+	service, err := NewJWTService(secret, "mycloud", time.Minute, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.New()
+	now := time.Now()
+	claims := Claims{UserID: id, Role: "member", Type: TokenTypeAccess, RegisteredClaims: jwt.RegisteredClaims{Issuer: "mycloud", Subject: id.String(), IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute))}}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS384, claims).SignedString([]byte(secret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.ValidateAccessToken(token); err == nil {
+		t.Fatal("accepted HS384 despite HS256-only policy")
+	}
+	claims.Subject = uuid.NewString()
+	token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.ValidateAccessToken(token); err == nil {
+		t.Fatal("accepted mismatched subject")
 	}
 }

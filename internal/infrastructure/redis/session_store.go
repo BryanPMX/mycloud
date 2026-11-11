@@ -59,3 +59,14 @@ func (s *SessionStore) RevokeAllForUser(ctx context.Context, userID uuid.UUID) e
 func sessionKey(userID uuid.UUID, jti string) string {
 	return fmt.Sprintf("session:%s:%s", userID.String(), jti)
 }
+
+// RotateRefreshToken atomically consumes the old session and installs its replacement.
+// A concurrent replay can never mint a second active refresh session.
+func (s *SessionStore) RotateRefreshToken(ctx context.Context, userID uuid.UUID, oldJTI, newJTI string, ttl time.Duration) (bool, error) {
+	result, err := s.client.Eval(ctx, `
+ if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
+ redis.call('SET', KEYS[2], '1', 'PX', ARGV[1])
+ redis.call('DEL', KEYS[1])
+ return 1`, []string{sessionKey(userID, oldJTI), sessionKey(userID, newJTI)}, ttl.Milliseconds()).Int()
+	return result == 1, err
+}

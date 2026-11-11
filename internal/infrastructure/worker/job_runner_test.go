@@ -338,7 +338,7 @@ func TestJobRunnerProcessFailsMediaWhenVirusDetected(t *testing.T) {
 	if len(progress.events) != 2 || progress.events[1].Type != domain.MediaProgressFailed {
 		t.Fatalf("process() progress events = %#v, want failure publish", progress.events)
 	}
-	if !strings.Contains(progress.events[1].Reason, "virus detected") {
+	if !strings.Contains(progress.events[1].Reason, "Media processing failed") {
 		t.Fatal("process() did not publish the failure reason")
 	}
 }
@@ -447,4 +447,8 @@ func TestJobRunnerProcessCleanupMarksJobDone(t *testing.T) {
 	if jobRepo.failedID != uuid.Nil {
 		t.Fatal("process() unexpectedly failed cleanup job")
 	}
+}
+
+func (s *fakeStorageService) InspectUpload(context.Context, string) (domain.UploadInfo, error) {
+	return domain.UploadInfo{}, nil
 }

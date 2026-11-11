@@ -15,20 +15,21 @@ const (
 
 // User is the core account entity.
 type User struct {
-	ID           uuid.UUID
-	Email        string
-	DisplayName  string
-	AvatarKey    string
-	Role         UserRole
-	PasswordHash string
-	StorageUsed  int64
-	QuotaBytes   int64
-	Active       bool
-	InviteToken  string
-	InviteExpiry *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	LastLoginAt  *time.Time
+	ID              uuid.UUID
+	Email           string
+	DisplayName     string
+	AvatarKey       string
+	Role            UserRole
+	PasswordHash    string
+	StorageReserved int64
+	StorageUsed     int64
+	QuotaBytes      int64
+	Active          bool
+	InviteToken     string
+	InviteExpiry    *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	LastLoginAt     *time.Time
 }
 
 func (u User) IsAdmin() bool {
@@ -36,7 +37,7 @@ func (u User) IsAdmin() bool {
 }
 
 func (u User) HasQuotaFor(bytes int64) bool {
-	return u.StorageUsed+bytes <= u.QuotaBytes
+	return bytes >= 0 && u.StorageUsed >= 0 && u.StorageReserved >= 0 && u.StorageUsed <= u.QuotaBytes && u.StorageReserved <= u.QuotaBytes-u.StorageUsed && bytes <= u.QuotaBytes-u.StorageUsed-u.StorageReserved
 }
 
 func (u User) StoragePercent() float64 {

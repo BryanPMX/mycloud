@@ -2,8 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"github.com/yourorg/mycloud/internal/infrastructure/observability"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	admincmd "github.com/yourorg/mycloud/internal/application/commands/admin"
@@ -31,6 +37,9 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	runCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
@@ -41,13 +50,13 @@ func main() {
 
 	db, err := postgres.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("connect postgres: %v", err)
+		log.Fatal("PostgreSQL connection failed")
 	}
 	defer db.Close()
 
 	redisClient, err := redisinfra.NewClient(cfg.RedisURL)
 	if err != nil {
-		log.Fatalf("connect redis: %v", err)
+		log.Fatal("Redis connection failed")
 	}
 	defer redisClient.Close()
 
@@ -66,16 +75,16 @@ func main() {
 		cfg.MinIOAvatarsBuck,
 	)
 	if err != nil {
-		log.Fatalf("connect minio: %v", err)
+		log.Fatal("MinIO connection or privacy verification failed")
 	}
 	minioPresignClient, err := minioinfra.NewClient(
 		cfg.MinIOPublicEndpoint,
 		cfg.MinIOAccessKey,
 		cfg.MinIOSecretKey,
-		cfg.MinIOPublicSecure,
+		cfg.MinIOPublicSecure, cfg.MinIORegion,
 	)
 	if err != nil {
-		log.Fatalf("create minio presign client: %v", err)
+		log.Fatal("MinIO public-endpoint configuration failed")
 	}
 
 	tokenService, err := pkgauth.NewJWTService(cfg.JWTSecret, cfg.JWTIssuer, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
@@ -96,14 +105,14 @@ func main() {
 	favoriteRepo := postgres.NewFavoriteRepository(db)
 	jobRepo := postgres.NewJobRepository(db)
 	sessionStore := redisinfra.NewSessionStore(redisClient)
-	uploadStore := redisinfra.NewUploadSessionStore(redisClient)
+	uploadStore := postgres.NewUploadSessionStore(db)
 	jobQueue := redisinfra.NewJobQueue(redisClient)
 	progressBus := redisinfra.NewMediaProgressBus(redisClient)
 	storageService := minioinfra.NewStorageService(minioCore, minioPresignClient, cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck)
 	keyBuilder := minioinfra.NewKeyBuilder()
 	progressHub := wsdelivery.NewProgressHub(progressBus)
 	go func() {
-		if err := progressHub.Run(context.Background()); err != nil && err != context.Canceled {
+		if err := progressHub.Run(runCtx); err != nil && err != context.Canceled {
 			log.Printf("progress hub stopped: %v", err)
 		}
 	}()
@@ -160,7 +169,32 @@ func main() {
 	inviteUserHandler := admincmd.NewInviteUserHandler(userRepo, adminRepo, inviteSender, cfg.AppName, cfg.AppBaseURL)
 	updateUserHandler := admincmd.NewUpdateUserHandler(userRepo, adminRepo, sessionStore)
 
+	metrics := observability.New(db, redisClient)
+	ready := func(ctx context.Context) error {
+		if err := db.Ping(ctx); err != nil {
+			return err
+		}
+		if err := redisClient.Ping(ctx).Err(); err != nil {
+			return err
+		}
+		for _, bucket := range []string{cfg.MinIOUploadsBuck, cfg.MinIOOrigBuck, cfg.MinIOThumbsBuck, cfg.MinIOAvatarsBuck} {
+			exists, err := minioCore.BucketExists(ctx, bucket)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return fmt.Errorf("storage unavailable")
+			}
+		}
+		return nil
+	}
+	go observability.ServePrivate(runCtx, ":9090", metrics, ready)
+
 	router := httpapi.NewRouter(httpapi.Dependencies{
+		DeleteAccount: handlers.DeleteAccount(usercmd.NewDeleteAccountHandler(userRepo, userRepo, sessionStore)),
+		FamilyHandler: handlers.NewFamilyHandler(postgres.NewFamilyRepository(db)),
+		Metrics:       metrics, Ready: ready,
+		Users: userRepo, TrustedProxies: cfg.TrustedProxies,
 		AppName:        cfg.AppName,
 		AppEnv:         cfg.AppEnv,
 		AllowedOrigins: cfg.AllowedOrigins,
@@ -233,13 +267,20 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-		IdleTimeout:  cfg.IdleTimeout,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadTimeout:       cfg.ReadTimeout,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
 	}
 
+	go func() {
+		<-runCtx.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+	}()
 	log.Printf("%s API listening on :%s", cfg.AppName, cfg.Port)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("serve http: %v", err)

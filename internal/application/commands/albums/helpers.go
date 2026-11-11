@@ -35,7 +35,7 @@ func requireManageableAlbum(
 	if err != nil {
 		return nil, nil, err
 	}
-	if album.OwnerID != user.ID && !user.IsAdmin() {
+	if album.OwnerID != user.ID {
 		return nil, nil, domain.ErrForbidden
 	}
 

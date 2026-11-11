@@ -55,7 +55,7 @@ func (h *AddMediaHandler) Execute(ctx context.Context, command AddMediaCommand) 
 		return AddMediaResult{}, err
 	}
 
-	canManage := album.OwnerID == user.ID || user.IsAdmin()
+	canManage := album.OwnerID == user.ID
 	if !canManage {
 		allowed, err := h.shareRepo.UserCanContribute(ctx, album.ID, user.ID)
 		if err != nil {

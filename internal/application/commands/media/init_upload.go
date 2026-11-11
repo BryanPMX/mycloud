@@ -67,7 +67,7 @@ func NewInitUploadHandler(
 func (h *InitUploadHandler) Execute(ctx context.Context, command InitUploadCommand) (*InitUploadResult, error) {
 	filename := strings.TrimSpace(command.Filename)
 	mimeType := strings.ToLower(strings.TrimSpace(command.MimeType))
-	if filename == "" || mimeType == "" || command.SizeBytes <= 0 {
+	if filename == "" || mimeType == "" || command.SizeBytes <= 0 || command.SizeBytes > domain.MaxUploadSizeBytes || len(filename) > 255 || strings.IndexFunc(filename, func(r rune) bool { return r < 32 || r == 127 }) >= 0 || strings.ContainsAny(filename, "/\\\x00\r\n") {
 		return nil, domain.ErrInvalidInput
 	}
 	if !pkgmime.IsAllowed(mimeType) {
@@ -78,7 +78,7 @@ func (h *InitUploadHandler) Execute(ctx context.Context, command InitUploadComma
 	if err != nil {
 		return nil, err
 	}
-	if !user.HasQuotaFor(command.SizeBytes) {
+	if !user.HasQuotaFor(command.SizeBytes + domain.DerivativeBudgetBytes) {
 		return nil, domain.ErrQuotaExceeded
 	}
 

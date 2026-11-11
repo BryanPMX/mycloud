@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/yourorg/mycloud/internal/domain"
@@ -23,20 +23,26 @@ func NewShareRepository(db *pgxpool.Pool) *ShareRepository {
 
 func (r *ShareRepository) Create(ctx context.Context, share *domain.Share) error {
 	const query = `
-		INSERT INTO shares (id, album_id, shared_by, shared_with, permission, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`
-
-	_, err := r.db.Exec(ctx, query,
+ INSERT INTO shares(id,album_id,shared_by,shared_with,permission,expires_at,created_at,family_id)
+ SELECT $1,$2,$3,$4,$5,$6,$7,CASE WHEN $4::uuid='00000000-0000-0000-0000-000000000000'::uuid
+ THEN COALESCE($8::uuid,(SELECT f.id FROM families f JOIN family_memberships m ON m.family_id=f.id WHERE f.legacy AND m.user_id=$3)) ELSE NULL END
+ WHERE ($4::uuid<>'00000000-0000-0000-0000-000000000000'::uuid AND users_share_family($3,$4)) OR
+ ($4::uuid='00000000-0000-0000-0000-000000000000'::uuid AND EXISTS(SELECT 1 FROM family_memberships m JOIN families f ON f.id=m.family_id
+ WHERE m.user_id=$3 AND m.family_id=COALESCE($8::uuid,(SELECT id FROM families WHERE legacy))))
+ `
+	tag, err := r.db.Exec(ctx, query,
 		share.ID,
 		share.AlbumID,
 		share.SharedBy,
 		share.SharedWith,
 		share.Permission,
 		share.ExpiresAt,
-		share.CreatedAt,
+		share.CreatedAt, share.FamilyID,
 	)
 	if err == nil {
+		if tag.RowsAffected() == 0 {
+			return domain.ErrForbidden
+		}
 		return nil
 	}
 
@@ -51,9 +57,10 @@ func (r *ShareRepository) Create(ctx context.Context, share *domain.Share) error
 func (r *ShareRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Share, error) {
 	const query = `
 		SELECT s.id, s.album_id, s.shared_by, s.shared_with, s.permission, s.expires_at, s.created_at,
-		       u.display_name, u.avatar_key
+		       u.display_name, u.avatar_key, s.family_id, f.name
 		FROM shares s
 		LEFT JOIN users u ON u.id = s.shared_with
+ LEFT JOIN families f ON f.id=s.family_id
 		WHERE s.id = $1
 	`
 
@@ -67,7 +74,7 @@ func (r *ShareRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.S
 		&row.ExpiresAt,
 		&row.CreatedAt,
 		&row.RecipientDisplayName,
-		&row.RecipientAvatarKey,
+		&row.RecipientAvatarKey, &row.FamilyID, &row.FamilyName,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
@@ -82,9 +89,10 @@ func (r *ShareRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.S
 func (r *ShareRepository) ListActiveByAlbum(ctx context.Context, albumID uuid.UUID) ([]*domain.Share, error) {
 	const query = `
 		SELECT s.id, s.album_id, s.shared_by, s.shared_with, s.permission, s.expires_at, s.created_at,
-		       u.display_name, u.avatar_key
+		       u.display_name, u.avatar_key, s.family_id, f.name
 		FROM shares s
 		LEFT JOIN users u ON u.id = s.shared_with
+ LEFT JOIN families f ON f.id=s.family_id
 		WHERE s.album_id = $1
 		  AND (s.expires_at IS NULL OR s.expires_at > now())
 		ORDER BY s.created_at DESC, s.id DESC
@@ -108,7 +116,7 @@ func (r *ShareRepository) ListActiveByAlbum(ctx context.Context, albumID uuid.UU
 			&row.ExpiresAt,
 			&row.CreatedAt,
 			&row.RecipientDisplayName,
-			&row.RecipientAvatarKey,
+			&row.RecipientAvatarKey, &row.FamilyID, &row.FamilyName,
 		); err != nil {
 			return nil, err
 		}
@@ -126,9 +134,9 @@ func (r *ShareRepository) UserCanContribute(ctx context.Context, albumID, userID
 	const query = `
 		SELECT EXISTS (
 			SELECT 1
-			FROM shares
+			FROM shares s JOIN albums a ON a.id=s.album_id
 			WHERE album_id = $1
-			  AND shared_with IN ($2, $3)
+			  AND (shared_with = $2 OR (shared_with = $3 AND users_share_family($2,a.owner_id)))
 			  AND permission = $4
 			  AND (expires_at IS NULL OR expires_at > now())
 		)
@@ -175,6 +183,8 @@ func (r *ShareRepository) DeleteExpired(ctx context.Context, before time.Time) (
 }
 
 type shareRow struct {
+	FamilyID             *uuid.UUID
+	FamilyName           *string
 	ID                   uuid.UUID
 	AlbumID              uuid.UUID
 	SharedBy             uuid.UUID
@@ -206,7 +216,11 @@ func (r shareRow) toDomain() *domain.Share {
 		}
 	}
 
+	if recipient != nil && r.SharedWith == uuid.Nil && r.FamilyName != nil {
+		recipient.DisplayName = "Everyone in " + *r.FamilyName
+	}
 	return &domain.Share{
+		FamilyID:   r.FamilyID,
 		ID:         r.ID,
 		AlbumID:    r.AlbumID,
 		SharedBy:   r.SharedBy,

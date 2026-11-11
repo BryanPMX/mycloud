@@ -10,6 +10,7 @@ import (
 )
 
 type CreateShareCommand struct {
+	FamilyID   *uuid.UUID
 	UserID     uuid.UUID
 	AlbumID    uuid.UUID
 	SharedWith *uuid.UUID
@@ -49,7 +50,7 @@ func (h *CreateShareHandler) Execute(ctx context.Context, command CreateShareCom
 	if err != nil {
 		return nil, err
 	}
-	if album.OwnerID != user.ID && !user.IsAdmin() {
+	if album.OwnerID != user.ID {
 		return nil, domain.ErrForbidden
 	}
 
@@ -97,6 +98,7 @@ func (h *CreateShareHandler) Execute(ctx context.Context, command CreateShareCom
 
 	share := &domain.Share{
 		ID:         uuid.New(),
+		FamilyID:   command.FamilyID,
 		AlbumID:    album.ID,
 		SharedBy:   user.ID,
 		SharedWith: sharedWith,

@@ -57,7 +57,8 @@ func (h *PermanentDeleteMediaHandler) Execute(ctx context.Context, command Perma
 		return nil
 	}
 
-	return h.cleaner.DeleteMediaAssets(ctx, media)
+	_ = h.cleaner.DeleteMediaAssets(ctx, media)
+	return nil
 }
 
 type EmptyTrashCommand struct {
@@ -102,5 +103,7 @@ func (h *EmptyTrashHandler) Execute(ctx context.Context, command EmptyTrashComma
 		}
 	}
 
-	return cleanupErr
+	// PostgreSQL retains retry keys and charges until the sweeper succeeds.
+	_ = cleanupErr
+	return nil
 }

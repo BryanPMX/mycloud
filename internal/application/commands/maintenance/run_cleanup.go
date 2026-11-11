@@ -57,9 +57,8 @@ func (h *RunCleanupHandler) Execute(ctx context.Context) (*RunCleanupResult, err
 			}
 		}
 	}
-	if cleanupErr != nil {
-		return nil, cleanupErr
-	}
+	// Physical deletion failures are retried from the durable deletion outbox.
+	_ = cleanupErr
 
 	return &RunCleanupResult{
 		PurgedMediaCount:  len(media),

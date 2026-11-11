@@ -240,6 +240,39 @@ func (r *AdminRepository) UpdateUser(
 	}
 	defer rollbackTx(ctx, tx)
 
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(684306103)`); err != nil {
+		return nil, err
+	}
+	var currentRole string
+	var active bool
+	var deleted bool
+	if err = tx.QueryRow(ctx, `SELECT role,active,deletion_requested_at IS NOT NULL FROM users WHERE id=$1 FOR UPDATE`, params.UserID).Scan(&currentRole, &active, &deleted); err != nil {
+		return nil, err
+	}
+	if deleted {
+		return nil, domain.ErrConflict
+	}
+	demotes := params.Role != nil && *params.Role != domain.RoleAdmin
+	deactivates := params.Active != nil && !*params.Active
+	if currentRole == "admin" && active && (demotes || deactivates) {
+		var count int
+		if err = tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE role='admin' AND active AND id<>$1`, params.UserID).Scan(&count); err != nil {
+			return nil, err
+		}
+		if count == 0 {
+			return nil, domain.ErrConflict
+		}
+	}
+	if params.QuotaBytes != nil {
+		var committed int64
+		if err = tx.QueryRow(ctx, `SELECT storage_used+COALESCE((SELECT sum(s.reserved_bytes) FROM upload_sessions s WHERE s.owner_id=users.id AND NOT EXISTS(SELECT 1 FROM media m WHERE m.id=s.media_id)),0) FROM users WHERE id=$1`, params.UserID).Scan(&committed); err != nil {
+			return nil, err
+		}
+		if *params.QuotaBytes < committed {
+			return nil, domain.ErrQuotaExceeded
+		}
+	}
+
 	roleSet := params.Role != nil
 	roleValue := string(domain.RoleMember)
 	if params.Role != nil {

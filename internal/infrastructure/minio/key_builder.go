@@ -56,6 +56,9 @@ func (b *KeyBuilder) BuildAvatarObjectKey(userID uuid.UUID, mimeType string, now
 }
 
 func normalizedExtension(filename, mimeType string) string {
+	if ext := extensionFromMIME(mimeType); ext != "" {
+		return ext
+	}
 	raw := strings.ToLower(strings.TrimSpace(filepath.Ext(filename)))
 	if ext := sanitizeExtension(raw); ext != "" {
 		return ext

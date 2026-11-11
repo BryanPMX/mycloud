@@ -12,7 +12,7 @@ import (
 
 const (
 	DefaultThumbURLTTL = 5 * time.Minute
-	MaxThumbURLTTL     = time.Hour
+	MaxThumbURLTTL     = 15 * time.Minute
 )
 
 type GetMediaThumbURLQuery struct {

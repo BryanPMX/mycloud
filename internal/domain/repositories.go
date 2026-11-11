@@ -15,7 +15,7 @@ type UserRepository interface {
 
 type UserDirectoryRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
-	ListActiveUsers(ctx context.Context) ([]*User, error)
+	ListActiveUsers(ctx context.Context, viewerID uuid.UUID) ([]*User, error)
 }
 
 type UserProfileRepository interface {
@@ -108,4 +108,9 @@ type JobRepository interface {
 	MarkRunning(ctx context.Context, id uuid.UUID, startedAt time.Time) error
 	MarkDone(ctx context.Context, id uuid.UUID, completedAt time.Time) error
 	MarkFailed(ctx context.Context, id uuid.UUID, message string, completedAt time.Time) error
+}
+
+type UserAvatarRepository interface {
+	UserRepository
+	FindVisibleProfile(ctx context.Context, targetID, viewerID uuid.UUID) (*User, error)
 }

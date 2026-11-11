@@ -46,7 +46,14 @@ func (r *UserRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Us
 		WHERE id = $1
 	`
 
-	return scanUser(r.db.QueryRow(ctx, query, id))
+	user, err := scanUser(r.db.QueryRow(ctx, query, id))
+	if err != nil {
+		return nil, err
+	}
+	if err = r.db.QueryRow(ctx, `SELECT COALESCE(sum(s.reserved_bytes),0) FROM upload_sessions s WHERE owner_id=$1 AND NOT EXISTS(SELECT 1 FROM media m WHERE m.id=s.media_id)`, id).Scan(&user.StorageReserved); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
@@ -78,16 +85,16 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID, last
 	return nil
 }
 
-func (r *UserRepository) ListActiveUsers(ctx context.Context) ([]*domain.User, error) {
+func (r *UserRepository) ListActiveUsers(ctx context.Context, viewerID uuid.UUID) ([]*domain.User, error) {
 	const query = `
 		SELECT id, email, display_name, avatar_key, role, password_hash, storage_used,
 		       quota_bytes, active, invite_token, invite_token_expires_at, created_at, updated_at, last_login_at
 		FROM users
-		WHERE active = true
+		WHERE active = true AND (id=$1 OR users_share_family(id,$1))
 		ORDER BY lower(display_name), id
 	`
 
-	rows, err := r.db.Query(ctx, query)
+	rows, err := r.db.Query(ctx, query, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -204,4 +211,9 @@ func scanUser(row pgx.Row) (*domain.User, error) {
 	}
 
 	return record.toDomain(), nil
+}
+
+func (r *UserRepository) FindVisibleProfile(ctx context.Context, targetID, viewerID uuid.UUID) (*domain.User, error) {
+	const query = `SELECT id,email,display_name,avatar_key,role,password_hash,storage_used,quota_bytes,active,invite_token,invite_token_expires_at,created_at,updated_at,last_login_at FROM users WHERE id=$1 AND active AND (id=$2 OR users_share_family(id,$2) OR EXISTS(SELECT 1 FROM users viewer WHERE viewer.id=$2 AND viewer.active AND viewer.role='admin'))`
+	return scanUser(r.db.QueryRow(ctx, query, targetID, viewerID))
 }

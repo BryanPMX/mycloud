@@ -49,6 +49,9 @@ func NewJWTService(secret, issuer string, accessTTL, refreshTTL time.Duration) (
 	if len(secret) < 32 {
 		return nil, errors.New("jwt secret must be at least 32 bytes")
 	}
+	if accessTTL <= 0 || refreshTTL <= 0 {
+		return nil, errors.New("token lifetimes must be positive")
+	}
 	if issuer == "" {
 		return nil, errors.New("jwt issuer is required")
 	}
@@ -110,7 +113,7 @@ func (s *service) validate(raw string, expected TokenType) (*TokenDetails, error
 		}
 
 		return s.secret, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer(s.issuer), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +127,9 @@ func (s *service) validate(raw string, expected TokenType) (*TokenDetails, error
 	}
 	if claims.Issuer != s.issuer {
 		return nil, errors.New("unexpected token issuer")
+	}
+	if claims.UserID == uuid.Nil || claims.Subject != claims.UserID.String() || (expected == TokenTypeRefresh && claims.ID == "") {
+		return nil, errors.New("invalid token identity")
 	}
 	if claims.ExpiresAt == nil || claims.IssuedAt == nil {
 		return nil, errors.New("missing token timestamps")

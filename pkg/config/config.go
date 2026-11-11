@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	TrustedProxies      []string
 	AppName             string
 	AppEnv              string
 	AppBaseURL          string
@@ -17,6 +18,7 @@ type Config struct {
 	Port                string
 	DatabaseURL         string
 	RedisURL            string
+	MinIORegion         string
 	MinIOEndpoint       string
 	MinIOPublicEndpoint string
 	MinIOAccessKey      string
@@ -45,6 +47,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
+		TrustedProxies:      parseCSVEnv("TRUSTED_PROXIES"),
 		AppName:             getEnv("APP_NAME", "MyCloud"),
 		AppEnv:              getEnv("APP_ENV", "development"),
 		AppBaseURL:          getEnv("APP_BASE_URL", "http://localhost:8080"),
@@ -52,6 +55,7 @@ func Load() (Config, error) {
 		Port:                getEnv("PORT", "8080"),
 		DatabaseURL:         strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		RedisURL:            strings.TrimSpace(os.Getenv("REDIS_URL")),
+		MinIORegion:         getEnv("MINIO_REGION", "us-east-1"),
 		MinIOEndpoint:       strings.TrimSpace(os.Getenv("MINIO_ENDPOINT")),
 		MinIOPublicEndpoint: strings.TrimSpace(os.Getenv("MINIO_PUBLIC_ENDPOINT")),
 		MinIOAccessKey:      strings.TrimSpace(os.Getenv("MINIO_ACCESS_KEY")),

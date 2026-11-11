@@ -159,3 +159,7 @@ func mustJWTService(t *testing.T) pkgauth.Service {
 func timePtr(value time.Time) *time.Time {
 	return &value
 }
+
+func (s *fakeInviteSessionStore) RotateRefreshToken(context.Context, uuid.UUID, string, string, time.Duration) (bool, error) {
+	return true, nil
+}

@@ -23,7 +23,7 @@ func requireActiveUser(ctx context.Context, userRepo domain.UserRepository, user
 }
 
 func normalizeCompletedParts(parts []domain.CompletedPart) ([]domain.CompletedPart, error) {
-	if len(parts) == 0 {
+	if len(parts) == 0 || len(parts) > 10000 {
 		return nil, domain.ErrInvalidInput
 	}
 
@@ -35,7 +35,7 @@ func normalizeCompletedParts(parts []domain.CompletedPart) ([]domain.CompletedPa
 
 	lastPartNumber := 0
 	for _, part := range normalized {
-		if part.PartNumber <= 0 || strings.TrimSpace(part.ETag) == "" {
+		if part.PartNumber <= 0 || strings.TrimSpace(part.ETag) == "" || len(part.ETag) > 128 {
 			return nil, domain.ErrInvalidInput
 		}
 		if part.PartNumber == lastPartNumber {
@@ -54,9 +54,12 @@ func loadOwnedOrAdminMedia(
 	user *domain.User,
 	mediaID uuid.UUID,
 ) (*domain.Media, error) {
-	if user.IsAdmin() {
-		return repo.FindByIDIncludingDeleted(ctx, mediaID)
+	media, err := repo.FindOwnedByUserIncludingDeleted(ctx, mediaID, user.ID)
+	if err != nil {
+		return nil, err
 	}
-
-	return repo.FindOwnedByUserIncludingDeleted(ctx, mediaID, user.ID)
+	if media.OwnerID != user.ID {
+		return nil, domain.ErrNotFound
+	}
+	return media, nil
 }

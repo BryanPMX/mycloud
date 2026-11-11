@@ -153,7 +153,7 @@ func (r *JobRepository) MarkRunning(ctx context.Context, id uuid.UUID, startedAt
 		    started_at = $3,
 		    completed_at = NULL,
 		    error = NULL
-		WHERE id = $1
+		WHERE id = $1 AND status = 'queued'
 	`
 
 	tag, err := r.db.Exec(ctx, query, id, domain.JobStatusRunning, startedAt)

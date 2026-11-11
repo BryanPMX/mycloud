@@ -36,7 +36,7 @@ func NewScanner(address string) *Scanner {
 
 func (s *Scanner) ScanReader(ctx context.Context, r io.Reader) (bool, string, error) {
 	if s.address == "" {
-		return true, "", nil
+		return false, "", fmt.Errorf("clamav scanner is not configured")
 	}
 
 	conn, err := (&net.Dialer{}).DialContext(ctx, s.network, s.address)
@@ -44,6 +44,11 @@ func (s *Scanner) ScanReader(ctx context.Context, r io.Reader) (bool, string, er
 		return false, "", fmt.Errorf("dial clamd: %w", err)
 	}
 	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 
 	if _, err := io.WriteString(conn, "zINSTREAM\x00"); err != nil {
 		return false, "", fmt.Errorf("start clamd instream: %w", err)
@@ -95,4 +100,31 @@ func (s *Scanner) ScanReader(ctx context.Context, r io.Reader) (bool, string, er
 	}
 
 	return false, "", fmt.Errorf("clamd error: %s", message)
+}
+
+func (s *Scanner) Ping(ctx context.Context) error {
+	if s.address == "" {
+		return fmt.Errorf("scanner is not configured")
+	}
+	conn, err := (&net.Dialer{}).DialContext(ctx, s.network, s.address)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	if _, err = io.WriteString(conn, "zPING\x00"); err != nil {
+		return err
+	}
+	response, err := bufio.NewReader(conn).ReadString('\x00')
+	if err != nil {
+		return err
+	}
+	if strings.Trim(response, "\x00 \r\n") != "PONG" {
+		return fmt.Errorf("scanner not ready")
+	}
+	return nil
 }

@@ -11,7 +11,6 @@ import (
 func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 	t.Parallel()
 
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(CORS([]string{"https://mynube.live"}))
 	router.GET("/", func(c *gin.Context) {
@@ -34,7 +33,6 @@ func TestCORSAllowsConfiguredOrigin(t *testing.T) {
 func TestCORSRejectsPreflightForUnknownOrigin(t *testing.T) {
 	t.Parallel()
 
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(CORS([]string{"https://mynube.live"}))
 	router.OPTIONS("/", func(c *gin.Context) {

@@ -14,6 +14,7 @@ import (
 )
 
 type JobRunner struct {
+	Observe     func(kind, outcome string)
 	queue       domain.JobQueue
 	jobRepo     domain.JobRepository
 	mediaRepo   domain.MediaRepository
@@ -64,6 +65,11 @@ func (r *JobRunner) Run(ctx context.Context) {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
 			continue
 		}
 		if job == nil {
@@ -75,6 +81,8 @@ func (r *JobRunner) Run(ctx context.Context) {
 }
 
 func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
 	job, err := r.jobRepo.FindByID(ctx, queued.ID)
 	if err != nil {
 		return
@@ -87,7 +95,19 @@ func (r *JobRunner) process(ctx context.Context, queued *domain.Job) {
 	if err := r.jobRepo.MarkRunning(ctx, job.ID, now); err != nil {
 		return
 	}
-
+	if r.Observe != nil {
+		defer func() {
+			kind := "unknown"
+			if job.Type == domain.JobTypeProcessMedia || job.Type == domain.JobTypeCleanup {
+				kind = string(job.Type)
+			}
+			outcome := "failed"
+			if latest, err := r.jobRepo.FindByID(ctx, job.ID); err == nil && latest.Status == domain.JobStatusDone {
+				outcome = "done"
+			}
+			r.Observe(kind, outcome)
+		}()
+	}
 	switch job.Type {
 	case domain.JobTypeProcessMedia:
 		if job.MediaID == nil || *job.MediaID == uuid.Nil {
@@ -136,8 +156,15 @@ func (r *JobRunner) processMediaJob(ctx context.Context, job *domain.Job) {
 		return
 	}
 	if !clean {
-		_ = r.storage.DeleteUpload(ctx, media.OriginalKey)
+		deletedErr := r.storage.DeleteUpload(ctx, media.OriginalKey)
 		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, fmt.Errorf("virus detected: %s", strings.TrimSpace(threat)))
+		if deletedErr == nil {
+			if accounting, ok := r.mediaRepo.(interface {
+				ReleaseRejectedUpload(context.Context, uuid.UUID) error
+			}); ok {
+				_ = accounting.ReleaseRejectedUpload(ctx, media.ID)
+			}
+		}
 		return
 	}
 
@@ -145,8 +172,6 @@ func (r *JobRunner) processMediaJob(ctx context.Context, job *domain.Job) {
 		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
 		return
 	}
-	_ = r.storage.DeleteUpload(ctx, media.OriginalKey)
-
 	if r.processor == nil {
 		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, errors.New("media processor not configured"))
 		return
@@ -162,6 +187,7 @@ func (r *JobRunner) processMediaJob(ctx context.Context, job *domain.Job) {
 		r.failJob(ctx, job.ID, job.MediaID, &media.OwnerID, err)
 		return
 	}
+	_ = r.storage.DeleteUpload(ctx, media.OriginalKey)
 	r.publishProgress(ctx, domain.MediaProgressEvent{
 		Type:       domain.MediaProgressComplete,
 		MediaID:    media.ID,
@@ -197,7 +223,7 @@ func (r *JobRunner) failJob(ctx context.Context, jobID uuid.UUID, mediaID *uuid.
 			Type:       domain.MediaProgressFailed,
 			MediaID:    *mediaID,
 			OwnerID:    *ownerID,
-			Reason:     err.Error(),
+			Reason:     "Media processing failed. Please retry or remove the upload.",
 			OccurredOn: time.Now().UTC(),
 		})
 	}

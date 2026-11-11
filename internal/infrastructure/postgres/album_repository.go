@@ -78,7 +78,7 @@ func (r *AlbumRepository) FindByIDVisibleToUser(ctx context.Context, id, userID 
 		      SELECT 1
 		      FROM shares s
 		      WHERE s.album_id = a.id
-		        AND s.shared_with IN ($2, $3)
+		        AND share_applies_to($2,s.id) AND $3::uuid IS NOT NULL
 		        AND (s.expires_at IS NULL OR s.expires_at > now())
 		    )
 		  )
@@ -125,7 +125,7 @@ func (r *AlbumRepository) ListSharedWithUser(ctx context.Context, userID uuid.UU
 		    SELECT 1
 		    FROM shares s
 		    WHERE s.album_id = a.id
-		      AND s.shared_with IN ($1, $2)
+		      AND share_applies_to($1,s.id) AND $2::uuid IS NOT NULL
 		      AND (s.expires_at IS NULL OR s.expires_at > now())
 		  )
 		ORDER BY a.created_at DESC, a.id DESC

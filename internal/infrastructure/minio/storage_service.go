@@ -126,7 +126,7 @@ func (s *StorageService) DeleteAvatar(ctx context.Context, key string) error {
 }
 
 func (s *StorageService) PresignAvatar(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.presignClient.PresignedGetObject(ctx, s.avatarsBucket, key, ttl, nil)
+	u, err := s.presignClient.PresignedGetObject(ctx, s.avatarsBucket, key, ttl, url.Values{"response-cache-control": {"private, no-store"}})
 	if err != nil {
 		return "", fmt.Errorf("presign avatar: %w", err)
 	}
@@ -184,7 +184,7 @@ func (s *StorageService) UploadThumbnail(ctx context.Context, key, mimeType stri
 }
 
 func (s *StorageService) PresignOriginalDownload(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.presignClient.PresignedGetObject(ctx, s.originalsBuck, key, ttl, nil)
+	u, err := s.presignClient.PresignedGetObject(ctx, s.originalsBuck, key, ttl, url.Values{"response-cache-control": {"private, no-store"}})
 	if err != nil {
 		return "", fmt.Errorf("presign original download: %w", err)
 	}
@@ -193,7 +193,7 @@ func (s *StorageService) PresignOriginalDownload(ctx context.Context, key string
 }
 
 func (s *StorageService) PresignThumbnail(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.presignClient.PresignedGetObject(ctx, s.thumbsBucket, key, ttl, nil)
+	u, err := s.presignClient.PresignedGetObject(ctx, s.thumbsBucket, key, ttl, url.Values{"response-cache-control": {"private, no-store"}})
 	if err != nil {
 		return "", fmt.Errorf("presign thumbnail: %w", err)
 	}
@@ -223,7 +223,10 @@ func (s *StorageService) DeleteMediaAssets(ctx context.Context, media *domain.Me
 		)
 	}
 
+	// Include deterministic keys if a worker died before persisting its result.
+	derived := NewKeyBuilder().BuildThumbKeys(media.ID, media.MimeType)
 	for _, key := range []string{
+		derived.Small, derived.Medium, derived.Large, derived.Poster,
 		media.ThumbKeys.Small,
 		media.ThumbKeys.Medium,
 		media.ThumbKeys.Large,
@@ -253,8 +256,18 @@ func (s *StorageService) removeObjectIfExists(ctx context.Context, bucket, key, 
 	if key == "" {
 		return nil
 	}
-	if err := s.core.RemoveObject(ctx, bucket, key, miniosdk.RemoveObjectOptions{}); err != nil && !isObjectNotFound(err) {
-		return fmt.Errorf("%s: %w", action, err)
+	// Versioned buckets retain hidden bytes after an ordinary S3 delete. A
+	// permanent owner deletion must remove every version of this exact key.
+	for object := range s.core.Client.ListObjects(ctx, bucket, miniosdk.ListObjectsOptions{Prefix: key, Recursive: true, WithVersions: true}) {
+		if object.Err != nil {
+			return fmt.Errorf("%s: object version listing failed", action)
+		}
+		if object.Key != key {
+			continue
+		}
+		if err := s.core.RemoveObject(ctx, bucket, key, miniosdk.RemoveObjectOptions{VersionID: object.VersionID}); err != nil && !isObjectNotFound(err) {
+			return fmt.Errorf("%s: object version deletion failed", action)
+		}
 	}
 
 	return nil
@@ -265,4 +278,22 @@ func isObjectNotFound(err error) bool {
 	return strings.EqualFold(code, "NotFound") ||
 		strings.EqualFold(code, "NoSuchKey") ||
 		strings.EqualFold(code, "NoSuchObject")
+}
+
+func (s *StorageService) InspectUpload(ctx context.Context, key string) (domain.UploadInfo, error) {
+	info, err := s.core.StatObject(ctx, s.uploadsBucket, key, miniosdk.StatObjectOptions{})
+	if err != nil {
+		return domain.UploadInfo{}, fmt.Errorf("inspect upload: %w", err)
+	}
+	opts := miniosdk.GetObjectOptions{}
+	if err := opts.SetRange(0, 511); err != nil {
+		return domain.UploadInfo{}, err
+	}
+	obj, err := s.core.Client.GetObject(ctx, s.uploadsBucket, key, opts)
+	if err != nil {
+		return domain.UploadInfo{}, err
+	}
+	defer obj.Close()
+	header, err := io.ReadAll(io.LimitReader(obj, 512))
+	return domain.UploadInfo{SizeBytes: info.Size, Header: header}, err
 }

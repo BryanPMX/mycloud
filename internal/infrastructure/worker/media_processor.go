@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -46,24 +49,78 @@ func (p *FFMpegMediaProcessor) Process(ctx context.Context, media *domain.Media)
 		return domain.MediaProcessingResult{}, err
 	}
 
+	originalPath := inputPath
+	var sourceWidth, sourceHeight int
+	if media.MimeType == "image/heic" {
+		// FFmpeg 6 does not decode HEIC. Keep the original untouched and decode only
+		// a bounded temporary input for metadata and thumbnail generation.
+		info, err := runMediaCommand(ctx, "heif-info", inputPath)
+		if err != nil {
+			return domain.MediaProcessingResult{}, err
+		}
+		dimensions := regexp.MustCompile(`image:\s*(\d+)x(\d+)[^\n]*primary`).FindSubmatch(info)
+		if len(dimensions) != 3 {
+			return domain.MediaProcessingResult{}, fmt.Errorf("HEIC dimensions unavailable")
+		}
+		width, _ := strconv.ParseInt(string(dimensions[1]), 10, 64)
+		height, _ := strconv.ParseInt(string(dimensions[2]), 10, 64)
+		if width <= 0 || height <= 0 || width > 100000000/height {
+			return domain.MediaProcessingResult{}, fmt.Errorf("HEIC pixel limit exceeded")
+		}
+		sourceWidth, sourceHeight = int(width), int(height)
+		decoded := filepath.Join(workDir, "heic-preview.png")
+		if _, err = runMediaCommand(ctx, "heif-thumbnailer", "-s", "1920", "-p", inputPath, decoded); err != nil {
+			return domain.MediaProcessingResult{}, err
+		}
+		inputPath = decoded
+	}
+
 	probeOutput, err := probeMedia(ctx, inputPath)
 	if err != nil {
 		return domain.MediaProcessingResult{}, err
 	}
 	probeDetails := buildProbeDetails(probeOutput)
+	if sourceWidth > 0 {
+		probeDetails.Width = sourceWidth
+		probeDetails.Height = sourceHeight
+	}
+	if probeDetails.Width <= 0 || probeDetails.Height <= 0 || int64(probeDetails.Width)*int64(probeDetails.Height) > 100_000_000 {
+		return domain.MediaProcessingResult{}, fmt.Errorf("invalid or excessive media dimensions")
+	}
 
+	sourceFile, err := os.Open(originalPath)
+	if err != nil {
+		return domain.MediaProcessingResult{}, err
+	}
+	hash := sha256.New()
+	_, hashErr := io.Copy(hash, sourceFile)
+	sourceFile.Close()
+	if hashErr != nil {
+		return domain.MediaProcessingResult{}, hashErr
+	}
+	probeDetails.Metadata["sha256"] = hex.EncodeToString(hash.Sum(nil))
 	thumbKeys := p.keyBuilder.BuildThumbKeys(media.ID, media.MimeType)
 	if err := p.generateThumbnails(ctx, inputPath, workDir, media, probeDetails, thumbKeys); err != nil {
 		return domain.MediaProcessingResult{}, err
 	}
 
+	var derivativeBytes int64
+	for _, name := range []string{"small.webp", "medium.webp", "large.webp", "poster.webp"} {
+		if info, err := os.Stat(filepath.Join(workDir, name)); err == nil {
+			derivativeBytes += info.Size()
+		}
+	}
+	if derivativeBytes > domain.DerivativeBudgetBytes {
+		return domain.MediaProcessingResult{}, fmt.Errorf("derivative budget exceeded")
+	}
 	return domain.MediaProcessingResult{
-		Width:        probeDetails.Width,
-		Height:       probeDetails.Height,
-		DurationSecs: probeDetails.DurationSecs,
-		TakenAt:      probeDetails.TakenAt,
-		ThumbKeys:    thumbKeys,
-		Metadata:     probeDetails.Metadata,
+		DerivativeBytes: derivativeBytes,
+		Width:           probeDetails.Width,
+		Height:          probeDetails.Height,
+		DurationSecs:    probeDetails.DurationSecs,
+		TakenAt:         probeDetails.TakenAt,
+		ThumbKeys:       thumbKeys,
+		Metadata:        probeDetails.Metadata,
 	}, nil
 }
 
@@ -84,7 +141,7 @@ func (p *FFMpegMediaProcessor) downloadOriginal(ctx context.Context, workDir, ob
 		return "", fmt.Errorf("create original temp file: %w", err)
 	}
 
-	if _, err := io.Copy(file, reader); err != nil {
+	if n, err := io.Copy(file, io.LimitReader(reader, domain.MaxUploadSizeBytes+1)); err != nil || n > domain.MaxUploadSizeBytes {
 		file.Close()
 		return "", fmt.Errorf("write original temp file: %w", err)
 	}
@@ -156,20 +213,20 @@ type thumbnailTarget struct {
 }
 
 func renderThumbnail(ctx context.Context, inputPath, outputPath string, maxDimension int, isVideo bool, seekSeconds float64) error {
-	args := []string{"-hide_banner", "-loglevel", "error", "-y"}
+	args := []string{"-hide_banner", "-loglevel", "error", "-y", "-max_alloc", "268435456", "-threads", "2", "-protocol_whitelist", "file", "-max_pixels", "100000000"}
 	if isVideo && seekSeconds > 0 {
 		args = append(args, "-ss", formatFFmpegSeconds(seekSeconds))
 	}
 	args = append(args, "-i", inputPath)
 	args = append(args,
 		"-vf", buildScaleFilter(maxDimension),
-		"-frames:v", "1",
+		"-frames:v", "1", "-threads", "2",
 		"-vcodec", "libwebp",
 		"-q:v", "82",
 		outputPath,
 	)
 
-	output, err := exec.CommandContext(ctx, "ffmpeg", args...).CombinedOutput()
+	output, err := runMediaCommand(ctx, "ffmpeg", args...)
 	if err != nil {
 		return fmt.Errorf("render thumbnail: %w: %s", err, strings.TrimSpace(string(output)))
 	}
@@ -234,14 +291,14 @@ type probeDetails struct {
 
 func probeMedia(ctx context.Context, inputPath string) (ffprobeOutput, error) {
 	args := []string{
-		"-v", "error",
+		"-v", "error", "-max_alloc", "268435456", "-protocol_whitelist", "file",
 		"-print_format", "json",
 		"-show_streams",
 		"-show_format",
 		inputPath,
 	}
 
-	output, err := exec.CommandContext(ctx, "ffprobe", args...).CombinedOutput()
+	output, err := runMediaCommand(ctx, "ffprobe", args...)
 	if err != nil {
 		return ffprobeOutput{}, fmt.Errorf("probe media: %w: %s", err, strings.TrimSpace(string(output)))
 	}
@@ -395,4 +452,37 @@ func parseTimestamp(value string) (time.Time, bool) {
 
 func isVideoMIME(mimeType string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(mimeType)), "video/")
+}
+
+// Bound subprocess output and wall time even for corrupt or adversarial metadata.
+type boundedOutput struct {
+	data     []byte
+	exceeded bool
+}
+
+func (b *boundedOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	left := 1024*1024 - len(b.data)
+	if len(p) > left {
+		p = p[:left]
+		b.exceeded = true
+	}
+	b.data = append(b.data, p...)
+	return n, nil
+}
+func runMediaCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, name, args...)
+	var output boundedOutput
+	command.Stdout = &output
+	command.Stderr = &output
+	err := command.Run()
+	if output.exceeded {
+		return nil, fmt.Errorf("media command output limit exceeded")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("media command failed: %w", err)
+	}
+	return output.data, nil
 }

@@ -301,7 +301,7 @@ func TestInitUploadHandlerExecute(t *testing.T) {
 		ID:          uuid.New(),
 		Active:      true,
 		StorageUsed: 10,
-		QuotaBytes:  10_000,
+		QuotaBytes:  100_000_000,
 	}
 	userRepo := &fakeMediaUserRepo{user: user}
 	storage := &fakeStorageService{uploadID: "upload-123"}
@@ -460,4 +460,8 @@ func TestCompleteUploadHandlerExecuteReturnsExistingMediaWhenSessionIsGone(t *te
 	if len(jobQueue.enqueued) != 1 {
 		t.Fatal("Execute() did not enqueue processing for the existing pending media")
 	}
+}
+
+func (s *fakeStorageService) InspectUpload(context.Context, string) (domain.UploadInfo, error) {
+	return domain.UploadInfo{SizeBytes: 2048, Header: []byte("\x00\x00\x00\x18ftypisom")}, nil
 }

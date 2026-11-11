@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/yourorg/mycloud/internal/domain"
+	pkgmime "github.com/yourorg/mycloud/pkg/mime"
 )
 
 type CompleteUploadCommand struct {
@@ -73,6 +74,9 @@ func (h *CompleteUploadHandler) Execute(ctx context.Context, command CompleteUpl
 			return nil, findErr
 		}
 
+		if media.OwnerID != command.UserID {
+			return nil, domain.ErrNotFound
+		}
 		if err := h.ensureProcessMediaJob(ctx, media); err != nil {
 			return nil, err
 		}
@@ -96,16 +100,32 @@ func (h *CompleteUploadHandler) Execute(ctx context.Context, command CompleteUpl
 		}
 	}
 
+	info, err := h.storage.InspectUpload(ctx, session.ObjectKey)
+	if err != nil {
+		return nil, err
+	}
+	if info.SizeBytes != session.SizeBytes || info.SizeBytes <= 0 || info.SizeBytes > domain.MaxUploadSizeBytes || !pkgmime.MatchesSignature(session.MimeType, info.Header) {
+		// Retain the reservation if physical cleanup fails, allowing a safe retry.
+		if err := h.storage.DeleteUpload(ctx, session.ObjectKey); err != nil {
+			return nil, err
+		}
+		if err := h.uploadStore.DeleteUploadSession(ctx, session.MediaID); err != nil {
+			return nil, err
+		}
+		return nil, domain.ErrInvalidInput
+	}
+
 	media := &domain.Media{
-		ID:          session.MediaID,
-		OwnerID:     session.OwnerID,
-		Filename:    session.Filename,
-		MimeType:    session.MimeType,
-		SizeBytes:   session.SizeBytes,
-		OriginalKey: session.ObjectKey,
-		Status:      domain.MediaStatusPending,
-		UploadedAt:  time.Now().UTC(),
-		Metadata:    map[string]any{},
+		ID:              session.MediaID,
+		OwnerID:         session.OwnerID,
+		Filename:        session.Filename,
+		MimeType:        session.MimeType,
+		SizeBytes:       info.SizeBytes,
+		DerivativeBytes: domain.DerivativeBudgetBytes,
+		OriginalKey:     session.ObjectKey,
+		Status:          domain.MediaStatusPending,
+		UploadedAt:      time.Now().UTC(),
+		Metadata:        map[string]any{},
 	}
 	if err := h.mediaRepo.Create(ctx, media); err != nil {
 		if !errors.Is(err, domain.ErrConflict) {

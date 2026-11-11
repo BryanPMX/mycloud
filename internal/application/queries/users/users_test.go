@@ -32,7 +32,7 @@ func (r *fakeUserDirectoryRepo) UpdateLastLogin(context.Context, uuid.UUID, time
 	return nil
 }
 
-func (r *fakeUserDirectoryRepo) ListActiveUsers(context.Context) ([]*domain.User, error) {
+func (r *fakeUserDirectoryRepo) ListActiveUsers(context.Context, uuid.UUID) ([]*domain.User, error) {
 	return r.list, nil
 }
 
@@ -150,4 +150,8 @@ func TestListDirectoryHandlerExecuteReturnsSignedAvatarURLs(t *testing.T) {
 	if result[1].AvatarURL == nil || *result[1].AvatarURL != "https://signed.example/second" {
 		t.Fatalf("Execute() second avatar_url = %#v, want signed URL", result[1].AvatarURL)
 	}
+}
+
+func (r *fakeUserDirectoryRepo) FindVisibleProfile(ctx context.Context, targetID, viewerID uuid.UUID) (*domain.User, error) {
+	return r.FindByID(ctx, targetID)
 }

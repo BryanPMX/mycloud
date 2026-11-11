@@ -38,7 +38,7 @@ func (h *ListDirectoryHandler) Execute(ctx context.Context, query ListDirectoryQ
 		return nil, err
 	}
 
-	users, err := h.userRepo.ListActiveUsers(ctx)
+	users, err := h.userRepo.ListActiveUsers(ctx, query.UserID)
 	if err != nil {
 		return nil, err
 	}

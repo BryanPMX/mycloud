@@ -27,12 +27,12 @@ type AvatarURLResult struct {
 }
 
 type GetAvatarURLHandler struct {
-	userRepo domain.UserRepository
+	userRepo domain.UserAvatarRepository
 	storage  domain.AvatarAssetReader
 }
 
 func NewGetAvatarURLHandler(
-	userRepo domain.UserRepository,
+	userRepo domain.UserAvatarRepository,
 	storage domain.AvatarAssetReader,
 ) *GetAvatarURLHandler {
 	return &GetAvatarURLHandler{
@@ -55,7 +55,7 @@ func (h *GetAvatarURLHandler) Execute(ctx context.Context, query GetAvatarURLQue
 		return nil, err
 	}
 
-	target, err := h.userRepo.FindByID(ctx, query.TargetUserID)
+	target, err := h.userRepo.FindVisibleProfile(ctx, query.TargetUserID, query.RequestUserID)
 	if err != nil {
 		return nil, err
 	}
