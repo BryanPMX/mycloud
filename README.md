@@ -18,7 +18,11 @@ Public HTTPS hosts are `api.mynube.live` and `minio.mynube.live`; the Flutter we
 
 Production uses `deploy/portainer-stack.npm.yml`. The MinIO image remains **`ghcr.io/bryanpmx/minio:RELEASE.2025-09-07T16-13-09Z`**. The SSD and private monitoring overrides are optional, separately documented changes. Current production storage is retained as `mycloud_minio_data`; changing a mount is not a migration.
 
+MinIO root credentials (`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`) are administrative only. API/worker use a separate least-privilege identity through the unchanged `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` variables. Preserve the existing root values privately before the separate [manual credential cutover](docs/deployment.md#minio-credential-separation). Example files contain placeholders only; no real secrets belong in Git. Repository validation does not establish that production has completed this cutover.
+
 For local development, copy `.env.example` into a private `.env`, set actual development credentials/HTTPS choices, and run `docker compose up -d --build`. Its services bind to loopback and migrations run through a version ledger. A new empty installation can use the documented `bootstrap-admin` helper. Existing deployments skip bootstrap; authorized password resets use the guarded account procedure in the deployment runbook.
+
+The local MinIO application identity must also be provisioned separately before API/worker readiness can pass; distinct placeholder values do not create a MinIO user. `scripts/init-minio.sh` is an administrative bucket-bootstrap helper and requires the root variables explicitly.
 
 Validation:
 

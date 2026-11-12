@@ -158,8 +158,8 @@ services:
     restart: always
     env_file: .env
     environment:
-      MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       MINIO_BROWSER_REDIRECT_URL: "http://localhost:9001"
     command: server /data --console-address ":9001"
     volumes:
@@ -292,9 +292,13 @@ DATABASE_URL=postgres://mycloud:change-me-strong-password-here@postgres:5432/myc
 REDIS_PASSWORD=change-me-redis-password
 REDIS_URL=redis://:change-me-redis-password@redis:6379/0
 
-# MinIO
-MINIO_ACCESS_KEY=change-me-minio-access-key
-MINIO_SECRET_KEY=change-me-minio-secret-key-long
+# MinIO administration only
+MINIO_ROOT_USER=change-me-minio-root-user
+MINIO_ROOT_PASSWORD=change-me-minio-root-password-long
+
+# MinIO application identity (separate, least privilege)
+MINIO_ACCESS_KEY=change-me-minio-app-access-key
+MINIO_SECRET_KEY=change-me-minio-app-secret-key-long
 MINIO_ENDPOINT=minio:9000
 MINIO_SECURE=false
 MINIO_UPLOADS_BUCKET=fc-uploads

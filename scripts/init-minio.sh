@@ -24,22 +24,13 @@ if [ -z "${MINIO_ENDPOINT:-}" ]; then
   exit 1
 fi
 
-MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-${MINIO_ROOT_USER:-}}"
-MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-${MINIO_ROOT_PASSWORD:-}}"
-
-if [ -z "$MINIO_ACCESS_KEY" ]; then
-  echo "MINIO_ACCESS_KEY or MINIO_ROOT_USER is required" >&2
-  exit 1
-fi
-if [ -z "$MINIO_SECRET_KEY" ]; then
-  echo "MINIO_SECRET_KEY or MINIO_ROOT_PASSWORD is required" >&2
-  exit 1
-fi
+: "${MINIO_ROOT_USER:?MINIO_ROOT_USER is required for administrative bootstrap}"
+: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required for administrative bootstrap}"
 
 endpoint="${MINIO_SCHEME}://${MINIO_ENDPOINT}"
 
 echo "Configuring MinIO alias ${MINIO_ALIAS} (${endpoint})"
-"$MC_BIN" alias set "$MINIO_ALIAS" "$endpoint" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" >/dev/null
+"$MC_BIN" alias set "$MINIO_ALIAS" "$endpoint" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
 
 for bucket in \
   "$MINIO_UPLOADS_BUCKET" \

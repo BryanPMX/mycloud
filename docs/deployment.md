@@ -14,6 +14,22 @@ Go is pinned to patched 1.26.11; core builder/runtime image manifests are pinned
 
 Use `deploy/portainer-stack.npm.yml` for production. This primary file publishes diagnostics only on `127.0.0.1:19090/19091` for the existing host-network Prometheus. It defaults to `MYCLOUD_MINIO_STORAGE_FILE=storage/minio-volume.yml`, preserving the current named volume. SSD selection is separately gated by [storage.md](storage.md). Do not change the production Compose project name or remove volumes.
 
+## MinIO credential separation
+
+`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` belong only to MinIO administration. Both production Compose files require them explicitly and refuse absent or empty values. API/worker retain `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` for a separate least-privilege application identity; the Compose change does not create users, rotate credentials or prove a live cutover.
+
+The owner reports that the dedicated application identity has already passed manual bucket/object/multipart/version checks and cannot perform MinIO administration. Preserve that identity and its policy; do not run administrative bucket bootstrap with it. `scripts/init-minio.sh` requires root variables for administrative setup. Do not rerun bootstrap as part of this existing-production credential cutover.
+
+After code review, the owner performs this separate manual operation:
+
+1. Preserve the **current** MinIO root values, image identifiers, environment and rollback information privately. Populate the new root variables with those same preserved values before changing the app variables. Do not rotate root credentials or put any real secret in Git, chat or logs.
+2. Adopt the reviewed Compose wiring with both root variables populated. Keep the existing app values until MinIO is healthy under the unchanged root identity, or prepare both credential sets together before one controlled apply. Never apply the former coupled Compose file after replacing the app values: it would change MinIO's root identity.
+3. Replace **only** `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` in Portainer with the already-created application identity. Keep images, storage selection, project/volumes, networks, ports and limits unchanged. Recreate only MinIO/API/worker as required by the environment change; do not perform a full-stack migration or remove volumes.
+4. Verify MinIO health and API/worker readiness. With disposable test media, verify upload, original read, preview and deletion. Verify Prometheus `mycloud-api` and `mycloud-worker` targets remain `UP=1`; an unconfigured target is an unmet acceptance check.
+5. Retain the preserved root values and rollback records. If reverting to the former coupled Compose wiring, restore its original app/root environment together; reverting only the YAML would assign the new application values to root.
+
+The local `.env` development stack also requires separate root variables, but continues to load its shared development env file. Production uses explicit per-service variables. No server action or credential change follows merely from editing or validating these files. Validate with public placeholders for repository tests; use `config --quiet` privately for a future production review without printing the rendered secrets.
+
 ## First rollout on the current named volume
 
 1. Review the audit, diff and CI. Record exact current image digests, stack/Portainer settings and existing bucket policies/versioning. Back up configuration privately with mode 0600. Never paste full container environments.

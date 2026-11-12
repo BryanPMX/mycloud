@@ -3,27 +3,54 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 UUID = "00000000-0000-4000-8000-000000000039"
 
 
-def resolve(*, ssd=False, uuid=None, monitoring=False):
+# Deliberately distinct, non-secret values. Never inherit operator credentials.
+ROOT_USER = "validation-root-user"
+ROOT_PASSWORD = "validation-root-password-only"
+APP_ACCESS = "validation-app-user"
+APP_SECRET = "validation-app-password-only"
+PRODUCTION_FILES = ("deploy/portainer-stack.npm.yml", "deploy/portainer-stack.yml")
+COMPOSE_FILES = (*PRODUCTION_FILES, "docker-compose.yml")
+
+
+def resolve(*, ssd=False, uuid=None, monitoring=False,
+            compose_file=PRODUCTION_FILES[0], missing=(), empty=()):
+    fixture = (ROOT / "deploy/portainer.env.example").read_text()
+    fixture_names = {line.split("=", 1)[0] for line in fixture.splitlines()
+                     if line and not line.startswith("#") and "=" in line}
     env = os.environ.copy()
-    for name in ("MYCLOUD_MINIO_STORAGE_FILE", "MYCLOUD_STORAGE_UUID",
-                 "MYCLOUD_DATA_MOUNT", "MYCLOUD_STORAGE_GUARD_PATH"):
+    for name in fixture_names | {"MYCLOUD_MINIO_STORAGE_FILE", "MYCLOUD_STORAGE_UUID",
+                                 "MYCLOUD_DATA_MOUNT", "MYCLOUD_STORAGE_GUARD_PATH"}:
         env.pop(name, None)
+    env.update(MINIO_ROOT_USER=ROOT_USER, MINIO_ROOT_PASSWORD=ROOT_PASSWORD,
+               MINIO_ACCESS_KEY=APP_ACCESS, MINIO_SECRET_KEY=APP_SECRET)
+    for name in missing:
+        env.pop(name, None)
+    for name in empty:
+        env[name] = ""
     if ssd:
         env["MYCLOUD_MINIO_STORAGE_FILE"] = "storage/minio-ssd.yml"
     if uuid:
         env["MYCLOUD_STORAGE_UUID"] = uuid
-    command = ["docker", "compose", "--project-name", "mycloud", "--env-file",
-               "deploy/portainer.env.example", "-f", "deploy/portainer-stack.npm.yml"]
-    if monitoring:
-        command += ["-f", "deploy/portainer-stack.monitoring.yml"]
-    return subprocess.run(command + ["config", "--format", "json"], cwd=ROOT,
-                          env=env, capture_output=True, text=True, check=False)
+    # A filtered public fixture proves absence, rather than only an empty value.
+    fixture = "\n".join(line for line in fixture.splitlines()
+                        if line.split("=", 1)[0] not in missing) + "\n"
+    with tempfile.TemporaryDirectory(prefix="mycloud-compose-config-") as work:
+        env_file = Path(work) / "dummy.env"
+        env_file.write_text(fixture)
+        command = ["docker", "compose", "--project-name", "mycloud", "--env-file",
+                   str(env_file), "-f", compose_file]
+        if monitoring:
+            command += ["-f", "deploy/portainer-stack.monitoring.yml"]
+        # Local Compose uses env_file: .env. Never read that private file in tests.
+        return subprocess.run(command + ["config", "--no-env-resolution", "--format", "json"],
+                              cwd=ROOT, env=env, capture_output=True, text=True, check=False)
 
 
 class PortainerConfig(unittest.TestCase):
@@ -45,6 +72,36 @@ class PortainerConfig(unittest.TestCase):
         for service in ("postgres", "redis", "clamav"):
             self.assertFalse(services[service].get("ports"))
 
+    def credentials(self, config, *, explicit_app=True):
+        services = config["services"]
+        minio = services["minio"]["environment"]
+        self.assertEqual(minio["MINIO_ROOT_USER"], ROOT_USER)
+        self.assertEqual(minio["MINIO_ROOT_PASSWORD"], ROOT_PASSWORD)
+        self.assertNotIn("MINIO_ACCESS_KEY", minio)
+        self.assertNotIn("MINIO_SECRET_KEY", minio)
+        if explicit_app:
+            for name in ("api", "worker"):
+                app = services[name]["environment"]
+                self.assertEqual(app["MINIO_ACCESS_KEY"], APP_ACCESS)
+                self.assertEqual(app["MINIO_SECRET_KEY"], APP_SECRET)
+                self.assertNotIn("MINIO_ROOT_USER", app)
+                self.assertNotIn("MINIO_ROOT_PASSWORD", app)
+
+    def test_separate_credentials_in_all_deployment_files(self):
+        for file in COMPOSE_FILES:
+            with self.subTest(file=file):
+                self.credentials(self.config(compose_file=file),
+                                 explicit_app=file in PRODUCTION_FILES)
+
+    def test_missing_or_empty_root_credentials_are_rejected(self):
+        for file in COMPOSE_FILES:
+            for name in ("MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD"):
+                for mode in ("missing", "empty"):
+                    with self.subTest(file=file, variable=name, mode=mode):
+                        result = resolve(compose_file=file, **{mode: (name,)})
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(name + " is required", result.stderr)
+
     def test_default_keeps_existing_volume_and_private_metrics(self):
         config = self.config()
         self.assertEqual(set(config["services"]),
@@ -59,6 +116,7 @@ class PortainerConfig(unittest.TestCase):
 
     def test_ssd_requires_identity_and_never_creates_fallback_paths(self):
         config = self.config(ssd=True, uuid=UUID)
+        self.credentials(config)
         minio = config["services"]["minio"]
         self.assertEqual(minio["image"], "ghcr.io/bryanpmx/minio:RELEASE.2025-09-07T16-13-09Z")
         self.assertEqual(minio["entrypoint"], ["/bin/sh", "/mycloud-storage-guard.sh"])

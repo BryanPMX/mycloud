@@ -193,8 +193,8 @@ services:
     command: server /data --console-address ":9001"
     environment:
       GOMEMLIMIT: "${MINIO_GO_MEMORY_LIMIT:-768MiB}"
-      MINIO_ROOT_USER: "${MINIO_ACCESS_KEY}"
-      MINIO_ROOT_PASSWORD: "${MINIO_SECRET_KEY}"
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
       MINIO_BROWSER_REDIRECT_URL: "${MINIO_CONSOLE_REDIRECT_URL}"
     volumes:
     - minio_data:/data

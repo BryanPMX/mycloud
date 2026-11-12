@@ -8,7 +8,7 @@ Production procedures are documented in [deployment](../docs/deployment.md), [st
 | `setup-accounts-server.sh` | Prepare the two explicitly named account roles on the inventoried server, using a hidden password prompt, fresh database rollback archive, paused API and private login verification. No account identity or password is embedded. |
 | `server-inventory.sh` | Read disk, mount, container and memory inventory without container environments or credentials. |
 | `storage-preflight.sh` | Refuse startup unless the expected filesystem UUID is mounted and its identity marker matches. |
-| `init-minio.sh` | Configure the private application buckets; never grant anonymous access. |
+| `init-minio.sh` | Administrative bucket bootstrap using explicit root variables only; never fall back to application credentials or grant anonymous access. |
 | `backup-postgres.sh` | Create and structurally check a private custom-format PostgreSQL archive, checksum and retention record. |
 | `backup-minio.sh` | Run the verified media snapshot CLI with hashing, metadata preservation and retention. No source deletion. |
 | `backup-all.sh` | Capture paired database/media backups with only API/worker paused; requires a mounted, independently verified backup destination. |
