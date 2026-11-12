@@ -318,170 +318,150 @@ class _FeedScreenState extends State<FeedScreen> {
       builder: (context, _) {
         final theme = Theme.of(context);
         final colors = theme.colorScheme;
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const VaultEyebrow('Close by choice'),
-          const SizedBox(height: 8),
-          Text('Your circle', style: theme.textTheme.headlineMedium),
-          const SizedBox(height: 8),
-          Text('Little moments. Your favorite people.',
-              style: TextStyle(color: colors.onSurfaceVariant)),
-          const SizedBox(height: 24),
-          Row(children: [
-            if (feed.families.isNotEmpty)
+        return VaultSection(
+            eyebrow: 'Close by choice',
+            title: 'Your circle',
+            subtitle: 'Little moments. Your favorite people.',
+            toolbar: Row(children: [
+              if (feed.families.isNotEmpty)
+                Expanded(
+                    child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: feed.selected?.id,
+                            style: theme.textTheme.titleSmall,
+                            items: feed.families
+                                .map((f) => DropdownMenuItem(
+                                    value: f.id,
+                                    child: Text(f.name,
+                                        overflow: TextOverflow.ellipsis)))
+                                .toList(),
+                            onChanged: feed.loading
+                                ? null
+                                : (id) {
+                                    if (id != null) {
+                                      feed.selectFamily(feed.families
+                                          .firstWhere((f) => f.id == id));
+                                    }
+                                  })))
+              else
+                const Spacer(),
+              if (feed.selected != null) ...[
+                IconButton(
+                    tooltip: 'Family members',
+                    onPressed: _members,
+                    icon: const Icon(Icons.people_outline_rounded, size: 21)),
+                const SizedBox(width: 4),
+                FilledButton.icon(
+                    onPressed: feed.mutating || feed.config.useDemoData
+                        ? null
+                        : _compose,
+                    icon: const Icon(Icons.add_rounded, size: 17),
+                    label: const Text('Share'))
+              ],
+              PopupMenuButton<String>(
+                  tooltip: 'Circle options',
+                  onSelected: (value) {
+                    if (value == 'create') {
+                      _newFamily();
+                    } else {
+                      _accept();
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                        PopupMenuItem(
+                            value: 'create', child: Text('Create a circle')),
+                        PopupMenuItem(
+                            value: 'join',
+                            child: Text('Join with an invitation'))
+                      ]),
+            ]),
+            child: Column(children: [
+              if (feed.loading) const LinearProgressIndicator(),
+              if (feed.error != null)
+                Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(feed.error!,
+                        style: TextStyle(color: colors.error))),
               Expanded(
-                  child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: feed.selected?.id,
-                          style: theme.textTheme.titleSmall,
-                          items: feed.families
-                              .map((f) => DropdownMenuItem(
-                                  value: f.id,
-                                  child: Text(f.name,
-                                      overflow: TextOverflow.ellipsis)))
-                              .toList(),
-                          onChanged: feed.loading
-                              ? null
-                              : (id) {
-                                  if (id != null) {
-                                    feed.selectFamily(feed.families
-                                        .firstWhere((f) => f.id == id));
-                                  }
-                                })))
-            else
-              const Spacer(),
-            if (feed.selected != null) ...[
-              IconButton(
-                  tooltip: 'Family members',
-                  onPressed: _members,
-                  icon: const Icon(Icons.people_outline_rounded, size: 21)),
-              const SizedBox(width: 4),
-              FilledButton.icon(
-                  onPressed: feed.mutating || feed.config.useDemoData
-                      ? null
-                      : _compose,
-                  icon: const Icon(Icons.add_rounded, size: 17),
-                  label: const Text('Share'))
-            ],
-            PopupMenuButton<String>(
-                tooltip: 'Circle options',
-                onSelected: (value) {
-                  if (value == 'create') {
-                    _newFamily();
-                  } else {
-                    _accept();
-                  }
-                },
-                itemBuilder: (_) => const [
-                      PopupMenuItem(
-                          value: 'create', child: Text('Create a circle')),
-                      PopupMenuItem(
-                          value: 'join', child: Text('Join with an invitation'))
-                    ]),
-          ]),
-          const SizedBox(height: 10),
-          const Divider(),
-          if (feed.loading) const LinearProgressIndicator(),
-          if (feed.error != null)
-            Padding(
-                padding: const EdgeInsets.all(12),
-                child:
-                    Text(feed.error!, style: TextStyle(color: colors.error))),
-          Expanded(
-              child: feed.posts.isEmpty
-                  ? Center(
-                      child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360),
-                          child:
-                              Column(mainAxisSize: MainAxisSize.min, children: [
-                            Container(
-                                width: 78,
-                                height: 78,
-                                decoration: BoxDecoration(
-                                    color: colors.primaryContainer,
-                                    shape: BoxShape.circle),
-                                child: Icon(Icons.favorite_border_rounded,
-                                    color: colors.primary, size: 32)),
-                            const SizedBox(height: 22),
-                            Text('A little closer starts here.',
-                                style: theme.textTheme.headlineSmall,
-                                textAlign: TextAlign.center),
-                            const SizedBox(height: 12),
-                            Text(
-                                feed.families.isEmpty
-                                    ? 'Create a private circle for the people you love. Invite them in, one by one.'
-                                    : 'Share a photo, a video, or a little piece of your day. The rest of your vault stays just yours.',
-                                style: TextStyle(
-                                    color: colors.onSurfaceVariant,
-                                    height: 1.7),
-                                textAlign: TextAlign.center),
-                            const SizedBox(height: 24),
-                            if (feed.families.isEmpty)
-                              FilledButton(
-                                  onPressed: _newFamily,
-                                  child: const Text('Create your circle'))
-                            else
-                              OutlinedButton(
-                                  onPressed:
-                                      feed.config.useDemoData ? null : _compose,
-                                  child: const Text('Share your first moment')),
-                          ])))
-                  : RefreshIndicator(
-                      onRefresh: feed.loadFamilies,
-                      child: ListView.builder(
-                          padding: const EdgeInsets.only(top: 18, bottom: 32),
-                          itemCount: feed.posts.length + (feed.hasMore ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (index == feed.posts.length) {
-                              return TextButton(
-                                  onPressed: feed.loading
-                                      ? null
-                                      : () => feed.loadPosts(more: true),
-                                  child: const Text('Earlier moments'));
-                            }
-                            final post = feed.posts[index];
-                            return Center(
-                                child: ConstrainedBox(
-                                    constraints:
-                                        const BoxConstraints(maxWidth: 660),
-                                    child: VaultEnter(
-                                        index: index,
-                                        child: _PostCard(
-                                            post: post,
-                                            provider: feed,
-                                            onRemove: () async {
-                                              final confirm = await showDialog<
-                                                      bool>(
-                                                  context: context,
-                                                  builder: (context) =>
-                                                      AlertDialog(
-                                                          title: const Text(
-                                                              'Remove this shared moment?'),
-                                                          content: const Text(
-                                                              'Your original photos and videos will stay in your vault.'),
-                                                          actions: [
-                                                            TextButton(
-                                                                onPressed: () =>
-                                                                    Navigator.pop(
-                                                                        context,
-                                                                        false),
-                                                                child: const Text(
-                                                                    'Keep it')),
-                                                            FilledButton(
-                                                                onPressed: () =>
-                                                                    Navigator.pop(
-                                                                        context,
-                                                                        true),
-                                                                child: const Text(
-                                                                    'Remove post'))
-                                                          ]));
-                                              if (confirm == true) {
-                                                await _run(() =>
-                                                    feed.unshare(post.id));
-                                              }
-                                            }))));
-                          }))),
-        ]);
+                  child: feed.posts.isEmpty
+                      ? VaultSectionBody(
+                          center: true,
+                          child: VaultEmptyState(
+                              icon: Icons.favorite_border_rounded,
+                              title: 'A little closer starts here.',
+                              message: feed.families.isEmpty
+                                  ? 'Create a private circle for the people you love. Invite them in, one by one.'
+                                  : 'Share a photo, a video, or a little piece of your day. The rest of your vault stays just yours.',
+                              action: feed.families.isEmpty
+                                  ? FilledButton(
+                                      onPressed: _newFamily,
+                                      child: const Text('Create your circle'))
+                                  : OutlinedButton(
+                                      onPressed: feed.config.useDemoData
+                                          ? null
+                                          : _compose,
+                                      child: const Text(
+                                          'Share your first moment'))))
+                      : RefreshIndicator(
+                          onRefresh: feed.loadFamilies,
+                          child: ListView.builder(
+                              padding:
+                                  const EdgeInsets.only(top: 18, bottom: 32),
+                              itemCount:
+                                  feed.posts.length + (feed.hasMore ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index == feed.posts.length) {
+                                  return TextButton(
+                                      onPressed: feed.loading
+                                          ? null
+                                          : () => feed.loadPosts(more: true),
+                                      child: const Text('Earlier moments'));
+                                }
+                                final post = feed.posts[index];
+                                return Center(
+                                    child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                            maxWidth:
+                                                VaultSectionBody.contentWidth),
+                                        child: VaultEnter(
+                                            index: index,
+                                            child: _PostCard(
+                                                post: post,
+                                                provider: feed,
+                                                onRemove: () async {
+                                                  final confirm = await showDialog<
+                                                          bool>(
+                                                      context: context,
+                                                      builder: (context) =>
+                                                          AlertDialog(
+                                                              title: const Text(
+                                                                  'Remove this shared moment?'),
+                                                              content: const Text(
+                                                                  'Your original photos and videos will stay in your vault.'),
+                                                              actions: [
+                                                                TextButton(
+                                                                    onPressed: () =>
+                                                                        Navigator.pop(
+                                                                            context,
+                                                                            false),
+                                                                    child: const Text(
+                                                                        'Keep it')),
+                                                                FilledButton(
+                                                                    onPressed: () =>
+                                                                        Navigator.pop(
+                                                                            context,
+                                                                            true),
+                                                                    child: const Text(
+                                                                        'Remove post'))
+                                                              ]));
+                                                  if (confirm == true) {
+                                                    await _run(() =>
+                                                        feed.unshare(post.id));
+                                                  }
+                                                }))));
+                              }))),
+            ]));
       });
 }
 

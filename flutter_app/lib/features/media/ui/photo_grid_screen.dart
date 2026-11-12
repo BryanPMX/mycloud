@@ -142,6 +142,26 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
         ]));
   }
 
+  Widget _sortMenu(bool compact) => PopupMenuButton<bool>(
+        tooltip: 'Sort memories',
+        onSelected: (value) => setState(() => _newest = value),
+        icon: compact ? const Icon(Icons.swap_vert_rounded, size: 21) : null,
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: true, child: Text('Newest first')),
+          PopupMenuItem(value: false, child: Text('Oldest first')),
+        ],
+        child: compact
+            ? null
+            : Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(children: [
+                  Text(_newest ? 'Newest first' : 'Oldest first',
+                      style: const TextStyle(fontSize: 12)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.keyboard_arrow_down_rounded, size: 16),
+                ])),
+      );
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
       animation: Listenable.merge([
@@ -150,11 +170,10 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
         widget.connectivityService
       ]),
       builder: (context, _) {
-        final theme = Theme.of(context);
-        final colors = theme.colorScheme;
+        final colors = Theme.of(context).colorScheme;
         final provider = widget.mediaProvider;
-        final all = provider.visibleItems;
-        final items = all
+        final hasMemories = provider.allItems.isNotEmpty;
+        final items = provider.visibleItems
             .where((m) => _filter == 'photos'
                 ? !m.isVideo
                 : _filter == 'videos'
@@ -166,209 +185,141 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
               : a.uploadedAt.compareTo(b.uploadedAt));
         final active =
             widget.mediaUploadProvider.tasks.where((t) => !t.isTerminal).length;
-        return LayoutBuilder(builder: (context, constraints) {
-          final mobile = constraints.maxWidth < 600;
-          return RefreshIndicator(
-              onRefresh: provider.load,
-              child: SingleChildScrollView(
-                  key: const ValueKey<String>('photo-grid-screen'),
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        VaultEnter(
-                            child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                              Expanded(
-                                  child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                    Text('Your vault',
-                                        style: theme.textTheme.headlineMedium),
-                                    const SizedBox(height: 7),
-                                    Text('Yours to keep. Yours to share.',
-                                        style: TextStyle(
-                                            color: colors.onSurfaceVariant,
-                                            fontSize: mobile ? 12 : 14)),
-                                  ])),
-                              const SizedBox(width: 12),
-                              if (mobile)
-                                IconButton.filled(
-                                    key: const ValueKey('open-upload'),
-                                    tooltip: 'Add memories',
-                                    onPressed: _uploads,
-                                    style: IconButton.styleFrom(
-                                        backgroundColor: colors.primary,
-                                        foregroundColor: colors.onPrimary,
-                                        minimumSize: const Size(48, 48)),
-                                    icon: const Icon(Icons.add_rounded))
-                              else
-                                FilledButton.icon(
-                                    key: const ValueKey('open-upload'),
-                                    onPressed: _uploads,
-                                    style: FilledButton.styleFrom(
-                                        backgroundColor: colors.primary,
-                                        foregroundColor: colors.onPrimary),
-                                    icon:
-                                        const Icon(Icons.add_rounded, size: 19),
-                                    label: const Text('Add memories')),
-                            ])),
-                        const SizedBox(height: 20),
-                        if (constraints.maxWidth < 860) ...[
-                          _searchField(),
-                          const SizedBox(height: 16),
-                          _filterBar()
-                        ] else
-                          Row(children: [
-                            Expanded(child: _filterBar()),
-                            const SizedBox(width: 20),
-                            SizedBox(width: 275, child: _searchField())
-                          ]),
-                        const SizedBox(height: 12),
-                        Row(children: [
-                          Expanded(
-                              child: Text(
-                                  '${items.length} ${items.length == 1 ? 'memory' : 'memories'}',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: colors.onSurfaceVariant))),
-                          PopupMenuButton<bool>(
-                              tooltip: 'Sort memories',
-                              onSelected: (value) =>
-                                  setState(() => _newest = value),
-                              itemBuilder: (_) => const [
-                                    PopupMenuItem(
-                                        value: true,
-                                        child: Text('Newest first')),
-                                    PopupMenuItem(
-                                        value: false,
-                                        child: Text('Oldest first'))
-                                  ],
-                              child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(children: [
-                                    Text(
-                                        _newest
-                                            ? 'Newest first'
-                                            : 'Oldest first',
-                                        style: const TextStyle(fontSize: 11)),
-                                    const SizedBox(width: 4),
-                                    const Icon(
-                                        Icons.keyboard_arrow_down_rounded,
-                                        size: 16)
-                                  ]))),
-                          PopupMenuButton<String>(
-                              tooltip: 'Vault options',
-                              onSelected: (value) {
-                                if (value == 'trash') {
-                                  widget.onOpenTrash?.call();
-                                } else {
-                                  provider.load();
-                                }
-                              },
-                              itemBuilder: (_) => [
-                                    const PopupMenuItem(
-                                        value: 'refresh',
-                                        child: Text('Refresh memories')),
-                                    if (widget.onOpenTrash != null)
-                                      const PopupMenuItem(
-                                          value: 'trash',
-                                          child: Text('Recently deleted'))
-                                  ]),
-                        ]),
-                        if (active > 0)
-                          Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: InkWell(
-                                  onTap: _uploads,
-                                  child: Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                          color: colors.primaryContainer,
-                                          borderRadius:
-                                              BorderRadius.circular(14)),
-                                      child: Row(children: [
-                                        const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2)),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                            child: Text(
-                                                'Keeping $active ${active == 1 ? 'memory' : 'memories'} safe…',
-                                                style: const TextStyle(
-                                                    fontSize: 12))),
-                                        const Icon(Icons.chevron_right_rounded,
-                                            size: 18)
-                                      ])))),
-                        if (provider.errorMessage != null)
-                          Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Text(provider.errorMessage!,
-                                  style: TextStyle(color: colors.error))),
-                        if (provider.isLoading) const LinearProgressIndicator(),
-                        const SizedBox(height: 8),
-                        if (items.isEmpty && !provider.isLoading)
-                          Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 65, horizontal: 16),
-                              child: Center(
-                                  child: Column(children: [
-                                Icon(Icons.photo_library_outlined,
-                                    size: 42, color: colors.secondary),
-                                const SizedBox(height: 18),
-                                Text(
-                                    all.isEmpty
-                                        ? 'Make room for your moments.'
-                                        : 'Nothing here just yet.',
-                                    style: theme.textTheme.titleLarge,
-                                    textAlign: TextAlign.center),
-                                const SizedBox(height: 8),
-                                Text(
-                                    all.isEmpty
-                                        ? 'Add a few photos or videos. This space is only yours.'
-                                        : 'Try a different filter or search.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: colors.onSurfaceVariant)),
-                                if (all.isEmpty) ...[
-                                  const SizedBox(height: 22),
-                                  FilledButton(
+        return VaultSection(
+          key: const ValueKey<String>('photo-grid-screen'),
+          eyebrow: 'A world of your own',
+          title: 'Your vault',
+          subtitle: 'Yours to keep. Yours to share.',
+          toolbar: LayoutBuilder(builder: (context, constraints) {
+            final compact = constraints.maxWidth < 620;
+            return Row(children: [
+              Expanded(
+                  child: Text(
+                      '${items.length} ${items.length == 1 ? 'memory' : 'memories'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.onSurfaceVariant))),
+              _sortMenu(compact),
+              const SizedBox(width: 4),
+              FilledButton.icon(
+                  key: const ValueKey('open-upload'),
+                  onPressed: _uploads,
+                  icon: const Icon(Icons.add_rounded, size: 17),
+                  label: Text(compact ? 'Add' : 'Add memories')),
+              PopupMenuButton<String>(
+                  tooltip: 'Vault options',
+                  onSelected: (value) {
+                    if (value == 'trash') {
+                      widget.onOpenTrash?.call();
+                    } else {
+                      provider.load();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                        const PopupMenuItem(
+                            value: 'refresh', child: Text('Refresh memories')),
+                        if (widget.onOpenTrash != null)
+                          const PopupMenuItem(
+                              value: 'trash', child: Text('Recently deleted')),
+                      ]),
+            ]);
+          }),
+          child: Column(children: [
+            if (active > 0)
+              Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: InkWell(
+                      onTap: _uploads,
+                      child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: colors.primaryContainer,
+                              borderRadius: BorderRadius.circular(14)),
+                          child: Row(children: [
+                            const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: Text(
+                                    'Keeping $active ${active == 1 ? 'memory' : 'memories'} safe…',
+                                    style: const TextStyle(fontSize: 12))),
+                            const Icon(Icons.chevron_right_rounded, size: 18),
+                          ])))),
+            if (provider.errorMessage != null)
+              Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(provider.errorMessage!,
+                      style: TextStyle(color: colors.error))),
+            if (provider.isLoading) const LinearProgressIndicator(),
+            Expanded(
+                child: RefreshIndicator(
+                    onRefresh: provider.load,
+                    child: VaultSectionBody(
+                      scrollKey: const ValueKey('vault-content-scroll'),
+                      center: !hasMemories,
+                      child: !hasMemories
+                          ? provider.isLoading
+                              ? const SizedBox.shrink()
+                              : VaultEmptyState(
+                                  icon: Icons.photo_library_outlined,
+                                  title: 'Make room for your moments.',
+                                  message:
+                                      'Add a few photos or videos. This space is only yours.',
+                                  action: OutlinedButton(
                                       onPressed: _uploads,
                                       child:
-                                          const Text('Add your first memory'))
-                                ]
-                              ])))
-                        else
-                          MemoryMasonry(
-                              items: items,
-                              builder: (media, index) => _VaultMemoryTile(
-                                  media: media,
-                                  provider: provider,
-                                  onOpen: () {
-                                    provider.selectMedia(media.id);
-                                    if (media.status == MediaStatus.ready) {
-                                      widget.onOpen?.call(media);
-                                    } else {
-                                      _details(media);
-                                    }
-                                  },
-                                  onDetails: () => _details(media))),
-                        if (provider.hasMore)
-                          Center(
-                              child: Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: OutlinedButton(
-                                      onPressed: provider.isLoading
-                                          ? null
-                                          : provider.loadMore,
-                                      child: const Text('More memories')))),
-                        const SizedBox(height: 24),
-                      ])));
-        });
+                                          const Text('Add your first memory')))
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                  _searchField(),
+                                  const SizedBox(height: 16),
+                                  _filterBar(),
+                                  const SizedBox(height: 24),
+                                  if (items.isEmpty)
+                                    const Padding(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 32),
+                                        child: VaultEmptyState(
+                                            icon: Icons.search_rounded,
+                                            title: 'Nothing here just yet.',
+                                            message:
+                                                'Try a different filter or search.'))
+                                  else
+                                    MemoryMasonry(
+                                        items: items,
+                                        builder: (media, index) =>
+                                            _VaultMemoryTile(
+                                                media: media,
+                                                provider: provider,
+                                                onOpen: () {
+                                                  provider
+                                                      .selectMedia(media.id);
+                                                  if (media.status ==
+                                                      MediaStatus.ready) {
+                                                    widget.onOpen?.call(media);
+                                                  } else {
+                                                    _details(media);
+                                                  }
+                                                },
+                                                onDetails: () =>
+                                                    _details(media))),
+                                  if (provider.hasMore)
+                                    Padding(
+                                        padding: const EdgeInsets.all(24),
+                                        child: OutlinedButton(
+                                            onPressed: provider.isLoading
+                                                ? null
+                                                : provider.loadMore,
+                                            child:
+                                                const Text('More memories'))),
+                                ]),
+                    ))),
+          ]),
+        );
       });
 }
 

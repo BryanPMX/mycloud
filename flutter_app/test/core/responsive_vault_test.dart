@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../shared/demo_app_harness.dart';
+import 'package:familycloud/core/theme/app_theme.dart';
+import 'package:familycloud/shared/widgets/vault_ui.dart';
 
 void main() {
   for (final scenario in [
@@ -26,6 +28,32 @@ void main() {
         await pumpDemoApp(tester, size: scenario.$2);
         await signInAsDemoMember(tester);
         expect(find.text('Your vault'), findsOneWidget);
+        expect(tester.getRect(find.byType(VaultPill).first).left,
+            tester.getRect(find.byKey(const ValueKey('vault-search'))).left);
+        final titleRect =
+            tester.getRect(find.byKey(const ValueKey('section-title')));
+        final dividerRect =
+            tester.getRect(find.byKey(const ValueKey('section-divider')));
+        void expectMatchingSection() {
+          final title =
+              tester.getRect(find.byKey(const ValueKey('section-title')));
+          final divider =
+              tester.getRect(find.byKey(const ValueKey('section-divider')));
+          expect(title.left, titleRect.left);
+          expect(divider.left, dividerRect.left);
+          expect(divider.right, dividerRect.right);
+          // Allow natural text wrapping on compact screens.
+          if (scenario.$2.width >= 600) {
+            expect(title.top, titleRect.top);
+            expect(divider.top, dividerRect.top);
+          }
+        }
+
+        await tester.drag(find.byKey(const ValueKey('vault-content-scroll')),
+            const Offset(0, -180));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(find.byKey(const ValueKey('section-title'))),
+            titleRect.topLeft);
         expect(tester.takeException(), isNull);
         await tester.tap(find.byKey(const ValueKey('open-upload')));
         await tester.pumpAndSettle();
@@ -35,11 +63,13 @@ void main() {
         await tester.pumpAndSettle();
         await openSection(tester, 'Shared');
         expect(find.text('Your circle'), findsOneWidget);
+        expectMatchingSection();
         expect(find.text('Sofia'), findsWidgets);
         expect(tester.takeException(), isNull);
         await openSection(tester, 'Collections');
         expect(
             find.byKey(const ValueKey('create-album-button')), findsOneWidget);
+        expectMatchingSection();
         expect(tester.takeException(), isNull);
         await openSection(tester, 'Profile');
         expect(find.text('Make it yours.'), findsOneWidget);
@@ -58,6 +88,67 @@ void main() {
       }
     });
   }
+  testWidgets(
+      'empty sections remain usable in a short viewport with large text',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 480);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    var activated = false;
+    await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.dark(),
+        home: Scaffold(
+            body: Padding(
+                padding: const EdgeInsets.all(18),
+                child: VaultSection(
+                    eyebrow: 'Keep the good things together',
+                    title: 'Collections',
+                    subtitle: 'Little worlds, made by you.',
+                    toolbar: const SizedBox(height: 48),
+                    child: VaultSectionBody(
+                        center: true,
+                        child: VaultEmptyState(
+                            icon: Icons.bookmarks_outlined,
+                            title: 'Your stories, kept together.',
+                            message:
+                                'Gather a few favorites into your first collection.',
+                            action: OutlinedButton(
+                                onPressed: () => activated = true,
+                                child: const Text(
+                                    'Create your first collection')))))))));
+    await tester.pumpAndSettle();
+    final titlePosition =
+        tester.getTopLeft(find.byKey(const ValueKey('section-title')));
+    await tester.ensureVisible(find.text('Create your first collection'));
+    await tester.tap(find.text('Create your first collection'));
+    expect(activated, isTrue);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('section-title'))),
+        titlePosition);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an empty search keeps the search control available',
+      (tester) async {
+    await pumpDemoApp(tester, size: const Size(390, 844));
+    await signInAsDemoMember(tester);
+    await tester.enterText(find.byKey(const ValueKey('vault-search')),
+        'no matching memory fixture');
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing here just yet.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('vault-search')), findsOneWidget);
+    await tester.enterText(find.byKey(const ValueKey('vault-search')), '');
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    expect(find.text('9 memories'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('large text and reduced motion keep the compact vault usable',
       (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 1.6;

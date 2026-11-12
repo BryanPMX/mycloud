@@ -75,6 +75,111 @@ class VaultEyebrow extends StatelessWidget {
           fontWeight: FontWeight.w700));
 }
 
+/// The common page structure for the vault, circle and collections.
+class VaultSection extends StatelessWidget {
+  const VaultSection({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    required this.toolbar,
+    required this.child,
+  });
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final Widget toolbar;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      VaultEyebrow(eyebrow),
+      const SizedBox(height: 8),
+      Text(title,
+          key: const ValueKey('section-title'),
+          style: theme.textTheme.headlineMedium),
+      const SizedBox(height: 8),
+      Text(subtitle,
+          style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+      const SizedBox(height: 24),
+      toolbar,
+      const SizedBox(height: 10),
+      const Divider(key: ValueKey('section-divider')),
+      Expanded(child: child),
+    ]);
+  }
+}
+
+/// A centered content column that also scrolls when an empty state is tall.
+class VaultSectionBody extends StatelessWidget {
+  const VaultSectionBody(
+      {super.key, required this.child, this.center = false, this.scrollKey});
+  static const contentWidth = 660.0;
+  final Widget child;
+  final bool center;
+  final Key? scrollKey;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+            key: scrollKey,
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Align(
+                alignment: center ? Alignment.center : Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints:
+                      BoxConstraints(maxWidth: center ? 360 : contentWidth),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Padding(
+                        padding: const EdgeInsets.only(top: 18, bottom: 32),
+                        child: child),
+                  ),
+                ),
+              ),
+            ),
+          ));
+}
+
+class VaultEmptyState extends StatelessWidget {
+  const VaultEmptyState(
+      {super.key,
+      required this.icon,
+      required this.title,
+      required this.message,
+      this.action});
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+          width: 78,
+          height: 78,
+          decoration: BoxDecoration(
+              color: colors.primaryContainer, shape: BoxShape.circle),
+          child: Icon(icon, color: colors.primary, size: 32)),
+      const SizedBox(height: 22),
+      Text(title,
+          style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
+      const SizedBox(height: 12),
+      Text(message,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.onSurfaceVariant, height: 1.7)),
+      if (action != null) ...[const SizedBox(height: 24), action!],
+    ]);
+  }
+}
+
 class VaultPill extends StatelessWidget {
   const VaultPill(this.label,
       {super.key, this.icon, this.selected = false, this.onTap});

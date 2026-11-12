@@ -18,11 +18,11 @@ Manrope gives navigation and interface text a friendly, clear voice. Five explic
 
 ## Layout and components
 
-- **Vault:** two-column masonry on phones, three on tablets and up to five on wide displays. Natural photo proportions, minimal metadata, favorites, search and real photo/video filters. Adding memories opens a focused progress sheet; file details/comments are secondary.
+- **Vault:** two-column masonry on phones and three columns in the centered desktop content area. Natural photo proportions, minimal metadata, favorites, search and real photo/video filters. Adding memories opens a focused progress sheet; file details/comments are secondary.
 - **Shared:** chronological, author-led moments, swipeable media and a clear circle boundary. Removing a post keeps its original in the vault.
 - **Collections:** photographic covers, stacked visual treatment, clear ownership, and explicit recipient controls. These use the existing album API and permissions.
 - **Profile:** centered personal details, a compact identity row on desktop, aligned name/storage cards, and stacked cards on phones or at larger text sizes. Visible field labels remain clear without floating over the input background.
-- **Desktop:** persistent side navigation, hover feedback, focusable controls and a compact gallery toolbar.
+- **Desktop:** persistent side navigation, hover feedback and focusable controls. Vault, Shared and Collections use the same fixed eyebrow/title/subtitle, right-aligned primary action, divider and centered 660 px content column. Their contents scroll below the header. Empty sections share the same centered icon, message and action; short viewports can scroll that state too.
 - **iOS/Android:** thumb-friendly bottom navigation, safe-area spacing, system theme/status-bar treatment, keyboard-aware forms/sheets and familiar native page transitions. Video pauses when the app leaves the foreground.
 
 Shared components live in `lib/shared/widgets/vault_ui.dart`. Colors and typography live in `lib/core/theme/app_theme.dart`; avoid independent feature palettes. Surfaces have restrained 14–24 px corners. Actions keep at least a 44–48 px touch area. Charcoal and warm paper form the continuous canvas; terracotta is reserved for actions and emphasis. Brand decoration remains secondary to a person’s own photography.

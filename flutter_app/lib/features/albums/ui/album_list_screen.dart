@@ -68,63 +68,94 @@ class AlbumListScreen extends StatelessWidget {
                           SizedBox(width: width, child: collection(album)))
                       .toList());
             });
-        return SingleChildScrollView(
-            key: const ValueKey<String>('album-list-screen'),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const VaultEyebrow('Keep the good things together'),
-              const SizedBox(height: 8),
-              Text('Collections', style: theme.textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text('Little worlds, made by you.',
-                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 24),
-              Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
+        final empty = owned.isEmpty && shared.isEmpty;
+        final total = owned.length + shared.length;
+        return VaultSection(
+          key: const ValueKey<String>('album-list-screen'),
+          eyebrow: 'Keep the good things together',
+          title: 'Collections',
+          subtitle: 'Little worlds, made by you.',
+          toolbar: LayoutBuilder(
+              builder: (context, constraints) => Row(children: [
+                    Expanded(
+                        child: Text(
+                            '$total ${total == 1 ? 'collection' : 'collections'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant))),
                     FilledButton.icon(
                         key: const ValueKey<String>('create-album-button'),
                         onPressed: albumProvider.isCreating
                             ? null
                             : () => _showAlbumEditorDialog(context,
                                 albumProvider: albumProvider),
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        label: const Text('New collection')),
+                        icon: const Icon(Icons.add_rounded, size: 17),
+                        label: Text(constraints.maxWidth < 500
+                            ? 'New'
+                            : 'New collection')),
                     IconButton(
                         tooltip: 'Refresh collections',
                         onPressed:
                             albumProvider.isLoading ? null : albumProvider.load,
-                        icon: const Icon(Icons.refresh_rounded, size: 20))
-                  ]),
-              if (albumProvider.errorMessage != null)
-                Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Text(albumProvider.errorMessage!,
-                        style: TextStyle(color: theme.colorScheme.error))),
-              const SizedBox(height: 30),
-              if (albumProvider.isLoading && !albumProvider.hasLoaded)
-                const LinearProgressIndicator(),
-              Text('Made by you', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 16),
-              if (owned.isEmpty)
-                const _AlbumEmptyState(
-                    message:
-                        'Gather a few favorites into your first collection.')
-              else
-                grid(owned),
-              const SizedBox(height: 32),
-              Text('Shared with you', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 16),
-              if (shared.isEmpty)
-                const _AlbumEmptyState(
-                    message:
-                        'Collections from your circle will find a home here.')
-              else
-                grid(shared),
-              const SizedBox(height: 36),
-            ]));
+                        icon: const Icon(Icons.refresh_rounded, size: 20)),
+                  ])),
+          child: Column(children: [
+            if (albumProvider.errorMessage != null)
+              Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(albumProvider.errorMessage!,
+                      style: TextStyle(color: theme.colorScheme.error))),
+            if (albumProvider.isLoading && !albumProvider.hasLoaded)
+              const LinearProgressIndicator(),
+            Expanded(
+                child: RefreshIndicator(
+                    onRefresh: albumProvider.load,
+                    child: VaultSectionBody(
+                      scrollKey: const ValueKey('collections-content-scroll'),
+                      center: empty,
+                      child: empty
+                          ? albumProvider.isLoading
+                              ? const SizedBox.shrink()
+                              : VaultEmptyState(
+                                  icon: Icons.bookmarks_outlined,
+                                  title: 'Your stories, kept together.',
+                                  message:
+                                      'Gather a few favorites into your first collection. Share it only when you want to.',
+                                  action: OutlinedButton(
+                                      onPressed: albumProvider.isCreating
+                                          ? null
+                                          : () => _showAlbumEditorDialog(
+                                              context,
+                                              albumProvider: albumProvider),
+                                      child: const Text(
+                                          'Create your first collection')))
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                  Text('Made by you',
+                                      style: theme.textTheme.titleMedium),
+                                  const SizedBox(height: 16),
+                                  if (owned.isEmpty)
+                                    const _AlbumEmptyState(
+                                        message:
+                                            'Gather a few favorites into your first collection.')
+                                  else
+                                    grid(owned),
+                                  const SizedBox(height: 32),
+                                  Text('Shared with you',
+                                      style: theme.textTheme.titleMedium),
+                                  const SizedBox(height: 16),
+                                  if (shared.isEmpty)
+                                    const _AlbumEmptyState(
+                                        message:
+                                            'Collections from your circle will find a home here.')
+                                  else
+                                    grid(shared),
+                                ]),
+                    ))),
+          ]),
+        );
       });
 
   Future<void> _showAlbumEditorDialog(
