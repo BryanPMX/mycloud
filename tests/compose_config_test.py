@@ -83,6 +83,11 @@ class PortainerConfig(unittest.TestCase):
     def test_existing_monitoring_override_does_not_duplicate_bindings(self):
         self.private_ports(self.config(monitoring=True))
 
+    def test_both_production_web_hosts_can_reach_the_api(self):
+        origins = self.config()["services"]["api"]["environment"]["ALLOWED_ORIGINS"]
+        self.assertEqual({origin.strip() for origin in origins.split(",")},
+                         {"https://mynube.live", "https://www.mynube.live"})
+
 
 if __name__ == "__main__":
     unittest.main()

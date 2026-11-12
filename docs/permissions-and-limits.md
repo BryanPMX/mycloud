@@ -22,7 +22,7 @@ Accounts have separate byte accounting and quotas. Trash continues to count unti
 
 ## Server RAM and CPU
 
-These are reviewed **release configuration limits**, not verified live limits until deployment. The owner’s inventory found the current API/worker/ClamAV unrestricted.
+These limits are now **verified live** after the controlled Portainer deployment. Docker inspection confirmed all six RAM/CPU bounds below. Before rollout, API/worker/ClamAV were unrestricted.
 
 | Container | RAM maximum | CPU maximum |
 | --- | --- | --- |

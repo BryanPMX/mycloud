@@ -112,6 +112,7 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
       onChanged: widget.mediaProvider.updateQuery,
       decoration: const InputDecoration(
           hintText: 'Search your memories',
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           prefixIcon: Icon(Icons.search_rounded, size: 21)));
 
   Widget _filterBar() {
@@ -215,7 +216,7 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
                                     label: const Text('Add memories')),
                             ])),
                         const SizedBox(height: 20),
-                        if (mobile) ...[
+                        if (constraints.maxWidth < 860) ...[
                           _searchField(),
                           const SizedBox(height: 16),
                           _filterBar()

@@ -62,10 +62,12 @@ class _MarkPainter extends CustomPainter {
 }
 
 class VaultEyebrow extends StatelessWidget {
-  const VaultEyebrow(this.text, {super.key});
+  const VaultEyebrow(this.text, {super.key, this.textAlign = TextAlign.start});
   final String text;
+  final TextAlign textAlign;
   @override
   Widget build(BuildContext context) => Text(text.toUpperCase(),
+      textAlign: textAlign,
       style: TextStyle(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
           fontSize: 10,
@@ -95,9 +97,10 @@ class VaultPill extends StatelessWidget {
             child: InkWell(
                 onTap: onTap,
                 customBorder: const StadiumBorder(),
-                child: Padding(
+                child: Container(
+                    constraints: const BoxConstraints(minHeight: 48),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 17, vertical: 13),
+                        horizontal: 17, vertical: 10),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       if (icon != null) ...[
                         Icon(icon,

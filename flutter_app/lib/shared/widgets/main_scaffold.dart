@@ -130,7 +130,7 @@ class MainScaffold extends StatelessWidget {
                                           value: user.storagePct.clamp(0, 1),
                                           backgroundColor:
                                               colors.surfaceContainerHighest,
-                                          color: colors.secondary)),
+                                          color: colors.primary)),
                                   const SizedBox(height: 9),
                                   Text(
                                       '${FileSizeFormatter.compact(user.storageUsed)} of ${FileSizeFormatter.compact(user.quotaBytes)}',
@@ -191,20 +191,20 @@ class MainScaffold extends StatelessWidget {
                                           (d) => d.$1 == selectedSection)
                                       .$2,
                                   style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w700))
                             ],
                             const Spacer(),
                             if (desktop) ...[
                               Icon(Icons.lock_outline_rounded,
-                                  size: 14, color: colors.secondary),
+                                  size: 14, color: colors.onSurfaceVariant),
                               const SizedBox(width: 7),
                               Text(
                                   config.useDemoData
                                       ? 'Sample vault'
                                       : 'Private by default',
                                   style: TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       color: colors.onSurfaceVariant)),
                               const SizedBox(width: 24)
                             ],
