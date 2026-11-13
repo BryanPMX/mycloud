@@ -11,6 +11,7 @@ void main() {
     (TargetPlatform.android, const Size(360, 800), Brightness.dark),
     (TargetPlatform.macOS, const Size(1440, 1000), Brightness.light),
     (TargetPlatform.macOS, const Size(1512, 805), Brightness.dark),
+    (TargetPlatform.windows, const Size(1920, 1080), Brightness.dark),
     (TargetPlatform.windows, const Size(1024, 768), Brightness.light),
     (TargetPlatform.iOS, const Size(834, 1112), Brightness.dark),
     (TargetPlatform.android, const Size(320, 640), Brightness.light),
@@ -28,8 +29,15 @@ void main() {
         await pumpDemoApp(tester, size: scenario.$2);
         await signInAsDemoMember(tester);
         expect(find.text('Your vault'), findsOneWidget);
-        expect(tester.getRect(find.byType(VaultPill).first).left,
-            tester.getRect(find.byKey(const ValueKey('vault-search'))).left);
+        final gallery =
+            tester.getRect(find.byKey(const ValueKey('vault-gallery')));
+        final search =
+            tester.getRect(find.byKey(const ValueKey('vault-search')));
+        expect(gallery.left, tester.getRect(find.byType(VaultPill).first).left);
+        expect(gallery.right, search.right);
+        expect(gallery.left,
+            tester.getRect(find.byKey(const ValueKey('section-title'))).left);
+        if (gallery.width < 800) expect(gallery.left, search.left);
         final titleRect =
             tester.getRect(find.byKey(const ValueKey('section-title')));
         final dividerRect =

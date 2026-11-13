@@ -142,6 +142,27 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
         ]));
   }
 
+  Widget _browseControls() => LayoutBuilder(builder: (context, constraints) {
+        final stacked = constraints.maxWidth < 800 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.3;
+        if (stacked) {
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _searchField(),
+                const SizedBox(height: 16),
+                _filterBar(),
+              ]);
+        }
+        return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Expanded(child: _filterBar()),
+          const SizedBox(width: 24),
+          SizedBox(
+              width: constraints.maxWidth >= 1100 ? 340 : 280,
+              child: _searchField()),
+        ]);
+      });
+
   Widget _sortMenu(bool compact) => PopupMenuButton<bool>(
         tooltip: 'Sort memories',
         onSelected: (value) => setState(() => _newest = value),
@@ -260,6 +281,7 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
                     child: VaultSectionBody(
                       scrollKey: const ValueKey('vault-content-scroll'),
                       center: !hasMemories,
+                      maxWidth: double.infinity,
                       child: !hasMemories
                           ? provider.isLoading
                               ? const SizedBox.shrink()
@@ -275,9 +297,7 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
                           : Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                  _searchField(),
-                                  const SizedBox(height: 16),
-                                  _filterBar(),
+                                  _browseControls(),
                                   const SizedBox(height: 24),
                                   if (items.isEmpty)
                                     const Padding(
@@ -290,6 +310,7 @@ class _PhotoGridScreenState extends State<PhotoGridScreen> {
                                                 'Try a different filter or search.'))
                                   else
                                     MemoryMasonry(
+                                        key: const ValueKey('vault-gallery'),
                                         items: items,
                                         builder: (media, index) =>
                                             _VaultMemoryTile(
@@ -366,11 +387,13 @@ class _VaultMemoryTileState extends State<_VaultMemoryTile> {
                   child: AspectRatio(
                       aspectRatio: aspect,
                       child: Stack(fit: StackFit.expand, children: [
-                        VaultImage(
-                            url: widget.provider.thumbnailUrlFor(media.id),
-                            label: media.filename,
-                            onError: () => unawaited(widget.provider
-                                .handleThumbnailLoadError(media))),
+                        ColoredBox(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: VaultImage(
+                                url: widget.provider.thumbnailUrlFor(media.id),
+                                label: media.filename,
+                                onError: () => unawaited(widget.provider
+                                    .handleThumbnailLoadError(media)))),
                         Positioned.fill(
                             child: Material(
                                 color: Colors.transparent,

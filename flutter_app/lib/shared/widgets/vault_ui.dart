@@ -75,7 +75,7 @@ class VaultEyebrow extends StatelessWidget {
           fontWeight: FontWeight.w700));
 }
 
-/// The common page structure for the vault, circle and collections.
+/// Shared heading and toolbar frame for the main account sections.
 class VaultSection extends StatelessWidget {
   const VaultSection({
     super.key,
@@ -115,11 +115,16 @@ class VaultSection extends StatelessWidget {
 /// A centered content column that also scrolls when an empty state is tall.
 class VaultSectionBody extends StatelessWidget {
   const VaultSectionBody(
-      {super.key, required this.child, this.center = false, this.scrollKey});
+      {super.key,
+      required this.child,
+      this.center = false,
+      this.scrollKey,
+      this.maxWidth = contentWidth});
   static const contentWidth = 660.0;
   final Widget child;
   final bool center;
   final Key? scrollKey;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -132,7 +137,7 @@ class VaultSectionBody extends StatelessWidget {
                 alignment: center ? Alignment.center : Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints:
-                      BoxConstraints(maxWidth: center ? 360 : contentWidth),
+                      BoxConstraints(maxWidth: center ? 360 : maxWidth),
                   child: SizedBox(
                     width: double.infinity,
                     child: Padding(
@@ -289,13 +294,8 @@ class MemoryMasonry extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       LayoutBuilder(builder: (context, constraints) {
-        final columns = constraints.maxWidth < 600
-            ? 2
-            : constraints.maxWidth < 950
-                ? 3
-                : constraints.maxWidth < 1300
-                    ? 4
-                    : 5;
+        // Keep a sparse library at the same tile scale as a full library.
+        final columns = (constraints.maxWidth / 240).floor().clamp(2, 8);
         final gap = constraints.maxWidth < 600 ? 10.0 : 18.0;
         final buckets = List.generate(columns, (_) => <int>[]);
         final heights = List.filled(columns, 0.0);
