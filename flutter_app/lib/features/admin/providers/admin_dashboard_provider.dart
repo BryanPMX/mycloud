@@ -29,14 +29,16 @@ class AdminDashboardProvider extends ChangeNotifier {
   final ApiTransport _transport;
   final AuthProvider _authProvider;
 
-  static const AdminStats _seedStats = AdminStats(
-    totalUsers: 52,
-    activeUsers: 48,
-    totalBytes: 1099511627776,
-    usedBytes: 429496729600,
-    totalItems: 18432,
-    totalImages: 15210,
-    totalVideos: 3222,
+  static final AdminStats _seedStats = AdminStats(
+    totalUsers: _seedUsers.length,
+    activeUsers: _seedUsers.where((user) => user.active).length,
+    totalBytes:
+        _seedUsers.fold<int>(0, (total, user) => total + user.quotaBytes),
+    usedBytes:
+        _seedUsers.fold<int>(0, (total, user) => total + user.storageUsed),
+    totalItems: 9,
+    totalImages: 7,
+    totalVideos: 2,
     pendingJobs: 3,
   );
 

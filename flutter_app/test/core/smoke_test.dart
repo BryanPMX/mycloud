@@ -107,6 +107,8 @@ void main() {
     expect(find.text('Avatar saved.'), findsOneWidget);
 
     await openSection(tester, 'Admin');
+    await tester.tap(find.byKey(const ValueKey('admin-open-invite')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey<String>('admin-invite-email')),
       'fresh@family.com',
