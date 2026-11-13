@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 UUID = "00000000-0000-4000-8000-000000000039"
@@ -15,6 +16,8 @@ ROOT_USER = "validation-root-user"
 ROOT_PASSWORD = "validation-root-password-only"
 APP_ACCESS = "validation-app-user"
 APP_SECRET = "validation-app-password-only"
+RUNTIME_DATABASE_URL = "postgres://mycloud_app:validation-runtime-only@postgres:5432/mycloud?sslmode=disable"
+MIGRATION_DATABASE_URL = "postgres://mycloud:validation-admin-only@postgres:5432/mycloud?sslmode=disable"
 PRODUCTION_FILES = ("deploy/portainer-stack.npm.yml", "deploy/portainer-stack.yml")
 COMPOSE_FILES = (*PRODUCTION_FILES, "docker-compose.yml")
 
@@ -29,7 +32,9 @@ def resolve(*, ssd=False, uuid=None, monitoring=False,
                                  "MYCLOUD_DATA_MOUNT", "MYCLOUD_STORAGE_GUARD_PATH"}:
         env.pop(name, None)
     env.update(MINIO_ROOT_USER=ROOT_USER, MINIO_ROOT_PASSWORD=ROOT_PASSWORD,
-               MINIO_ACCESS_KEY=APP_ACCESS, MINIO_SECRET_KEY=APP_SECRET)
+               MINIO_ACCESS_KEY=APP_ACCESS, MINIO_SECRET_KEY=APP_SECRET,
+               DATABASE_URL=RUNTIME_DATABASE_URL,
+               DATABASE_MIGRATION_URL=MIGRATION_DATABASE_URL)
     for name in missing:
         env.pop(name, None)
     for name in empty:
@@ -101,6 +106,55 @@ class PortainerConfig(unittest.TestCase):
                         result = resolve(compose_file=file, **{mode: (name,)})
                         self.assertNotEqual(result.returncode, 0)
                         self.assertIn(name + " is required", result.stderr)
+
+    def test_runtime_and_migration_database_connections_are_separate(self):
+        self.assertNotEqual(urlsplit(RUNTIME_DATABASE_URL).username,
+                            urlsplit(MIGRATION_DATABASE_URL).username)
+        for file in COMPOSE_FILES:
+            with self.subTest(file=file):
+                services = self.config(compose_file=file)["services"]
+                for name in ("api", "worker"):
+                    self.assertEqual(services[name]["environment"]["DATABASE_URL"],
+                                     RUNTIME_DATABASE_URL)
+                self.assertEqual(services["migrate"]["environment"]["DATABASE_URL"],
+                                 MIGRATION_DATABASE_URL)
+
+    def test_production_migration_credentials_reach_only_the_migrator(self):
+        for file in PRODUCTION_FILES:
+            with self.subTest(file=file):
+                services = self.config(compose_file=file)["services"]
+                for name, service in services.items():
+                    self.assertNotIn("DATABASE_MIGRATION_URL", service.get("environment", {}))
+                    self.assertFalse(service.get("env_file"))
+                    if name != "migrate":
+                        self.assertNotIn(MIGRATION_DATABASE_URL, json.dumps(service))
+                self.assertEqual(services["migrate"]["environment"],
+                                 {"DATABASE_URL": MIGRATION_DATABASE_URL})
+
+    def test_missing_or_empty_migration_database_url_is_rejected(self):
+        for file in COMPOSE_FILES:
+            for mode in ("missing", "empty"):
+                with self.subTest(file=file, mode=mode):
+                    result = resolve(compose_file=file, **{mode: ("DATABASE_MIGRATION_URL",)})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("DATABASE_MIGRATION_URL is required", result.stderr)
+
+    def test_postgres_container_keeps_its_admin_identity(self):
+        fixture = dict(line.split("=", 1) for line in
+                       (ROOT / "deploy/portainer.env.example").read_text().splitlines()
+                       if line and not line.startswith("#") and "=" in line)
+        for file in COMPOSE_FILES:
+            with self.subTest(file=file):
+                postgres = self.config(compose_file=file)["services"]["postgres"]["environment"]
+                self.assertEqual(postgres["POSTGRES_USER"], fixture["POSTGRES_USER"])
+                self.assertEqual(postgres["POSTGRES_PASSWORD"], fixture["POSTGRES_PASSWORD"])
+
+    def test_local_example_does_not_require_an_unprovisioned_runtime_role(self):
+        fixture = dict(line.split("=", 1) for line in
+                       (ROOT / ".env.example").read_text().splitlines()
+                       if line and not line.startswith("#") and "=" in line)
+        self.assertEqual(fixture["DATABASE_URL"], fixture["DATABASE_MIGRATION_URL"])
+        self.assertEqual(urlsplit(fixture["DATABASE_URL"]).username, fixture["POSTGRES_USER"])
 
     def test_default_keeps_existing_volume_and_private_metrics(self):
         config = self.config()

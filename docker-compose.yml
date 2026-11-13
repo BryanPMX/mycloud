@@ -6,6 +6,8 @@ services:
       dockerfile: Dockerfile.api
     env_file:
     - ".env"
+    environment:
+      DATABASE_URL: "${DATABASE_URL}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,6 +48,8 @@ services:
       dockerfile: Dockerfile.worker
     env_file:
     - ".env"
+    environment:
+      DATABASE_URL: "${DATABASE_URL}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -159,6 +163,8 @@ services:
       dockerfile: Dockerfile.migrate
     env_file:
     - ".env"
+    environment:
+      DATABASE_URL: "${DATABASE_MIGRATION_URL:?DATABASE_MIGRATION_URL is required}"
     depends_on:
       postgres:
         condition: service_healthy

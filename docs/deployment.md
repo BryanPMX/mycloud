@@ -14,6 +14,32 @@ Go is pinned to patched 1.26.11; core builder/runtime image manifests are pinned
 
 Use `deploy/portainer-stack.npm.yml` for production. This primary file publishes diagnostics only on `127.0.0.1:19090/19091` for the existing host-network Prometheus. It defaults to `MYCLOUD_MINIO_STORAGE_FILE=storage/minio-volume.yml`, preserving the current named volume. SSD selection is separately gated by [storage.md](storage.md). Do not change the production Compose project name or remove volumes.
 
+## PostgreSQL runtime and migration credentials
+
+Production uses two PostgreSQL connections:
+
+| Variable | Purpose |
+| --- | --- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | Existing PostgreSQL container/admin identity (`mycloud`); preserve both values. |
+| `DATABASE_MIGRATION_URL` | Privileged schema/migration owner connection (`mycloud`); mapped only to the migrator's `DATABASE_URL`. |
+| `DATABASE_URL` | Least-privilege API/worker connection (`mycloud_app`) after the staged cutover. |
+
+Both production Compose files reject absent or empty `DATABASE_MIGRATION_URL`. The migrator binary still consumes `DATABASE_URL`; it receives no variable named `DATABASE_MIGRATION_URL`. API/worker keep their existing `DATABASE_URL` mapping and receive no migration URL variable. PostgreSQL initialization/ownership, application code and migrations are unchanged. MinIO root/app separation is independent and unchanged.
+
+The owner has already created and verified the runtime role manually. Role creation, grants and credential rotation remain operator-managed; this repository does not perform them. The runtime role needs application DML, sequence and function access, but **no access to `public.schema_migrations`, no schema CREATE rights, no object ownership and no ability to assume the owner role**. See [the runtime privilege boundary](security.md#postgresql-identities). After future migrations, the operator must ensure new application objects receive the necessary runtime grants without exposing the ledger.
+
+After review, perform this separate manual cutover through the existing Portainer stack:
+
+1. Preserve the current admin `DATABASE_URL`, private configuration and rollback records securely. Add `DATABASE_MIGRATION_URL` with that **same current admin URL**. Preserve `POSTGRES_USER` / `POSTGRES_PASSWORD` and all unrelated settings; do not print URLs, put them in shell history or paste them into chat/Git.
+2. Deploy the reviewed Compose wiring while `DATABASE_URL` still points to admin. Keep the current reviewed images, project, storage, MinIO settings, networking, ports and resource limits. Validate privately with `docker compose --env-file PRIVATE_ENV -f deploy/portainer-stack.npm.yml config --quiet`; never print a real rendered configuration.
+3. Verify that the migrator exits zero and API/worker are healthy, including `/health/ready`. Do not proceed if migration or readiness fails.
+4. Replace **only `DATABASE_URL`** with the already-prepared `mycloud_app` connection. Keep `DATABASE_MIGRATION_URL` on the preserved admin connection and keep PostgreSQL container variables unchanged. URL-encode credential characters as required; example files contain fake values only.
+5. Redeploy and verify separation privately: API/worker connect as `mycloud_app`, the migrator connects as `mycloud`, API/worker environments have no migration URL, and the runtime cannot access `schema_migrations` or create schema objects. Verify readiness and disposable-media upload, processing, preview/read and deletion. Source configuration tests do not prove live role grants or successful cutover.
+
+For rollback, replace `DATABASE_URL` with the preserved admin URL and redeploy API/worker using the reviewed wiring. Keep `DATABASE_MIGRATION_URL`, `POSTGRES_USER` / `POSTGRES_PASSWORD` and existing data unchanged. **Do not remove the runtime role during rollback.** Investigate and correct its grants separately before retrying. A source rollback alone does not restore an environment value.
+
+For local development, copy the new `DATABASE_MIGRATION_URL` entry into the private `.env` before using the updated Compose file. `.env.example` uses the same development `mycloud` identity for both URLs because no separate local runtime role is created. API/worker retain the shared development env file; production uses explicit per-service environments. The local migrator explicitly overrides its container `DATABASE_URL` from `DATABASE_MIGRATION_URL`. Direct invocation of `scripts/migrate.sh` still requires an explicitly supplied owner connection as `DATABASE_URL`; the isolated integration/restore fixtures use their fixed synthetic owner and never load production credentials.
+
 ## MinIO credential separation
 
 `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` belong only to MinIO administration. Both production Compose files require them explicitly and refuse absent or empty values. API/worker retain `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` for a separate least-privilege application identity; the Compose change does not create users, rotate credentials or prove a live cutover.
