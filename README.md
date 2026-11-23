@@ -12,6 +12,7 @@ Start with [the audit](docs/audit.md), [implementation plan](docs/implementation
 - [Storage, quotas and SSD migration](docs/storage.md)
 - [Backup and verified restore](docs/backup-restore.md)
 - [Deployment, monitoring and iPhone acceptance](docs/deployment.md)
+- [iOS-first mobile release and device acceptance matrix](docs/mobile-acceptance.md)
 - [Disaster recovery](docs/disaster-recovery.md)
 
 Public HTTPS hosts are `api.mynube.live` and `minio.mynube.live`; the Flutter web app uses `mynube.live`. The MinIO console and all administration stay on localhost/SSH/Tailscale. Never expose a console proxy or make buckets anonymous.

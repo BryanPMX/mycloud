@@ -1,4 +1,3 @@
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'selected_upload_file.dart';
@@ -8,22 +7,16 @@ const bool supportsUploadPicking = true;
 
 final ImagePicker _picker = ImagePicker();
 
-Future<List<SelectedUploadFile>> pickUploadFiles() async {
+Future<List<SelectedUploadFile>> pickUploadFiles({ImagePicker? picker}) async {
+  final mediaPicker = picker ?? _picker;
   try {
-    final files = await _picker.pickMultipleMedia();
-    if (files.isNotEmpty) {
-      return _wrapFiles(files);
-    }
-  } on PlatformException {
-    rethrow;
+    // An empty result is cancellation, not a reason to open another picker.
+    return _wrapFiles(await mediaPicker.pickMultipleMedia());
   } on UnsupportedError {
-    rethrow;
-  } catch (_) {
-    // Older iOS targets can reject mixed multi-select support; fall back to
-    // single media selection so native/mobile picking still works.
+    // Includes UnimplementedError on older native implementations.
   }
 
-  final single = await _picker.pickMedia();
+  final single = await mediaPicker.pickMedia();
   if (single == null) {
     return const <SelectedUploadFile>[];
   }

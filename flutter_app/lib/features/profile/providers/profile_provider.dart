@@ -41,6 +41,7 @@ class ProfileProvider extends ChangeNotifier {
   bool _isSavingProfile = false;
   bool _isUploadingAvatar = false;
   bool _hasRecoveredLostAvatar = false;
+  bool _disposed = false;
   String? _profileMessage;
   bool _profileMessageIsError = false;
 
@@ -261,25 +262,23 @@ class ProfileProvider extends ChangeNotifier {
       return;
     }
     _hasRecoveredLostAvatar = true;
+    final ownerId = currentUser!.id;
 
     try {
       final file = await _lostAvatarFileRetriever();
-      if (file == null) {
+      if (_disposed || currentUser?.id != ownerId || file == null) {
         return;
       }
 
       _setProfileMessage(
-        'Recovered an interrupted avatar selection. Uploading now...',
+        'Your last photo selection was interrupted. Choose your profile photo again to upload it.',
       );
       notifyListeners();
-
-      _isUploadingAvatar = true;
-      notifyListeners();
-      await _uploadAvatarFile(file);
     } on UnsupportedError {
       // Ignore unsupported lost-data recovery on non-Android targets.
-    } finally {
-      _isUploadingAvatar = false;
+    } catch (_) {
+      if (_disposed || currentUser?.id != ownerId) return;
+      _setProfileMessage('Choose your profile photo again to upload it.');
       notifyListeners();
     }
   }
@@ -354,6 +353,7 @@ class ProfileProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     authProvider.removeListener(_handleAuthChanged);
     super.dispose();
   }

@@ -101,3 +101,24 @@ All twelve Compose contracts passed with distinct public runtime/owner URLs, inc
 Seven complete resolved configurations (NPM named volume, guarded SSD, monitoring, combined SSD/monitoring, alternate Portainer named volume/SSD override and local Compose) were compared with the base commit using only public dummy credentials and disabled service env-file resolution. Only the intended database environment mappings changed; all MinIO configuration, storage, networking, ports, volumes, limits and other service settings matched. Backup-failure, storage-identity and MinIO administrative-bootstrap regressions passed. Python syntax, all sixteen shell syntax checks and `git diff --check` passed. The full diff and tracked database URL references were reviewed; only fake examples/fixtures were added, and private `.env` files were never read.
 
 No Go/Flutter source, SQL migration or operational script changed, so application suites and live database rehearsals were not rerun. No database roles/passwords were created, altered, dropped or rotated. No application containers or server services were started or modified, and no deployment occurred. The owner's already-prepared `mycloud_app` role and the separate [manual cutover](deployment.md#postgresql-runtime-and-migration-credentials) still require operator acceptance; repository configuration tests do not certify live grants or deployment.
+
+## Mobile acceptance preparation — 23 November 2026
+
+The release order is iOS first, with acceptance required on both platforms. The
+owner reports an iPhone 16 Pro Max on iOS 27.0.1 and an individual Apple developer
+membership; physical device discovery, signing and hardware acceptance remain
+pending. Android Studio's API 36.1 AVD is available, with no physical Android
+device connected during discovery. See [mobile-acceptance.md](mobile-acceptance.md)
+for the test matrix and background-transfer implementation gates.
+
+Native picker cancellation no longer opens another picker. Recovery now asks for
+explicit reselection instead of silently treating unowned lost-picker data as
+vault media or a profile photo. Delayed picker results/errors cannot overwrite a
+different session's picker state. Eight new regressions plus the existing suite
+passed (62 tests total); Flutter analysis passed. A fresh unsigned production iOS
+release compiled with sample mode disabled and Xcode/iPhoneOS SDK 27.1. Both
+sample admin/member integration flows passed on Android API 36.1 and the iPhone
+17 Pro Max/iOS 26.2 simulator. These are build/UI results, not physical device,
+production-network, TestFlight or background-upload acceptance. Dependencies,
+credentials and server services were unchanged. Native background transfer and
+persistent account-owned upload recovery remain unimplemented release gates.

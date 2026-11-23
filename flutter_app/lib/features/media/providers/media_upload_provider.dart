@@ -114,14 +114,28 @@ class MediaUploadProvider extends ChangeNotifier {
       }
       await queueUploads(files);
     } on UnsupportedError catch (error) {
+      if (generation != _generation ||
+          ownerId != _authProvider.currentUser?.id ||
+          _disposed) {
+        return;
+      }
       _errorMessage = error.message;
       notifyListeners();
     } catch (_) {
+      if (generation != _generation ||
+          ownerId != _authProvider.currentUser?.id ||
+          _disposed) {
+        return;
+      }
       _errorMessage = 'Unable to open the upload picker right now.';
       notifyListeners();
     } finally {
-      _isPickingFiles = false;
-      notifyListeners();
+      if (generation == _generation &&
+          ownerId == _authProvider.currentUser?.id &&
+          !_disposed) {
+        _isPickingFiles = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -171,20 +185,28 @@ class MediaUploadProvider extends ChangeNotifier {
       return;
     }
     _hasRecoveredLostFiles = true;
+    final generation = _generation;
+    final ownerId = _authProvider.currentUser?.id;
+    bool current() =>
+        generation == _generation &&
+        ownerId == _authProvider.currentUser?.id &&
+        !_disposed;
 
     try {
       final files = await _lostUploadFilesRetriever();
-      if (files.isEmpty) {
+      if (!current() || files.isEmpty) {
         return;
       }
 
+      // Lost picker data has no trustworthy account ID. Do not assign it to
+      // whichever account signs in after the process was killed.
       _errorMessage =
-          'Recovered files from an interrupted picker session. Uploading now...';
+          'Your last selection was interrupted. Choose those photos or videos again to upload them.';
       notifyListeners();
-      await queueUploads(files);
     } on UnsupportedError {
       // Ignore unsupported lost-data recovery on non-Android targets.
     } catch (_) {
+      if (!current()) return;
       _errorMessage =
           'Unable to restore the interrupted upload picker session.';
       notifyListeners();
