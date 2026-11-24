@@ -8,6 +8,16 @@ Web cookies are HttpOnly, Secure in production and SameSite Strict. Native token
 
 The Flutter client serializes uploads, bounds chunks, and ties queued/in-flight work and retried requests to the originating account. Signing out cancels continuation under another account. Interrupted OS picker selections require choosing files again rather than automatically assigning them to a later account. Refresh outages preserve valid stored credentials; revoked sessions are cleared.
 
+The opt-in [resumable upload/Photos preview](photo-backup.md) defaults off. It stages
+bounded native sources with atomic owner-scoped checkpoints. iOS excludes staging
+from device backup and protects it until first unlock. Auth remains in secure
+storage; the native transfer library retains short-lived signed object URLs
+while executing, so never export its records. Discovery needs explicit per-device/
+account consent and cannot silently expand after permission changes. This is
+one-way backup, not end-to-end encryption. The API's optional stable upload ID
+reuses only the same owner's matching reservation; quotas, private authorization,
+signature validation and scanning remain unchanged.
+
 ## Object authorization
 
 The database is the authorization source. Private keys contain UUIDs/date/extension, not names or emails. Knowing a key is insufficient. Read URLs require current ownership or a valid household/album share and ready, nontrashed status. Defaults are five minutes; original URLs cannot exceed fifteen minutes. A previously issued bearer URL can remain usable until expiry after unsharing; immediate revocation requires an authenticated streaming proxy, which is deliberately not added here.

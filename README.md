@@ -13,6 +13,7 @@ Start with [the audit](docs/audit.md), [implementation plan](docs/implementation
 - [Backup and verified restore](docs/backup-restore.md)
 - [Deployment, monitoring and iPhone acceptance](docs/deployment.md)
 - [iOS-first mobile release and device acceptance matrix](docs/mobile-acceptance.md)
+- [Opt-in photo backup and resumable upload preview](docs/photo-backup.md)
 - [Disaster recovery](docs/disaster-recovery.md)
 
 Public HTTPS hosts are `api.mynube.live` and `minio.mynube.live`; the Flutter web app uses `mynube.live`. The MinIO console and all administration stay on localhost/SSH/Tailscale. Never expose a console proxy or make buckets anonymous.
@@ -42,6 +43,6 @@ flutter build web --release --dart-define=USE_DEMO_DATA=false
 
 Real PostgreSQL/Redis/MinIO/ClamAV and complete upload/feed tests use the isolated `tests/integration/compose.yml` stack; see its README. CI gates publishing of API, worker, migration and backup images. Use one reviewed immutable `sha-FULL_COMMIT` tag for rollout and preserve rollback copies.
 
-Native uploads are chunked and limited to 512 MiB per file. Keep the app open during transfer; OS-managed background backup/resume after termination and App Store submission are not yet accepted production capabilities. The existing numbered design documents remain historical references; `docs/` describes the current operational design.
+Uploads are chunked and limited to 512 MiB per file. Default builds require keeping the app open. A gated preview adds native recovery/part transport and opt-in device-album backup while open/on return; both flags default off. Website retry requires the original tab. Physical device acceptance and store submission remain open gates; see [preview behavior and limits](docs/photo-backup.md). The existing numbered design documents remain historical references; `docs/` describes the current operational design.
 
 The consumer client is branded **Mynube**, a private personal vault: a photographic library, collections and a deliberately small shared circle. See [the design system](docs/design-system.md) for branding, reusable components, responsive layouts and accessibility behavior. The Flutter implementation supports desktop web, iOS and Android without changing the existing API/storage architecture.

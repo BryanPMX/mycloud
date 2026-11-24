@@ -3,6 +3,7 @@ enum MediaUploadStage {
   initializing('Starting'),
   uploading('Uploading'),
   processing('Processing'),
+  paused('Paused'),
   complete('Ready'),
   failed('Failed'),
   cancelled('Cancelled');
@@ -47,6 +48,8 @@ class MediaUploadTask {
   bool get isTerminal => stage.isTerminal;
 
   bool get canCancel =>
+      stage == MediaUploadStage.queued ||
+      stage == MediaUploadStage.paused ||
       stage == MediaUploadStage.initializing ||
       stage == MediaUploadStage.uploading;
 

@@ -18,6 +18,10 @@ import 'features/auth/providers/auth_provider.dart';
 import 'features/comments/providers/comment_provider.dart';
 import 'features/directory/providers/family_directory_provider.dart';
 import 'features/media/data/upload_picker.dart';
+import 'features/media/data/transfers/transfer_factory.dart';
+import 'features/backup/providers/device_backup_provider.dart';
+import 'features/backup/data/backup_preferences_store.dart';
+import 'features/backup/data/photo_library_factory.dart';
 import 'features/media/providers/media_list_provider.dart';
 import 'features/media/providers/media_upload_provider.dart';
 import 'features/profile/data/avatar_picker.dart';
@@ -65,7 +69,8 @@ class AppController {
   }
 }
 
-class _AppState extends State<App> {
+class _AppState extends State<App> with WidgetsBindingObserver {
+  late final DeviceBackupProvider _backupProvider;
   late final ConnectivityService _connectivityService;
   late final ApiTransport _transport;
   late final ApiClient _apiClient;
@@ -88,6 +93,7 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _connectivityService = ConnectivityService(
       initialPlatformOnline: widget.config.useDemoData ? true : null,
       registerPlatformListener: widget.config.useDemoData ? (_) => null : null,
@@ -120,7 +126,22 @@ class _AppState extends State<App> {
       connectivityService: _connectivityService,
       uploadFilesPicker: widget.uploadFilesPicker,
       lostUploadFilesRetriever: widget.lostUploadFilesRetriever,
+      uploadJournal:
+          widget.config.enableResumableUploads && !widget.config.useDemoData
+              ? createUploadJournal()
+              : null,
+      partTransfer:
+          widget.config.enableResumableUploads && !widget.config.useDemoData
+              ? createNativePartTransfer()
+              : null,
     );
+    _backupProvider = DeviceBackupProvider(
+        auth: _authProvider,
+        uploads: _mediaUploadProvider,
+        library: createPhotoLibrary(),
+        store: SecureBackupPreferencesStore(),
+        available: widget.config.enableDeviceBackup &&
+            widget.config.enableResumableUploads);
     _albumProvider = AlbumProvider(
       config: widget.config,
       apiClient: _apiClient,
@@ -174,6 +195,7 @@ class _AppState extends State<App> {
         transport: _transport,
         auth: _authProvider);
     _router = AppRouter(
+      backupProvider: widget.config.enableDeviceBackup ? _backupProvider : null,
       feedProvider: _feedProvider,
       appConfig: widget.config,
       apiClient: _apiClient,
@@ -195,6 +217,8 @@ class _AppState extends State<App> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _backupProvider.dispose();
     _mediaProvider.removeListener(_handleSelectedMediaChanged);
     _authProvider.removeListener(_handleAuthChanged);
     _router.dispose();
@@ -211,6 +235,14 @@ class _AppState extends State<App> {
     _transport.dispose();
     _connectivityService.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _backupProvider.setForeground(state == AppLifecycleState.resumed);
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_mediaUploadProvider.reconcileProcessing());
+    }
   }
 
   @override
@@ -241,7 +273,8 @@ class _AppState extends State<App> {
 
   void _handleAuthChanged() {
     final user = _authProvider.currentUser;
-    if (user == null) {
+    if (user == null ||
+        (_bootstrappedUserId != null && _bootstrappedUserId != user.id)) {
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
       _bootstrappedUserId = null;
@@ -252,7 +285,7 @@ class _AppState extends State<App> {
       _commentProvider.clear();
       _adminProvider.reset();
       _familyDirectoryProvider.reset();
-      return;
+      if (user == null) return;
     }
 
     if (_bootstrappedUserId == user.id) {
@@ -281,6 +314,7 @@ class _AppState extends State<App> {
     }
 
     await Future.wait<void>(<Future<void>>[
+      _mediaUploadProvider.restorePendingUploads(),
       _mediaUploadProvider.recoverLostFiles(),
       _profileProvider.recoverLostAvatarUpload(),
     ]);

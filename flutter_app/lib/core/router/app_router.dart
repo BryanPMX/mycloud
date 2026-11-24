@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../connectivity/connectivity_service.dart';
+import '../../features/backup/providers/device_backup_provider.dart';
 import '../../features/feed/providers/feed_provider.dart';
 import '../../features/feed/ui/feed_screen.dart';
 import '../../features/feed/ui/media_viewer.dart';
@@ -123,6 +124,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
     required this.familyDirectoryProvider,
     required this.uploadProgressHub,
     required this.connectivityService,
+    this.backupProvider,
   }) {
     authProvider.addListener(_handleAuthChanged);
   }
@@ -140,6 +142,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
   final FamilyDirectoryProvider familyDirectoryProvider;
   final UploadProgressHub uploadProgressHub;
   final ConnectivityService connectivityService;
+  final DeviceBackupProvider? backupProvider;
 
   @override
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -294,6 +297,7 @@ class AppRouter extends RouterDelegate<AppRoutePath>
         );
       case AppSection.profile:
         return ProfileScreen(
+          backupProvider: backupProvider,
           profileProvider: profileProvider,
           familyDirectoryProvider: familyDirectoryProvider,
         );

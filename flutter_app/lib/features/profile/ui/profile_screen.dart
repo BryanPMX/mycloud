@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../backup/providers/device_backup_provider.dart';
+import '../../backup/ui/backup_settings_card.dart';
 
 import '../../auth/domain/user.dart';
 import '../../directory/providers/family_directory_provider.dart';
@@ -14,8 +16,10 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen(
       {super.key,
       required this.profileProvider,
+      this.backupProvider,
       required this.familyDirectoryProvider});
   final ProfileProvider profileProvider;
+  final DeviceBackupProvider? backupProvider;
   final FamilyDirectoryProvider familyDirectoryProvider;
 
   @override
@@ -139,6 +143,10 @@ class ProfileScreen extends StatelessWidget {
                             ]);
                           }),
                           const SizedBox(height: 20),
+                          if (backupProvider != null) ...[
+                            BackupSettingsCard(provider: backupProvider!),
+                            const SizedBox(height: 20),
+                          ],
                           _ProfileCard(
                               title: 'Your account, in your hands',
                               subtitle:

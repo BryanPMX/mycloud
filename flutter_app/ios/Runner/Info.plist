@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MyNube needs access to your photo library so you can choose photos and videos to upload.</string>
+	<string>Choose which photos and videos Mynube can access for your uploads and optional album backup. Your phone originals are never changed.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -121,4 +121,37 @@ sample admin/member integration flows passed on Android API 36.1 and the iPhone
 17 Pro Max/iOS 26.2 simulator. These are build/UI results, not physical device,
 production-network, TestFlight or background-upload acceptance. Dependencies,
 credentials and server services were unchanged. Native background transfer and
-persistent account-owned upload recovery remain unimplemented release gates.
+persistent account-owned upload recovery were unimplemented at that checkpoint;
+the gated preview below supersedes that implementation status, not hardware acceptance.
+
+## Resumable transfer and opt-in Photos preview — 24 November 2026
+
+Both client flags remain off by default. No production configuration, credentials,
+services, media or rollback volumes changed. The backend accepts optional stable
+upload identities and reuses only matching owner-scoped reservations. Native
+staging/checkpoints, OS-managed current-part transport and explicit foreground/
+return album discovery share the normal application upload/worker pipeline.
+See [photo-backup.md](photo-backup.md) for exact guarantees and remaining limits.
+
+Flutter analysis and 92 automated tests passed, including permission expansion
+and revocation, account transitions, deduplication, paused/retry policy, corrupt
+staging recovery and responsive settings. Go vet/race tests and real PostgreSQL/
+Redis/MinIO integration passed. Docker E2E passed a real two-part synthetic PNG
+with init replay, saved first-part ETag, completion replay, worker readiness,
+byte-exact download and disposal. Only the isolated validation database/objects
+were used.
+
+Native HTTPS file-range transport and journal reconstruction passed on iOS 26.2
+simulator and Android API 36.1 emulator using only six synthetic bytes and a
+temporary bounded receiver. An unsigned iOS release compiled with both flags
+enabled. A sample-only browser preview was reviewed on desktop and at 390 px;
+the dialog choices were saved successfully. Screenshots contain fake albums,
+no private media or credentials. Clean Android release-mode APK and unsigned iOS
+release builds passed with both flags enabled; the normal production web build
+passed with flags off, and the flagged web build also passed. The first Android
+release attempt encountered a stale generated integration-test registration;
+regenerating local Flutter artifacts resolved it without changing app signing.
+Locked dependency resolution and the redacted source-diff secret scan passed.
+The temporary HTTPS receiver/tunnel, dedicated emulator/simulator and isolated
+Docker test containers/volumes were stopped/removed. These checks do not establish hardware Photos, suspension/force-quit,
+signing, store approval or unattended sync acceptance.

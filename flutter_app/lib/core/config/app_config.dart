@@ -6,6 +6,8 @@ class AppConfig {
     required this.websocketUri,
     required this.environmentLabel,
     required this.useDemoData,
+    this.enableResumableUploads = false,
+    this.enableDeviceBackup = false,
   });
 
   final String appName;
@@ -14,6 +16,8 @@ class AppConfig {
   final Uri websocketUri;
   final String environmentLabel;
   final bool useDemoData;
+  final bool enableResumableUploads;
+  final bool enableDeviceBackup;
 
   factory AppConfig.fromEnvironment() {
     const appName = String.fromEnvironment('APP_NAME', defaultValue: 'Mynube');
@@ -46,6 +50,9 @@ class AppConfig {
       environmentLabel: environmentLabel,
       useDemoData:
           useDemoData && environmentLabel.toLowerCase() != 'production',
+      enableResumableUploads:
+          const bool.fromEnvironment('ENABLE_RESUMABLE_UPLOADS'),
+      enableDeviceBackup: const bool.fromEnvironment('ENABLE_DEVICE_BACKUP'),
     );
   }
 

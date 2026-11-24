@@ -22,11 +22,15 @@ validation target.
 
 ## Transfer behavior required before release
 
-The existing uploader runs in Dart memory. Native background transfers and a
-persistent, account-owned queue are **not implemented** by the picker safety fix.
-No automatic background photo-backup claim is accepted.
+Default builds still use foreground uploads. The [gated preview](photo-backup.md)
+now implements private bounded native staging, atomic owner-scoped multipart
+checkpoints, native transfer of the current file part and opt-in album discovery
+while open/on return. Both flags default off. The picker safety fix alone did
+not provide these features. No unattended iCloud-style synchronization or
+guaranteed background queue-completion claim is accepted.
 
-Implement selected-file background uploads before approving the release:
+Validate the implemented selected-file foundation on physical hardware before
+approving the release, and close the remaining background orchestration gaps:
 
 1. Stage selected files in app-private storage, exclude staged media from device
    cloud backups, bound disk use and clean it after success/cancellation. Picker
@@ -83,7 +87,8 @@ asset; never empty a mixed trash list.
 
 ## Distribution gates
 
-1. Close native transfer implementation and the device matrix above.
+1. Complete physical validation of the preview, close background orchestration
+   gaps needed for the advertised behavior and pass the device matrix above.
 2. Close the outstanding SSD acceptance deletion/log/storage verification and
    independent backup/recovery checks; keep originals elsewhere meanwhile.
 3. Verify release signing and build an iOS distribution archive with sample mode
@@ -115,3 +120,27 @@ asset; never empty a mixed trash list.
   Photos/background behavior. An Android device-discovery warning occurred when
   the completed Android test emulator was stopped during iOS target discovery;
   the selected iOS simulator build and both tests nevertheless passed.
+
+## Gated transfer preview — 24 November 2026
+
+- Persistent native staging/checkpoints and a shared multipart transfer path are
+  implemented behind default-off flags. A stable client upload identity makes
+  lost init responses replay-safe; completion/processing reconciliation preserves
+  owned progress and finalizes only through the normal API/worker path.
+- Profile exposes explicit Photos permission, device-album/limited-scope choices,
+  include-existing, video and Wi-Fi options in a responsive preview. It defaults
+  off and never creates Collections/shares or deletes phone/vault originals.
+- The new native transport integration test passed over a temporary HTTPS tunnel
+  on iPhone 17 Pro Max / iOS 26.2 simulator and Android API 36.1 emulator. It sent
+  only six synthetic bytes in two ranges, reconstructed its private journal and
+  checked ETags/content. It did not request Photos or use production credentials.
+  This is native transport evidence, not background/termination or hardware sign-off.
+- The updated automated suite includes consent, access expansion/revocation,
+  account switching, persisted part ranges, bounded retries, corrupt journals,
+  completion-event races and 320/390/1440 px backup layout checks.
+- Actual physical Photos access/reselection, locked-screen scheduling, offline/
+  cellular transitions, process termination, HEIC/Live Photo behavior and store
+  permissions/distribution remain pending. Live Photos are skipped in this slice.
+- Discovery currently runs in the foreground/on return. One native part may
+  continue under OS scheduling; later part URLs/finalization can await reopening.
+  No periodic OS Photos scanner or full autonomous queue runner is implemented.

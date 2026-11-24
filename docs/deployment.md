@@ -8,6 +8,12 @@ Observed deployment: project `mycloud`, containers `mycloud-api-1`, `mycloud-wor
 
 ## Review and build gates
 
+Native resumable uploads and opt-in device backup are an engineering preview;
+both client flags default off. Roll out the compatible backend before enabling
+flagged clients and complete physical acceptance before broad distribution.
+No new credentials, SQL migration or storage switch is needed. See
+[photo-backup.md](photo-backup.md) for flags, privacy and platform limits.
+
 GitHub Go CI runs formatting, vet, race tests, the official vulnerability scanner and real dependency-backed integration tests. Flutter CI runs locked dependency resolution, analysis, tests and a production web build. Publishing waits for both reusable workflows, builds API/worker/migrate/backup for amd64/arm64 and pushes immutable `sha-FULL_COMMIT` tags to GHCR. The existing main-branch Portainer webhook remains, but do not merge this rollout until the backup/maintenance plan is ready. A configured `latest` deployment may redeploy immediately after merge.
 
 Go is pinned to patched 1.26.11; core builder/runtime image manifests are pinned. Flutter/Vercel use 3.35.4 and the lockfile. Dependency updates must rerun the checks; see [Go release history](https://go.dev/doc/devel/release) and the [Go vulnerability database](https://pkg.go.dev/vuln/).

@@ -519,7 +519,9 @@ class _UploadPanel extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Choose photos or videos up to 512 MB each. Keep Mynube open until uploading finishes; we’ll prepare previews for you.',
+                        mediaUploadProvider.backgroundTransfers
+                            ? 'Choose photos or videos up to 512 MB each. Transfers can continue in the background when your phone allows. Open Mynube to finish or resume your queue.'
+                            : 'Choose photos or videos up to 512 MB each. Keep Mynube open until uploading finishes; we’ll prepare previews for you.',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -635,6 +637,12 @@ class _UploadPanel extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _UploadTaskRow(
                     task: task,
+                    onResume: mediaUploadProvider.resumable
+                        ? () => mediaUploadProvider.resumeUpload(task.localId)
+                        : null,
+                    onPause: mediaUploadProvider.resumable
+                        ? () => mediaUploadProvider.pauseUpload(task.localId)
+                        : null,
                     onCancel: () {
                       mediaUploadProvider.cancelUpload(task.localId);
                     },
@@ -656,11 +664,15 @@ class _UploadTaskRow extends StatelessWidget {
     required this.task,
     required this.onCancel,
     required this.onDismiss,
+    this.onResume,
+    this.onPause,
   });
 
   final MediaUploadTask task;
   final VoidCallback onCancel;
   final VoidCallback onDismiss;
+  final VoidCallback? onResume;
+  final VoidCallback? onPause;
 
   @override
   Widget build(BuildContext context) {
@@ -693,6 +705,16 @@ class _UploadTaskRow extends StatelessWidget {
                 ),
               ),
               _TinyBadge(label: task.stage.label),
+              if (task.stage == MediaUploadStage.paused && onResume != null)
+                IconButton(
+                    onPressed: onResume,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    tooltip: 'Resume upload'),
+              if (task.stage == MediaUploadStage.uploading && onPause != null)
+                IconButton(
+                    onPressed: onPause,
+                    icon: const Icon(Icons.pause_rounded),
+                    tooltip: 'Pause upload'),
               if (task.canCancel)
                 IconButton(
                   onPressed: onCancel,
@@ -741,6 +763,8 @@ class _UploadTaskRow extends StatelessWidget {
         return 'Uploading your file.';
       case MediaUploadStage.processing:
         return 'Checking your file and preparing previews.';
+      case MediaUploadStage.paused:
+        return 'Paused. Resume when you’re ready.';
       case MediaUploadStage.complete:
         return 'Upload finished and processing is complete.';
       case MediaUploadStage.failed:
