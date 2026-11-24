@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -16,10 +17,11 @@ const (
 )
 
 type InitUploadCommand struct {
-	UserID    uuid.UUID
-	Filename  string
-	MimeType  string
-	SizeBytes int64
+	ClientUploadID uuid.UUID
+	UserID         uuid.UUID
+	Filename       string
+	MimeType       string
+	SizeBytes      int64
 }
 
 type InitUploadResult struct {
@@ -31,6 +33,7 @@ type InitUploadResult struct {
 }
 
 type InitUploadHandler struct {
+	mediaRepo     domain.MediaRepository
 	userRepo      domain.UserRepository
 	storage       domain.StorageService
 	uploadStore   domain.UploadSessionStore
@@ -48,12 +51,14 @@ func NewInitUploadHandler(
 	partSizeBytes int64,
 	partURLTTL time.Duration,
 	sessionTTL time.Duration,
+	mediaRepo domain.MediaRepository,
 ) *InitUploadHandler {
 	if partSizeBytes <= 0 {
 		partSizeBytes = DefaultPartSizeBytes
 	}
 
 	return &InitUploadHandler{
+		mediaRepo:     mediaRepo,
 		userRepo:      userRepo,
 		storage:       storage,
 		uploadStore:   uploadStore,
@@ -78,11 +83,30 @@ func (h *InitUploadHandler) Execute(ctx context.Context, command InitUploadComma
 	if err != nil {
 		return nil, err
 	}
+	// The client may have lost the first HTTP response. Reuse the same owned
+	// reservation instead of reserving quota and creating a second multipart job.
+	if command.ClientUploadID != uuid.Nil {
+		session, lookupErr := h.uploadStore.GetUploadSession(ctx, command.ClientUploadID)
+		if lookupErr == nil {
+			return h.existingSession(session, command, filename, mimeType)
+		}
+		if !errors.Is(lookupErr, domain.ErrNotFound) {
+			return nil, lookupErr
+		}
+		if _, lookupErr = h.mediaRepo.FindByIDForUser(ctx, command.ClientUploadID, command.UserID); lookupErr == nil {
+			return nil, domain.ErrConflict
+		} else if !errors.Is(lookupErr, domain.ErrNotFound) {
+			return nil, lookupErr
+		}
+	}
 	if !user.HasQuotaFor(command.SizeBytes + domain.DerivativeBudgetBytes) {
 		return nil, domain.ErrQuotaExceeded
 	}
 
 	mediaID := uuid.New()
+	if command.ClientUploadID != uuid.Nil {
+		mediaID = command.ClientUploadID
+	}
 	now := time.Now().UTC()
 	key := h.keyBuilder.BuildMediaObjectKey(user.ID, mediaID, filename, mimeType, now)
 
@@ -103,6 +127,11 @@ func (h *InitUploadHandler) Execute(ctx context.Context, command InitUploadComma
 	}
 	if err := h.uploadStore.SaveUploadSession(ctx, session, h.sessionTTL); err != nil {
 		_ = h.storage.AbortUpload(ctx, key, uploadID)
+		if command.ClientUploadID != uuid.Nil {
+			if existing, lookupErr := h.uploadStore.GetUploadSession(ctx, mediaID); lookupErr == nil {
+				return h.existingSession(existing, command, filename, mimeType)
+			}
+		}
 		return nil, err
 	}
 
@@ -113,4 +142,15 @@ func (h *InitUploadHandler) Execute(ctx context.Context, command InitUploadComma
 		PartSizeBytes: h.partSizeBytes,
 		PartURLTTL:    int(h.partURLTTL.Seconds()),
 	}, nil
+}
+
+func (h *InitUploadHandler) existingSession(session *domain.UploadSession, command InitUploadCommand, filename, mimeType string) (*InitUploadResult, error) {
+	if session.OwnerID != command.UserID {
+		return nil, domain.ErrNotFound
+	}
+	if session.MediaID != command.ClientUploadID || session.Filename != filename || session.MimeType != mimeType || session.SizeBytes != command.SizeBytes {
+		return nil, domain.ErrConflict
+	}
+	return &InitUploadResult{MediaID: session.MediaID, UploadID: session.UploadID, Key: session.ObjectKey,
+		PartSizeBytes: h.partSizeBytes, PartURLTTL: int(h.partURLTTL.Seconds())}, nil
 }

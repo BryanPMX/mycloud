@@ -307,9 +307,10 @@ func (h *MediaHandler) InitUpload(c *gin.Context) {
 	}
 
 	var request struct {
-		Filename  string `json:"filename"`
-		MimeType  string `json:"mime_type"`
-		SizeBytes int64  `json:"size_bytes"`
+		ClientUploadID uuid.UUID `json:"client_upload_id"`
+		Filename       string    `json:"filename"`
+		MimeType       string    `json:"mime_type"`
+		SizeBytes      int64     `json:"size_bytes"`
 	}
 	if err := httpx.BindJSON(c, &request); err != nil {
 		writeError(c, errInvalidInput())
@@ -317,10 +318,11 @@ func (h *MediaHandler) InitUpload(c *gin.Context) {
 	}
 
 	result, err := h.initUploadHandler.Execute(c.Request.Context(), mediacmd.InitUploadCommand{
-		UserID:    userID,
-		Filename:  request.Filename,
-		MimeType:  request.MimeType,
-		SizeBytes: request.SizeBytes,
+		ClientUploadID: request.ClientUploadID,
+		UserID:         userID,
+		Filename:       request.Filename,
+		MimeType:       request.MimeType,
+		SizeBytes:      request.SizeBytes,
 	})
 	if err != nil {
 		writeError(c, err)

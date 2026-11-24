@@ -205,6 +205,54 @@ func TestIntegrationQuotaReservationsAndAccounting(t *testing.T) {
 	}
 }
 
+func TestIntegrationUploadIdentityReservation(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	owner := testUser(t, db, 1<<30, "member")
+	store := NewUploadSessionStore(db)
+	id := uuid.New()
+	var wg sync.WaitGroup
+	results := make(chan error, 8)
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results <- store.SaveUploadSession(ctx, domain.UploadSession{
+				MediaID: id, OwnerID: owner, SizeBytes: 1024, Filename: "synthetic.png",
+				MimeType: "image/png", ObjectKey: uuid.NewString(), UploadID: uuid.NewString(), CreatedAt: time.Now(),
+			}, time.Hour)
+		}()
+	}
+	wg.Wait()
+	close(results)
+	accepted := 0
+	for err := range results {
+		if err == nil {
+			accepted++
+		} else if !errors.Is(err, domain.ErrConflict) {
+			t.Fatal(err)
+		}
+	}
+	if accepted != 1 {
+		t.Fatalf("accepted %d reservations for one upload identity, want 1", accepted)
+	}
+	session, err := store.GetUploadSession(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := testMedia(owner, session.SizeBytes)
+	item.ID = id
+	if err := NewMediaRepository(db).Create(ctx, item); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteUploadSession(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveUploadSession(ctx, *session, time.Hour); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("completed identity must not be reserved again: %v", err)
+	}
+}
+
 type integrationCleaner struct{ fail bool }
 
 func (c *integrationCleaner) DeleteMediaAssets(context.Context, *domain.Media) error {

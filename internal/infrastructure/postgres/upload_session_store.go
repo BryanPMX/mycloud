@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/yourorg/mycloud/internal/domain"
 )
@@ -32,6 +33,15 @@ func (s *UploadSessionStore) SaveUploadSession(ctx context.Context, session doma
 	if !active {
 		return domain.ErrUnauthorized
 	}
+	// Serialize against this owner's media creation/quota accounting before
+	// checking replay identity, including a concurrent completion of this ID.
+	var completed bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media WHERE id=$1)`, session.MediaID).Scan(&completed); err != nil {
+		return err
+	}
+	if completed {
+		return domain.ErrConflict
+	}
 	var reserved int64
 	if err = tx.QueryRow(ctx, `SELECT COALESCE(sum(s.reserved_bytes),0) FROM upload_sessions s WHERE owner_id=$1 AND NOT EXISTS(SELECT 1 FROM media m WHERE m.id=s.media_id)`, session.OwnerID).Scan(&reserved); err != nil {
 		return err
@@ -46,6 +56,10 @@ func (s *UploadSessionStore) SaveUploadSession(ctx context.Context, session doma
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO upload_sessions(media_id,owner_id,reserved_bytes,session,expires_at) VALUES($1,$2,$3,$4,now()+$5::interval)`, session.MediaID, session.OwnerID, bytes, payload, ttl.String())
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.ErrConflict
+		}
 		return err
 	}
 	return tx.Commit(ctx)

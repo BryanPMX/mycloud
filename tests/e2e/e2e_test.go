@@ -79,24 +79,17 @@ func seed(t *testing.T, db *pgxpool.Pool, role string) account {
 }
 func upload(t *testing.T, owner account, name, mime string, data []byte) string {
 	t.Helper()
-	init := call(t, "POST", "/media/upload/init", owner.token, map[string]any{"filename": name, "mime_type": mime, "size_bytes": len(data)}, 201)
+	clientID := uuid.NewString()
+	request := map[string]any{"filename": name, "mime_type": mime, "size_bytes": len(data), "client_upload_id": clientID}
+	init := call(t, "POST", "/media/upload/init", owner.token, request, 201)
 	id := init["media_id"].(string)
 	uploadID := init["upload_id"].(string)
+	replayed := call(t, "POST", "/media/upload/init", owner.token, request, 201)
+	if id != clientID || replayed["media_id"] != id || replayed["upload_id"] != uploadID {
+		t.Fatal("upload initialization replay changed the owned reservation")
+	}
 	signed := call(t, "POST", "/media/upload/"+id+"/part-url", owner.token, map[string]any{"upload_id": uploadID, "part_number": 1}, 200)
-	req, err := http.NewRequest("PUT", signed["url"].(string), bytes.NewReader(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	response, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
-		t.Fatal("signed upload failed")
-	}
-	io.Copy(io.Discard, response.Body)
-	response.Body.Close()
-	if response.StatusCode != 200 {
-		t.Fatal("object upload rejected")
-	}
-	etag := response.Header.Get("ETag")
+	etag := putUploadPart(t, signed["url"].(string), data)
 	call(t, "POST", "/media/upload/"+id+"/complete", owner.token, map[string]any{"upload_id": uploadID, "parts": []any{map[string]any{"part_number": 1, "etag": etag}}}, 200)
 	deadline := time.Now().Add(90 * time.Second)
 	for time.Now().Before(deadline) {
@@ -112,6 +105,93 @@ func upload(t *testing.T, owner account, name, mime string, data []byte) string 
 	t.Fatal("worker did not finish processing valid media")
 	return ""
 }
+func putUploadPart(t *testing.T, signedURL string, data []byte) string {
+	t.Helper()
+	request, err := http.NewRequest("PUT", signedURL, bytes.NewReader(data))
+	if err != nil {
+		t.Fatal("could not prepare synthetic upload part")
+	}
+	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(request)
+	if err != nil {
+		t.Fatal("synthetic object upload failed")
+	}
+	io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatal("synthetic object upload rejected")
+	}
+	etag := response.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("synthetic upload part missing ETag")
+	}
+	return etag
+}
+
+func verifyMultipartResume(t *testing.T, owner account) {
+	t.Helper()
+	frame := image.NewRGBA(image.Rect(0, 0, 1536, 1536))
+	for y := 0; y < 1536; y++ {
+		for x := 0; x < 1536; x++ {
+			frame.SetRGBA(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: 80, A: 255})
+		}
+	}
+	var encoded bytes.Buffer
+	encoder := png.Encoder{CompressionLevel: png.NoCompression}
+	if err := encoder.Encode(&encoded, frame); err != nil {
+		t.Fatal("synthetic large PNG encoding failed")
+	}
+	data := encoded.Bytes()
+	clientID := uuid.NewString()
+	request := map[string]any{"filename": "synthetic-resumable.png", "mime_type": "image/png", "size_bytes": len(data), "client_upload_id": clientID}
+	init := call(t, "POST", "/media/upload/init", owner.token, request, 201)
+	partSize := int(init["part_size_bytes"].(float64))
+	if len(data) <= partSize || len(data) > 2*partSize {
+		t.Fatal("resumable fixture must span exactly two parts")
+	}
+	uploadID := init["upload_id"].(string)
+	first := call(t, "POST", "/media/upload/"+clientID+"/part-url", owner.token, map[string]any{"upload_id": uploadID, "part_number": 1}, 200)
+	etag1 := putUploadPart(t, first["url"].(string), data[:partSize])
+	// Simulate a resumed client with only its durable session and confirmed ETag.
+	replay := call(t, "POST", "/media/upload/init", owner.token, request, 201)
+	if replay["media_id"] != clientID || replay["upload_id"] != uploadID {
+		t.Fatal("resume replaced the existing upload")
+	}
+	second := call(t, "POST", "/media/upload/"+clientID+"/part-url", owner.token, map[string]any{"upload_id": uploadID, "part_number": 2}, 200)
+	etag2 := putUploadPart(t, second["url"].(string), data[partSize:])
+	completion := map[string]any{"upload_id": uploadID, "parts": []any{map[string]any{"part_number": 1, "etag": etag1}, map[string]any{"part_number": 2, "etag": etag2}}}
+	call(t, "POST", "/media/upload/"+clientID+"/complete", owner.token, completion, 200)
+	call(t, "POST", "/media/upload/"+clientID+"/complete", owner.token, completion, 200)
+	ready := false
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		item := call(t, "GET", "/media/"+clientID, owner.token, nil, 200)
+		if item["status"] == "ready" {
+			ready = true
+			break
+		}
+		if item["status"] == "failed" {
+			t.Fatal("resumed PNG processing failed")
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if !ready {
+		t.Fatal("resumed PNG did not become ready within 60 seconds")
+	}
+	signed := call(t, "GET", "/media/"+clientID+"/url", owner.token, nil, 200)
+	response, err := (&http.Client{Timeout: 15 * time.Second}).Get(signed["url"].(string))
+	if err != nil {
+		t.Fatal("resumed original unavailable")
+	}
+	original, readErr := io.ReadAll(response.Body)
+	response.Body.Close()
+	if readErr != nil || response.StatusCode != 200 || !bytes.Equal(original, data) {
+		t.Fatal("resumed original bytes differ")
+	}
+	call(t, "DELETE", "/media/"+clientID, owner.token, nil, 204)
+	call(t, "DELETE", "/media/"+clientID+"/permanent", owner.token, nil, 204)
+	call(t, "GET", "/media/"+clientID, owner.token, nil, 404)
+}
+
 func TestPrivateFamilyCloudEndToEnd(t *testing.T) {
 	if os.Getenv("MYCLOUD_E2E") != "isolated-local-stack" {
 		t.Skip("explicit local e2e acknowledgement required")
@@ -135,6 +215,7 @@ func TestPrivateFamilyCloudEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner, member, outsider := seed(t, db, "admin"), seed(t, db, "member"), seed(t, db, "admin")
+	verifyMultipartResume(t, owner)
 	frame := image.NewRGBA(image.Rect(0, 0, 160, 120))
 	for y := 0; y < 120; y++ {
 		for x := 0; x < 160; x++ {

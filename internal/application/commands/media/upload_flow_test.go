@@ -315,6 +315,7 @@ func TestInitUploadHandlerExecute(t *testing.T) {
 		DefaultPartSizeBytes,
 		15*time.Minute,
 		48*time.Hour,
+		&fakeMediaRepo{},
 	)
 
 	result, err := handler.Execute(context.Background(), InitUploadCommand{
@@ -464,4 +465,32 @@ func TestCompleteUploadHandlerExecuteReturnsExistingMediaWhenSessionIsGone(t *te
 
 func (s *fakeStorageService) InspectUpload(context.Context, string) (domain.UploadInfo, error) {
 	return domain.UploadInfo{SizeBytes: 2048, Header: []byte("\x00\x00\x00\x18ftypisom")}, nil
+}
+
+func TestUploadInitClientIdentityReplay(t *testing.T) {
+	owner := uuid.New()
+	client := uuid.New()
+	users := &fakeMediaUserRepo{user: &domain.User{ID: owner, Active: true, QuotaBytes: 100_000_000}}
+	storage := &fakeStorageService{uploadID: "owned-upload"}
+	sessions := &fakeUploadStore{}
+	handler := NewInitUploadHandler(users, storage, sessions, fakeKeyBuilder{key: "synthetic"}, DefaultPartSizeBytes, time.Minute, time.Hour, &fakeMediaRepo{})
+	command := InitUploadCommand{UserID: owner, ClientUploadID: client, Filename: "synthetic.png", MimeType: "image/png", SizeBytes: 100}
+	first, err := handler.Execute(context.Background(), command)
+	if err != nil || first.MediaID != client {
+		t.Fatalf("initial client upload identity not preserved: %v", err)
+	}
+	storage.initiatedKey = ""
+	second, err := handler.Execute(context.Background(), command)
+	if err != nil || second.UploadID != first.UploadID || storage.initiatedKey != "" {
+		t.Fatalf("replay created another storage upload: %v", err)
+	}
+	command.SizeBytes++
+	if _, err = handler.Execute(context.Background(), command); err != domain.ErrConflict {
+		t.Fatalf("changed upload reused reservation: %v", err)
+	}
+	command.SizeBytes--
+	sessions.session.OwnerID = uuid.New()
+	if _, err = handler.Execute(context.Background(), command); err != domain.ErrNotFound {
+		t.Fatalf("another owner could replay upload: %v", err)
+	}
 }

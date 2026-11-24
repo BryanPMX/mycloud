@@ -158,6 +158,7 @@ func main() {
 		mediacmd.DefaultPartSizeBytes,
 		15*time.Minute,
 		48*time.Hour,
+		mediaRepo,
 	)
 	partURLHandler := mediacmd.NewPresignUploadPartHandler(userRepo, storageService, uploadStore, 15*time.Minute)
 	completeUploadHandler := mediacmd.NewCompleteUploadHandler(userRepo, mediaRepo, jobRepo, jobQueue, storageService, uploadStore)
